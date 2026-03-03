@@ -2,6 +2,7 @@ import Foundation
 
 enum GameMode: Codable {
     case title
+    case characterCreation
     case exploration
     case dialogue
     case inventory
@@ -104,6 +105,12 @@ enum ItemID: String, Codable, CaseIterable {
     case charmFragment
     case lensCore
     case shrineKey
+    case ashenBlade
+    case wandererCloak
+    case sunCharm
+    case barrowMail
+    case fenLance
+    case mirrorCharm
 }
 
 enum ItemKind: String, Codable {
@@ -111,6 +118,125 @@ enum ItemKind: String, Codable {
     case key
     case quest
     case upgrade
+    case equipment
+}
+
+enum EquipmentSlot: String, Codable, CaseIterable {
+    case weapon
+    case armor
+    case charm
+}
+
+enum TraitStat: String, Codable, CaseIterable {
+    case brawn
+    case agility
+    case grit
+    case wits
+    case lore
+    case spark
+
+    var shortLabel: String {
+        switch self {
+        case .brawn: return "BRN"
+        case .agility: return "AGI"
+        case .grit: return "GRT"
+        case .wits: return "WIT"
+        case .lore: return "LOR"
+        case .spark: return "SPK"
+        }
+    }
+
+    var displayName: String {
+        rawValue.capitalized
+    }
+}
+
+struct TraitProfile: Codable, Equatable {
+    var brawn: Int
+    var agility: Int
+    var grit: Int
+    var wits: Int
+    var lore: Int
+    var spark: Int
+
+    func value(for trait: TraitStat) -> Int {
+        switch trait {
+        case .brawn: return brawn
+        case .agility: return agility
+        case .grit: return grit
+        case .wits: return wits
+        case .lore: return lore
+        case .spark: return spark
+        }
+    }
+}
+
+enum SkillID: String, Codable, CaseIterable {
+    case bulwark
+    case cleave
+    case fieldMedicine
+    case scavenger
+    case trailcraft
+    case runeSight
+
+    var displayName: String {
+        switch self {
+        case .bulwark: return "Bulwark"
+        case .cleave: return "Cleave"
+        case .fieldMedicine: return "Field Medicine"
+        case .scavenger: return "Scavenger"
+        case .trailcraft: return "Trailcraft"
+        case .runeSight: return "Rune Sight"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .bulwark: return "+1 defense in every fight."
+        case .cleave: return "+1 attack with all weapons."
+        case .fieldMedicine: return "Healing tonics restore +4 more."
+        case .scavenger: return "Carry two more inventory items."
+        case .trailcraft: return "The fen drains lantern charge more slowly."
+        case .runeSight: return "Mirror switch mistakes preserve your current progress."
+        }
+    }
+}
+
+enum HeroClass: String, Codable, CaseIterable {
+    case warden
+    case wayfarer
+    case seer
+
+    var displayName: String {
+        switch self {
+        case .warden: return "Warden"
+        case .wayfarer: return "Wayfarer"
+        case .seer: return "Seer"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .warden: return "A hard front-line guardian built to weather attrition."
+        case .wayfarer: return "A practical roamer with better sustain and carrying capacity."
+        case .seer: return "A ritualist who bends light, runes, and strange machinery."
+        }
+    }
+}
+
+struct HeroTemplate {
+    let heroClass: HeroClass
+    let title: String
+    let summary: String
+    let traits: TraitProfile
+    let skills: [SkillID]
+    let baseHealth: Int
+    let baseStamina: Int
+    let baseAttack: Int
+    let baseDefense: Int
+    let baseLantern: Int
+    let startingEquipment: EquipmentLoadout
+    let startingInventory: [ItemID]
 }
 
 struct Item: Codable, Equatable {
@@ -118,6 +244,94 @@ struct Item: Codable, Equatable {
     let name: String
     let kind: ItemKind
     let value: Int
+    let slot: EquipmentSlot?
+    let attackBonus: Int
+    let defenseBonus: Int
+    let lanternBonus: Int
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case kind
+        case value
+        case slot
+        case attackBonus
+        case defenseBonus
+        case lanternBonus
+    }
+
+    init(
+        id: ItemID,
+        name: String,
+        kind: ItemKind,
+        value: Int,
+        slot: EquipmentSlot?,
+        attackBonus: Int,
+        defenseBonus: Int,
+        lanternBonus: Int
+    ) {
+        self.id = id
+        self.name = name
+        self.kind = kind
+        self.value = value
+        self.slot = slot
+        self.attackBonus = attackBonus
+        self.defenseBonus = defenseBonus
+        self.lanternBonus = lanternBonus
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(ItemID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        kind = try container.decode(ItemKind.self, forKey: .kind)
+        value = try container.decode(Int.self, forKey: .value)
+        slot = try container.decodeIfPresent(EquipmentSlot.self, forKey: .slot)
+        attackBonus = try container.decodeIfPresent(Int.self, forKey: .attackBonus) ?? 0
+        defenseBonus = try container.decodeIfPresent(Int.self, forKey: .defenseBonus) ?? 0
+        lanternBonus = try container.decodeIfPresent(Int.self, forKey: .lanternBonus) ?? 0
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(kind, forKey: .kind)
+        try container.encode(value, forKey: .value)
+        try container.encodeIfPresent(slot, forKey: .slot)
+        try container.encode(attackBonus, forKey: .attackBonus)
+        try container.encode(defenseBonus, forKey: .defenseBonus)
+        try container.encode(lanternBonus, forKey: .lanternBonus)
+    }
+
+    var isEquippable: Bool {
+        kind == .equipment && slot != nil
+    }
+}
+
+struct EquipmentLoadout: Codable, Equatable {
+    var weapon: ItemID?
+    var armor: ItemID?
+    var charm: ItemID?
+
+    func itemID(for slot: EquipmentSlot) -> ItemID? {
+        switch slot {
+        case .weapon: return weapon
+        case .armor: return armor
+        case .charm: return charm
+        }
+    }
+
+    mutating func set(_ itemID: ItemID?, for slot: EquipmentSlot) {
+        switch slot {
+        case .weapon:
+            weapon = itemID
+        case .armor:
+            armor = itemID
+        case .charm:
+            charm = itemID
+        }
+    }
 }
 
 typealias NPCID = String
@@ -155,6 +369,9 @@ struct QuestState: Codable {
 
 struct PlayerState: Codable {
     var name: String
+    var heroClass: HeroClass
+    var traits: TraitProfile
+    var skills: [SkillID]
     var health: Int
     var maxHealth: Int
     var stamina: Int
@@ -163,10 +380,167 @@ struct PlayerState: Codable {
     var defense: Int
     var lanternCharge: Int
     var inventory: [Item]
+    var equipment: EquipmentLoadout = EquipmentLoadout()
     var position: Position
     var currentMapID: String
     var lastSavePosition: Position
     var lastSaveMapID: String
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case heroClass
+        case traits
+        case skills
+        case health
+        case maxHealth
+        case stamina
+        case maxStamina
+        case attack
+        case defense
+        case lanternCharge
+        case inventory
+        case equipment
+        case position
+        case currentMapID
+        case lastSavePosition
+        case lastSaveMapID
+    }
+
+    init(
+        name: String,
+        heroClass: HeroClass,
+        traits: TraitProfile,
+        skills: [SkillID],
+        health: Int,
+        maxHealth: Int,
+        stamina: Int,
+        maxStamina: Int,
+        attack: Int,
+        defense: Int,
+        lanternCharge: Int,
+        inventory: [Item],
+        equipment: EquipmentLoadout = EquipmentLoadout(),
+        position: Position,
+        currentMapID: String,
+        lastSavePosition: Position,
+        lastSaveMapID: String
+    ) {
+        self.name = name
+        self.heroClass = heroClass
+        self.traits = traits
+        self.skills = skills
+        self.health = health
+        self.maxHealth = maxHealth
+        self.stamina = stamina
+        self.maxStamina = maxStamina
+        self.attack = attack
+        self.defense = defense
+        self.lanternCharge = lanternCharge
+        self.inventory = inventory
+        self.equipment = equipment
+        self.position = position
+        self.currentMapID = currentMapID
+        self.lastSavePosition = lastSavePosition
+        self.lastSaveMapID = lastSaveMapID
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let fallbackTemplate = heroTemplate(for: .wayfarer)
+
+        name = try container.decode(String.self, forKey: .name)
+        heroClass = try container.decodeIfPresent(HeroClass.self, forKey: .heroClass) ?? .wayfarer
+        traits = try container.decodeIfPresent(TraitProfile.self, forKey: .traits) ?? fallbackTemplate.traits
+        skills = try container.decodeIfPresent([SkillID].self, forKey: .skills) ?? fallbackTemplate.skills
+        health = try container.decode(Int.self, forKey: .health)
+        maxHealth = try container.decode(Int.self, forKey: .maxHealth)
+        stamina = try container.decode(Int.self, forKey: .stamina)
+        maxStamina = try container.decode(Int.self, forKey: .maxStamina)
+        attack = try container.decode(Int.self, forKey: .attack)
+        defense = try container.decode(Int.self, forKey: .defense)
+        lanternCharge = try container.decode(Int.self, forKey: .lanternCharge)
+        inventory = try container.decode([Item].self, forKey: .inventory)
+        equipment = try container.decodeIfPresent(EquipmentLoadout.self, forKey: .equipment) ?? EquipmentLoadout()
+        position = try container.decode(Position.self, forKey: .position)
+        currentMapID = try container.decode(String.self, forKey: .currentMapID)
+        lastSavePosition = try container.decode(Position.self, forKey: .lastSavePosition)
+        lastSaveMapID = try container.decode(String.self, forKey: .lastSaveMapID)
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(name, forKey: .name)
+        try container.encode(heroClass, forKey: .heroClass)
+        try container.encode(traits, forKey: .traits)
+        try container.encode(skills, forKey: .skills)
+        try container.encode(health, forKey: .health)
+        try container.encode(maxHealth, forKey: .maxHealth)
+        try container.encode(stamina, forKey: .stamina)
+        try container.encode(maxStamina, forKey: .maxStamina)
+        try container.encode(attack, forKey: .attack)
+        try container.encode(defense, forKey: .defense)
+        try container.encode(lanternCharge, forKey: .lanternCharge)
+        try container.encode(inventory, forKey: .inventory)
+        try container.encode(equipment, forKey: .equipment)
+        try container.encode(position, forKey: .position)
+        try container.encode(currentMapID, forKey: .currentMapID)
+        try container.encode(lastSavePosition, forKey: .lastSavePosition)
+        try container.encode(lastSaveMapID, forKey: .lastSaveMapID)
+    }
+
+    func equipmentItem(for slot: EquipmentSlot) -> Item? {
+        guard let itemID = equipment.itemID(for: slot) else { return nil }
+        return itemTable[itemID]
+    }
+
+    func hasSkill(_ skill: SkillID) -> Bool {
+        skills.contains(skill)
+    }
+
+    func equippedName(for slot: EquipmentSlot) -> String {
+        equipmentItem(for: slot)?.name ?? "None"
+    }
+
+    func effectiveAttack() -> Int {
+        let equipmentBonus = EquipmentSlot.allCases.reduce(0) { partial, slot in
+            partial + (equipmentItem(for: slot)?.attackBonus ?? 0)
+        }
+        let traitBonus = traits.brawn / 3
+        let skillBonus = hasSkill(.cleave) ? 1 : 0
+        return attack + equipmentBonus + traitBonus + skillBonus
+    }
+
+    func effectiveDefense() -> Int {
+        let equipmentBonus = EquipmentSlot.allCases.reduce(0) { partial, slot in
+            partial + (equipmentItem(for: slot)?.defenseBonus ?? 0)
+        }
+        let traitBonus = traits.grit / 3
+        let skillBonus = hasSkill(.bulwark) ? 1 : 0
+        return defense + equipmentBonus + traitBonus + skillBonus
+    }
+
+    func effectiveLanternCapacity() -> Int {
+        let equipmentBonus = EquipmentSlot.allCases.reduce(0) { partial, slot in
+            partial + (equipmentItem(for: slot)?.lanternBonus ?? 0)
+        }
+        return lanternCharge + equipmentBonus + (traits.spark / 2)
+    }
+
+    func inventoryCapacity() -> Int {
+        8 + (hasSkill(.scavenger) ? 2 : 0)
+    }
+
+    func tonicHealingAmount(base: Int) -> Int {
+        base + (hasSkill(.fieldMedicine) ? 4 : 0)
+    }
+
+    func traitSummaryLine() -> String {
+        "\(TraitStat.brawn.shortLabel):\(traits.brawn) \(TraitStat.agility.shortLabel):\(traits.agility) \(TraitStat.grit.shortLabel):\(traits.grit)"
+    }
+
+    func traitSummaryLineSecondary() -> String {
+        "\(TraitStat.wits.shortLabel):\(traits.wits) \(TraitStat.lore.shortLabel):\(traits.lore) \(TraitStat.spark.shortLabel):\(traits.spark)"
+    }
 }
 
 struct NPCState: Codable {
@@ -503,12 +877,28 @@ struct GameState {
     var currentDialogue: DialogueNode?
     var shouldQuit = false
     var playTimeSeconds = 0
+    var inventorySelectionIndex = 0
+    var selectedHeroIndex = 0
 
     mutating func log(_ message: String) {
         messages.append(message)
         if messages.count > 8 {
             messages.removeFirst(messages.count - 8)
         }
+    }
+
+    mutating func clampInventorySelection() {
+        if player.inventory.isEmpty {
+            inventorySelectionIndex = 0
+        } else {
+            inventorySelectionIndex = max(0, min(inventorySelectionIndex, player.inventory.count - 1))
+        }
+    }
+
+    func selectedHeroClass() -> HeroClass {
+        let classes = HeroClass.allCases
+        guard !classes.isEmpty else { return .wayfarer }
+        return classes[(selectedHeroIndex % classes.count + classes.count) % classes.count]
     }
 }
 
@@ -517,4 +907,54 @@ extension EnemyState: RenderableEntity {}
 extension NPCState: RenderableEntity {
     var glyph: Character { glyphSymbol }
     var color: ANSIColor { glyphColor }
+}
+
+func heroTemplate(for heroClass: HeroClass) -> HeroTemplate {
+    switch heroClass {
+    case .warden:
+        return HeroTemplate(
+            heroClass: .warden,
+            title: "The Iron Warden",
+            summary: "A durable fighter who begins stronger in armor and holds the line.",
+            traits: TraitProfile(brawn: 7, agility: 4, grit: 8, wits: 4, lore: 3, spark: 4),
+            skills: [.bulwark, .cleave],
+            baseHealth: 30,
+            baseStamina: 11,
+            baseAttack: 6,
+            baseDefense: 4,
+            baseLantern: 7,
+            startingEquipment: EquipmentLoadout(weapon: .ashenBlade, armor: .barrowMail, charm: nil),
+            startingInventory: [.healingTonic]
+        )
+    case .wayfarer:
+        return HeroTemplate(
+            heroClass: .wayfarer,
+            title: "The Wild Wayfarer",
+            summary: "A scavenging survivor with better sustain, mobility, and bag space.",
+            traits: TraitProfile(brawn: 5, agility: 7, grit: 5, wits: 6, lore: 4, spark: 5),
+            skills: [.fieldMedicine, .scavenger],
+            baseHealth: 24,
+            baseStamina: 13,
+            baseAttack: 5,
+            baseDefense: 3,
+            baseLantern: 8,
+            startingEquipment: EquipmentLoadout(weapon: .ashenBlade, armor: .wandererCloak, charm: nil),
+            startingInventory: [.healingTonic, .lanternOil]
+        )
+    case .seer:
+        return HeroTemplate(
+            heroClass: .seer,
+            title: "The Ember Seer",
+            summary: "A light-worker who handles runes better and navigates hazard zones more safely.",
+            traits: TraitProfile(brawn: 3, agility: 5, grit: 4, wits: 7, lore: 8, spark: 8),
+            skills: [.trailcraft, .runeSight],
+            baseHealth: 21,
+            baseStamina: 12,
+            baseAttack: 4,
+            baseDefense: 2,
+            baseLantern: 10,
+            startingEquipment: EquipmentLoadout(weapon: nil, armor: .wandererCloak, charm: .sunCharm),
+            startingInventory: [.lanternOil, .healingTonic]
+        )
+    }
 }

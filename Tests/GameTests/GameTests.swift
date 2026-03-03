@@ -40,6 +40,9 @@ import Testing
     let save = SaveGame(
         player: PlayerState(
             name: "Mira",
+            heroClass: .wayfarer,
+            traits: heroTemplate(for: .wayfarer).traits,
+            skills: heroTemplate(for: .wayfarer).skills,
             health: 10,
             maxHealth: 20,
             stamina: 5,
@@ -48,6 +51,7 @@ import Testing
             defense: 2,
             lanternCharge: 3,
             inventory: [],
+            equipment: EquipmentLoadout(),
             position: Position(x: 1, y: 1),
             currentMapID: "merrow_village",
             lastSavePosition: Position(x: 1, y: 1),
@@ -92,6 +96,42 @@ import Testing
 @Test func contentLoaderLoadsSixMaps() async throws {
     let content = try ContentLoader().load()
     #expect(content.maps.count == 6)
+    #expect(content.initialNPCs.count >= 5)
+    #expect(content.initialEnemies.count >= 9)
+}
+
+@Test func equippedItemsAffectDerivedStats() async throws {
+    let player = PlayerState(
+        name: "Mira",
+        heroClass: .wayfarer,
+        traits: TraitProfile(brawn: 5, agility: 5, grit: 5, wits: 5, lore: 5, spark: 4),
+        skills: [],
+        health: 24,
+        maxHealth: 24,
+        stamina: 12,
+        maxStamina: 12,
+        attack: 6,
+        defense: 3,
+        lanternCharge: 8,
+        inventory: [],
+        equipment: EquipmentLoadout(weapon: .fenLance, armor: .barrowMail, charm: .mirrorCharm),
+        position: Position(x: 0, y: 0),
+        currentMapID: "merrow_village",
+        lastSavePosition: Position(x: 0, y: 0),
+        lastSaveMapID: "merrow_village"
+    )
+
+    #expect(player.effectiveAttack() == 11)
+    #expect(player.effectiveDefense() == 7)
+    #expect(player.effectiveLanternCapacity() == 12)
+}
+
+@Test func heroTemplateProvidesDistinctClasses() async throws {
+    let warden = heroTemplate(for: .warden)
+    let seer = heroTemplate(for: .seer)
+    #expect(warden.heroClass == .warden)
+    #expect(seer.traits.spark > warden.traits.spark)
+    #expect(warden.skills.contains(.bulwark))
 }
 
 @Test func automationTokenizerSplitsScriptsAndComments() async throws {

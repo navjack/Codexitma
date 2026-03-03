@@ -15,21 +15,7 @@ final class GameEngine {
 
     static func makeInitialState(content: GameContent) -> GameState {
         let startMap = content.maps["merrow_village"]!
-        let player = PlayerState(
-            name: "Mira",
-            health: 24,
-            maxHealth: 24,
-            stamina: 12,
-            maxStamina: 12,
-            attack: 6,
-            defense: 3,
-            lanternCharge: 8,
-            inventory: [itemTable[.healingTonic]!, itemTable[.lanternOil]!],
-            position: startMap.spawn,
-            currentMapID: startMap.id,
-            lastSavePosition: startMap.spawn,
-            lastSaveMapID: startMap.id
-        )
+        let player = makePlayer(for: .wayfarer, at: startMap)
         let world = WorldState(
             maps: content.maps,
             npcs: content.initialNPCs,
@@ -47,12 +33,38 @@ final class GameEngine {
         )
     }
 
+    static func makePlayer(for heroClass: HeroClass, at startMap: MapDefinition) -> PlayerState {
+        let template = heroTemplate(for: heroClass)
+        let startingInventory = template.startingInventory.compactMap { itemTable[$0] }
+        return PlayerState(
+            name: "Mira",
+            heroClass: template.heroClass,
+            traits: template.traits,
+            skills: template.skills,
+            health: template.baseHealth,
+            maxHealth: template.baseHealth,
+            stamina: template.baseStamina,
+            maxStamina: template.baseStamina,
+            attack: template.baseAttack,
+            defense: template.baseDefense,
+            lanternCharge: template.baseLantern,
+            inventory: startingInventory,
+            equipment: template.startingEquipment,
+            position: startMap.spawn,
+            currentMapID: startMap.id,
+            lastSavePosition: startMap.spawn,
+            lastSaveMapID: startMap.id
+        )
+    }
+
     var shouldQuit: Bool { state.shouldQuit }
 
     func handle(_ command: ActionCommand) {
         switch state.mode {
         case .title:
             handleTitle(command)
+        case .characterCreation:
+            handleCharacterCreation(command)
         case .exploration:
             handleExploration(command)
         case .dialogue:
@@ -69,9 +81,8 @@ final class GameEngine {
     private func handleTitle(_ command: ActionCommand) {
         switch command {
         case .newGame, .confirm:
-            state = Self.makeInitialState(content: content)
-            state.mode = .exploration
-            state.log("You wake in Merrow as the valley groans.")
+            state.mode = .characterCreation
+            state.log("Choose a class, then confirm to begin.")
         case .load:
             do {
                 let save = try saveRepository.load()
@@ -93,6 +104,29 @@ final class GameEngine {
         }
     }
 
+    private func handleCharacterCreation(_ command: ActionCommand) {
+        switch command {
+        case .move(.left), .move(.up):
+            state.selectedHeroIndex = (state.selectedHeroIndex - 1 + HeroClass.allCases.count) % HeroClass.allCases.count
+            state.log("\(heroTemplate(for: state.selectedHeroClass()).title) selected.")
+        case .move(.right), .move(.down):
+            state.selectedHeroIndex = (state.selectedHeroIndex + 1) % HeroClass.allCases.count
+            state.log("\(heroTemplate(for: state.selectedHeroClass()).title) selected.")
+        case .interact, .confirm, .newGame:
+            startNewAdventure(with: state.selectedHeroClass())
+        case .help:
+            let template = heroTemplate(for: state.selectedHeroClass())
+            state.log("\(template.title): \(template.summary)")
+        case .cancel:
+            state.mode = .title
+            state.log("The campfire waits while you reconsider.")
+        case .quit:
+            state.shouldQuit = true
+        default:
+            break
+        }
+    }
+
     private func handleExploration(_ command: ActionCommand) {
         switch command {
         case .move(let direction):
@@ -100,7 +134,12 @@ final class GameEngine {
         case .interact, .confirm:
             interact()
         case .openInventory:
-            state.mode = .inventory
+            if state.player.inventory.isEmpty {
+                state.log("Your satchel is empty.")
+            } else {
+                state.clampInventorySelection()
+                state.mode = .inventory
+            }
         case .help:
             state.log(QuestSystem.objective(for: state.quests))
         case .save:
@@ -135,8 +174,12 @@ final class GameEngine {
 
     private func handleInventory(_ command: ActionCommand) {
         switch command {
+        case .move(let direction):
+            moveInventorySelection(direction)
+        case .help:
+            describeSelectedItem()
         case .interact, .confirm:
-            useFirstConsumable()
+            useSelectedInventoryItem()
             state.mode = .exploration
         case .cancel, .openInventory:
             state.mode = .exploration
@@ -205,29 +248,42 @@ final class GameEngine {
         }
     }
 
-    private func useFirstConsumable() {
-        guard let index = state.player.inventory.firstIndex(where: { $0.kind == .consumable }) else {
+    private func useSelectedInventoryItem() {
+        state.clampInventorySelection()
+        guard !state.player.inventory.isEmpty else {
             state.log("Your satchel offers no comfort.")
             return
         }
+        let index = state.inventorySelectionIndex
         let item = state.player.inventory.remove(at: index)
         switch item.id {
         case .healingTonic:
-            state.player.health = min(state.player.maxHealth, state.player.health + item.value)
+            state.player.health = min(state.player.maxHealth, state.player.health + state.player.tonicHealingAmount(base: item.value))
             state.log("Warm tonic steadies your pulse.")
         case .lanternOil:
             state.player.lanternCharge += item.value
             state.log("The lantern brightens.")
+        case .charmFragment:
+            state.player.maxHealth += 2
+            state.player.health = min(state.player.maxHealth, state.player.health + 2)
+            state.player.attack += 1
+            state.log("The fragment fuses into your gear. You feel hardier.")
         default:
-            break
+            if item.isEquippable, let slot = item.slot {
+                equip(item, in: slot, returningTo: index)
+            } else {
+                state.player.inventory.insert(item, at: min(index, state.player.inventory.count))
+                state.log("\(item.name) cannot be used directly.")
+            }
         }
+        state.clampInventorySelection()
     }
 
     private func resolveCombat(with enemyIndex: Int) {
         state.mode = .combat
         turnCounter += 1
         let playerDamage = CombatSystem.damage(
-            attackerAttack: state.player.attack,
+            attackerAttack: state.player.effectiveAttack(),
             defenderDefense: state.world.enemies[enemyIndex].defense,
             turnIndex: turnCounter
         )
@@ -254,7 +310,7 @@ final class GameEngine {
 
         let enemyDamage = CombatSystem.damage(
             attackerAttack: state.world.enemies[enemyIndex].attack,
-            defenderDefense: state.player.defense,
+            defenderDefense: state.player.effectiveDefense(),
             turnIndex: turnCounter + 1
         )
         state.player.health -= enemyDamage
@@ -310,9 +366,12 @@ final class GameEngine {
             state.log("The beacon chamber accepts the Lens Core.")
         }
         if state.player.currentMapID == "black_fen" {
-            state.player.lanternCharge = max(0, state.player.lanternCharge - 1)
-            if state.player.lanternCharge == 0 {
-                state.log("The fen drinks the last of your lantern.")
+            let drain = state.player.hasSkill(.trailcraft) && state.playTimeSeconds.isMultiple(of: 2) ? 0 : 1
+            if drain > 0 {
+                state.player.lanternCharge = max(0, state.player.lanternCharge - drain)
+                if state.player.lanternCharge == 0 {
+                    state.log("The fen drinks the last of your lantern.")
+                }
             }
         }
     }
@@ -410,8 +469,13 @@ final class GameEngine {
 
         state.world.activeSwitchSequence.append(interactable.id)
         if !solution.starts(with: state.world.activeSwitchSequence) {
-            state.world.activeSwitchSequence = interactable.id == solution.first ? [interactable.id] : []
-            state.log("The tower hum snaps out of tune. The mirrors reset.")
+            if state.player.hasSkill(.runeSight) {
+                _ = state.world.activeSwitchSequence.popLast()
+                state.log("Rune sight preserves the mirrors' partial alignment.")
+            } else {
+                state.world.activeSwitchSequence = interactable.id == solution.first ? [interactable.id] : []
+                state.log("The tower hum snaps out of tune. The mirrors reset.")
+            }
             return
         }
 
@@ -426,12 +490,79 @@ final class GameEngine {
     }
 
     private func grantItem(_ id: ItemID, message: String) {
-        guard let item = content.items[id], state.player.inventory.count < 8 else {
+        guard let item = content.items[id] else {
+            state.log("The relic dissolves before you can claim it.")
+            return
+        }
+        if item.isEquippable,
+           let slot = item.slot,
+           state.player.equipment.itemID(for: slot) == nil {
+            state.player.equipment.set(item.id, for: slot)
+            state.log(message)
+            state.log("\(item.name) is fitted to your \(slot.rawValue).")
+            return
+        }
+        guard state.player.inventory.count < state.player.inventoryCapacity() else {
             state.log("Your satchel is too full.")
             return
         }
         state.player.inventory.append(item)
         state.log(message)
+    }
+
+    private func moveInventorySelection(_ direction: Direction) {
+        guard !state.player.inventory.isEmpty else { return }
+        let delta: Int
+        switch direction {
+        case .up, .left:
+            delta = -1
+        case .down, .right:
+            delta = 1
+        }
+        let count = state.player.inventory.count
+        state.inventorySelectionIndex = (state.inventorySelectionIndex + delta + count) % count
+        let item = state.player.inventory[state.inventorySelectionIndex]
+        state.log("Selected \(item.name).")
+    }
+
+    private func describeSelectedItem() {
+        state.clampInventorySelection()
+        guard !state.player.inventory.isEmpty else { return }
+        let item = state.player.inventory[state.inventorySelectionIndex]
+        if item.isEquippable, let slot = item.slot {
+            state.log("\(item.name): \(slot.rawValue) +A\(item.attackBonus) +D\(item.defenseBonus) +L\(item.lanternBonus)")
+            return
+        }
+        switch item.kind {
+        case .consumable:
+            state.log("\(item.name): restores \(item.value).")
+        case .upgrade:
+            state.log("\(item.name): permanent boon when used.")
+        case .key, .quest:
+            state.log("\(item.name): important, but not directly usable.")
+        case .equipment:
+            state.log("\(item.name): equipable gear.")
+        }
+    }
+
+    private func equip(_ item: Item, in slot: EquipmentSlot, returningTo index: Int) {
+        let previousItemID = state.player.equipment.itemID(for: slot)
+        state.player.equipment.set(item.id, for: slot)
+        if let previousItemID,
+           let previousItem = content.items[previousItemID],
+           state.player.inventory.count < state.player.inventoryCapacity() {
+            state.player.inventory.insert(previousItem, at: min(index, state.player.inventory.count))
+        }
+        state.log("\(item.name) equipped to \(slot.rawValue).")
+    }
+
+    private func startNewAdventure(with heroClass: HeroClass) {
+        let startMap = content.maps["merrow_village"]!
+        state = Self.makeInitialState(content: content)
+        state.player = Self.makePlayer(for: heroClass, at: startMap)
+        state.mode = .exploration
+        let template = heroTemplate(for: heroClass)
+        state.log("\(template.title) enters the darkened valley.")
     }
 
     private func handlePortalIfNeeded(at position: Position, map: MapDefinition) {

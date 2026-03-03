@@ -7,7 +7,7 @@
 Run a fixed command sequence and print JSON state:
 
 ```sh
-./Codexitma --script "new, right, right, e, state"
+./Codexitma --script "new, e, right, right, state"
 ```
 
 Add `--step-json` to emit a JSON snapshot after every command:
@@ -49,7 +49,7 @@ Then send plain command tokens on stdin, one line at a time:
 
 ```text
 new
-right
+e
 right
 state
 ```

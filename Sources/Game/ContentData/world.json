@@ -51,6 +51,16 @@
     ],
     "interactables": [
       {
+        "id": "south_cache",
+        "kind": "chest",
+        "position": { "x": 5, "y": 2 },
+        "title": "Field Cache",
+        "lines": ["A sun charm hangs from a cracked standard."],
+        "rewardItem": "sunCharm",
+        "requiredFlag": null,
+        "grantsFlag": null
+      },
+      {
         "id": "south_shrine",
         "kind": "shrine",
         "position": { "x": 10, "y": 5 },
@@ -104,6 +114,16 @@
         "rewardItem": null,
         "requiredFlag": null,
         "grantsFlag": null
+      },
+      {
+        "id": "orchard_cache",
+        "kind": "chest",
+        "position": { "x": 14, "y": 1 },
+        "title": "Orchard Cache",
+        "lines": ["A tonic and notes from a lost scout survive the flood."],
+        "rewardItem": "healingTonic",
+        "requiredFlag": null,
+        "grantsFlag": null
       }
     ]
   },
@@ -135,8 +155,18 @@
         "kind": "chest",
         "position": { "x": 7, "y": 3 },
         "title": "Barrow Cache",
-        "lines": ["You salvage a charm fragment from the dust."],
-        "rewardItem": "charmFragment",
+        "lines": ["Ancient mail still holds fast after centuries underground."],
+        "rewardItem": "barrowMail",
+        "requiredFlag": null,
+        "grantsFlag": null
+      },
+      {
+        "id": "barrow_tonic",
+        "kind": "chest",
+        "position": { "x": 15, "y": 2 },
+        "title": "Dust Locker",
+        "lines": ["A sealed tonic rattles inside the locker."],
+        "rewardItem": "healingTonic",
         "requiredFlag": null,
         "grantsFlag": null
       }
@@ -182,6 +212,16 @@
         "title": "Fen Plate",
         "lines": ["Another plate sinks. Water begins to recoil."],
         "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": null
+      },
+      {
+        "id": "fen_cache",
+        "kind": "chest",
+        "position": { "x": 16, "y": 2 },
+        "title": "Bog Cache",
+        "lines": ["A fen lance lies wedged in black reeds."],
+        "rewardItem": "fenLance",
         "requiredFlag": null,
         "grantsFlag": null
       }
@@ -230,6 +270,16 @@
         "title": "Star Rune",
         "lines": ["A sharp note traces the top of the tower."],
         "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": null
+      },
+      {
+        "id": "spire_cache",
+        "kind": "chest",
+        "position": { "x": 3, "y": 1 },
+        "title": "Tower Cache",
+        "lines": ["A mirror charm waits in the tower's dry dark."],
+        "rewardItem": "mirrorCharm",
         "requiredFlag": null,
         "grantsFlag": null
       },

@@ -28,6 +28,8 @@ final class TerminalRenderer {
         switch state.mode {
         case .title:
             return titleFrame()
+        case .characterCreation:
+            return characterCreationFrame(state: state)
         case .ending:
             return endingFrame(state: state)
         default:
@@ -78,12 +80,39 @@ final class TerminalRenderer {
         let title = "ASHES OF MERROW"
         buffer.write(title, color: .yellow, x: 28, y: 3)
         buffer.write("A Swift terminal RPG", color: .cyan, x: 29, y: 5)
-        buffer.write("N  New Game", x: 29, y: 9)
+        buffer.write("N  Create Hero", x: 27, y: 9)
         buffer.write("L  Load Game", x: 29, y: 10)
         buffer.write("X  Quit", x: 29, y: 11)
-        buffer.write("WASD/Arrows move. E talk/use. I use first item.", x: 9, y: 16)
-        buffer.write("J hint, K save, L load, X quit. --bridge for JSON control.", x: 6, y: 17)
+        buffer.write("Character creator: classes, skills, traits, and starting gear.", x: 6, y: 15)
+        buffer.write("WASD/Arrows move. E act. I open pack. J hint.", x: 11, y: 17)
+        buffer.write("K save, L load, X quit. --bridge for JSON control.", x: 9, y: 18)
         buffer.write("Expect an 80x24 terminal for the full retro frame.", color: .brightBlack, x: 14, y: 19)
+        return buffer
+    }
+
+    private func characterCreationFrame(state: GameState) -> ScreenBuffer {
+        var buffer = ScreenBuffer()
+        let heroClass = state.selectedHeroClass()
+        let template = heroTemplate(for: heroClass)
+        buffer.write("CREATE YOUR HERO", color: .yellow, x: 29, y: 2)
+        buffer.write(template.title, color: .cyan, x: 24, y: 5, maxWidth: 32)
+        buffer.write(template.summary, x: 9, y: 7, maxWidth: 62)
+        buffer.write("< A / LEFT        D / RIGHT >", color: .brightBlack, x: 24, y: 9)
+        buffer.write("E Confirm   Q Back   J Details", color: .brightBlack, x: 24, y: 10)
+
+        for (index, stat) in TraitStat.allCases.enumerated() {
+            let value = template.traits.value(for: stat)
+            buffer.write("\(stat.shortLabel): \(value)", x: 17 + (index % 3) * 16, y: 13 + (index / 3))
+        }
+
+        buffer.write("Skills", color: .yellow, x: 18, y: 17)
+        for (index, skill) in template.skills.enumerated() {
+            buffer.write(skill.displayName, x: 18 + (index * 18), y: 18, maxWidth: 16)
+        }
+        buffer.write("Start Gear", color: .yellow, x: 18, y: 20)
+        buffer.write("W \(shortName(template.startingEquipment.weapon.flatMap { itemTable[$0]?.name } ?? "None"))", x: 18, y: 21, maxWidth: 18)
+        buffer.write("A \(shortName(template.startingEquipment.armor.flatMap { itemTable[$0]?.name } ?? "None"))", x: 38, y: 21, maxWidth: 18)
+        buffer.write("C \(shortName(template.startingEquipment.charm.flatMap { itemTable[$0]?.name } ?? "None"))", x: 58, y: 21, maxWidth: 18)
         return buffer
     }
 
@@ -140,41 +169,53 @@ final class TerminalRenderer {
     private func drawHUD(into buffer: inout ScreenBuffer, state: GameState) {
         let x = 62
         buffer.write(state.player.name, color: .yellow, x: x, y: 1, maxWidth: 17)
+        buffer.write(state.player.heroClass.displayName, color: .cyan, x: x, y: 2, maxWidth: 17)
         buffer.write("HP \(state.player.health)/\(state.player.maxHealth)", x: x, y: 3)
         buffer.write("ST \(state.player.stamina)/\(state.player.maxStamina)", x: x, y: 4)
-        buffer.write("LN \(state.player.lanternCharge)", x: x, y: 5)
+        buffer.write("LN \(state.player.effectiveLanternCapacity())", x: x, y: 5)
+        buffer.write("AT \(state.player.effectiveAttack()) DF \(state.player.effectiveDefense())", x: x, y: 6, maxWidth: 17)
         if let map = state.world.maps[state.player.currentMapID] {
-            buffer.write(map.name, color: .cyan, x: x, y: 7, maxWidth: 17)
+            buffer.write(map.name, color: .cyan, x: x, y: 8, maxWidth: 17)
         }
-        buffer.write("Goal:", color: .yellow, x: x, y: 9)
+        buffer.write("Goal:", color: .yellow, x: x, y: 10)
         let objective = QuestSystem.objective(for: state.quests)
-        buffer.write(objective, x: x, y: 10, maxWidth: 17)
+        buffer.write(objective, x: x, y: 11, maxWidth: 17)
         let keyCount = state.player.inventory.filter { $0.kind == .key || $0.kind == .quest }.count
         buffer.write("Keys \(keyCount)", x: x, y: 13)
-        buffer.write("Bag \(state.player.inventory.count)/8", x: x, y: 14)
+        buffer.write("Bag \(state.player.inventory.count)/\(state.player.inventoryCapacity())", x: x, y: 14)
         buffer.write("Log", color: .yellow, x: 2, y: 23)
         let lines = Array(state.messages.suffix(1))
         for (index, message) in lines.enumerated() {
             buffer.write(message, x: 7, y: 23 + index, maxWidth: 72)
         }
         if state.mode == .inventory {
-            buffer.write("Inventory", color: .yellow, x: x, y: 16)
-            for (index, item) in state.player.inventory.prefix(5).enumerated() {
-                buffer.write(item.name, x: x, y: 17 + index, maxWidth: 17)
+            buffer.write("Inventory", color: .yellow, x: x, y: 15)
+            let start = max(0, min(state.inventorySelectionIndex, max(0, state.player.inventory.count - 5)))
+            let visible = state.player.inventory.dropFirst(start).prefix(5)
+            for (offset, item) in visible.enumerated() {
+                let actualIndex = start + offset
+                let marker: Character = actualIndex == state.inventorySelectionIndex ? ">" : " "
+                buffer.write("\(marker)\(item.name)", x: x, y: 16 + offset, maxWidth: 17)
             }
         } else if state.mode == .dialogue, let dialogue = state.currentDialogue {
-            buffer.write(dialogue.speaker, color: .yellow, x: x, y: 16, maxWidth: 17)
+            buffer.write(dialogue.speaker, color: .yellow, x: x, y: 15, maxWidth: 17)
             for (index, line) in dialogue.lines.prefix(4).enumerated() {
-                buffer.write(line, x: x, y: 17 + index, maxWidth: 17)
+                buffer.write(line, x: x, y: 16 + index, maxWidth: 17)
             }
         }
         if state.mode != .inventory && state.mode != .dialogue {
-            buffer.write("WASD Move", color: .brightBlack, x: x, y: 16, maxWidth: 17)
-            buffer.write("E Act/Talk", color: .brightBlack, x: x, y: 17, maxWidth: 17)
-            buffer.write("I Use 1st Item", color: .brightBlack, x: x, y: 18, maxWidth: 17)
-            buffer.write("J Hint  K Save", color: .brightBlack, x: x, y: 19, maxWidth: 17)
-            buffer.write("L Load  X Quit", color: .brightBlack, x: x, y: 20, maxWidth: 17)
+            buffer.write("W \(shortName(state.player.equippedName(for: .weapon)))", color: .brightBlack, x: x, y: 15, maxWidth: 17)
+            buffer.write("A \(shortName(state.player.equippedName(for: .armor)))", color: .brightBlack, x: x, y: 16, maxWidth: 17)
+            buffer.write("C \(shortName(state.player.equippedName(for: .charm)))", color: .brightBlack, x: x, y: 17, maxWidth: 17)
+            buffer.write("TR \(state.player.traitSummaryLine())", color: .brightBlack, x: x, y: 18, maxWidth: 17)
+            buffer.write("E Act  I Pack", color: .brightBlack, x: x, y: 19, maxWidth: 17)
+            buffer.write("J Hint K Save", color: .brightBlack, x: x, y: 20, maxWidth: 17)
+            buffer.write("L Load X Quit", color: .brightBlack, x: x, y: 21, maxWidth: 17)
         }
+    }
+
+    private func shortName(_ value: String) -> String {
+        String(value.prefix(15))
     }
 
     private func overlayMarker(for interactable: InteractableDefinition, opened: Set<String>) -> (glyph: Character, color: ANSIColor)? {

@@ -63,12 +63,18 @@ struct ContentLoader {
 }
 
 let itemTable: [ItemID: Item] = [
-    .healingTonic: Item(id: .healingTonic, name: "Healing Tonic", kind: .consumable, value: 8),
-    .ironKey: Item(id: .ironKey, name: "Iron Key", kind: .key, value: 0),
-    .lanternOil: Item(id: .lanternOil, name: "Lantern Oil", kind: .consumable, value: 6),
-    .charmFragment: Item(id: .charmFragment, name: "Charm Fragment", kind: .upgrade, value: 1),
-    .lensCore: Item(id: .lensCore, name: "Lens Core", kind: .quest, value: 0),
-    .shrineKey: Item(id: .shrineKey, name: "Shrine Key", kind: .key, value: 0),
+    .healingTonic: Item(id: .healingTonic, name: "Healing Tonic", kind: .consumable, value: 8, slot: nil, attackBonus: 0, defenseBonus: 0, lanternBonus: 0),
+    .ironKey: Item(id: .ironKey, name: "Iron Key", kind: .key, value: 0, slot: nil, attackBonus: 0, defenseBonus: 0, lanternBonus: 0),
+    .lanternOil: Item(id: .lanternOil, name: "Lantern Oil", kind: .consumable, value: 6, slot: nil, attackBonus: 0, defenseBonus: 0, lanternBonus: 0),
+    .charmFragment: Item(id: .charmFragment, name: "Charm Fragment", kind: .upgrade, value: 1, slot: nil, attackBonus: 0, defenseBonus: 0, lanternBonus: 0),
+    .lensCore: Item(id: .lensCore, name: "Lens Core", kind: .quest, value: 0, slot: nil, attackBonus: 0, defenseBonus: 0, lanternBonus: 0),
+    .shrineKey: Item(id: .shrineKey, name: "Shrine Key", kind: .key, value: 0, slot: nil, attackBonus: 0, defenseBonus: 0, lanternBonus: 0),
+    .ashenBlade: Item(id: .ashenBlade, name: "Ashen Blade", kind: .equipment, value: 0, slot: .weapon, attackBonus: 1, defenseBonus: 0, lanternBonus: 0),
+    .wandererCloak: Item(id: .wandererCloak, name: "Wanderer Cloak", kind: .equipment, value: 0, slot: .armor, attackBonus: 0, defenseBonus: 1, lanternBonus: 0),
+    .sunCharm: Item(id: .sunCharm, name: "Sun Charm", kind: .equipment, value: 0, slot: .charm, attackBonus: 0, defenseBonus: 0, lanternBonus: 3),
+    .barrowMail: Item(id: .barrowMail, name: "Barrow Mail", kind: .equipment, value: 0, slot: .armor, attackBonus: 0, defenseBonus: 2, lanternBonus: 0),
+    .fenLance: Item(id: .fenLance, name: "Fen Lance", kind: .equipment, value: 0, slot: .weapon, attackBonus: 3, defenseBonus: 0, lanternBonus: 0),
+    .mirrorCharm: Item(id: .mirrorCharm, name: "Mirror Charm", kind: .equipment, value: 0, slot: .charm, attackBonus: 1, defenseBonus: 1, lanternBonus: 2),
 ]
 
 let dialogueTable: [String: DialogueNode] = [
@@ -94,6 +100,22 @@ let dialogueTable: [String: DialogueNode] = [
         lines: [
             "The mist listens for weak lamps.",
             "Keep the lantern breathing and the bog will spare your feet.",
+        ]
+    ),
+    "field_scout": DialogueNode(
+        id: "field_scout",
+        speaker: "Watcher Elow",
+        lines: [
+            "The crows have learned the roads better than we have.",
+            "Take the old tonic cache. You'll need it.",
+        ]
+    ),
+    "barrow_scholar": DialogueNode(
+        id: "barrow_scholar",
+        speaker: "Dust Scholar",
+        lines: [
+            "The dead built these vaults to test memory.",
+            "Take only what light can carry. The rest belongs to stone.",
         ]
     ),
     "keeper": DialogueNode(
@@ -123,6 +145,16 @@ let npcSeed: [NPCState] = [
         dialogueState: 0
     ),
     NPCState(
+        id: "field_scout",
+        name: "Watcher Elow",
+        position: Position(x: 4, y: 7),
+        mapID: "south_fields",
+        dialogueID: "field_scout",
+        glyphSymbol: "s",
+        glyphColor: .white,
+        dialogueState: 0
+    ),
+    NPCState(
         id: "orchard_guide",
         name: "Mara the Tinker",
         position: Position(x: 4, y: 2),
@@ -130,6 +162,16 @@ let npcSeed: [NPCState] = [
         dialogueID: "orchard_hermit",
         glyphSymbol: "t",
         glyphColor: .green,
+        dialogueState: 0
+    ),
+    NPCState(
+        id: "barrow_scholar",
+        name: "Dust Scholar",
+        position: Position(x: 15, y: 7),
+        mapID: "hollow_barrows",
+        dialogueID: "barrow_scholar",
+        glyphSymbol: "d",
+        glyphColor: .magenta,
         dialogueState: 0
     ),
     NPCState(
@@ -146,8 +188,12 @@ let npcSeed: [NPCState] = [
 
 let enemySeed: [EnemyState] = [
     EnemyState(id: "crow_1", name: "Crow", position: Position(x: 10, y: 4), hp: 7, maxHP: 7, attack: 4, defense: 1, ai: .idle, glyph: "c", color: .yellow, mapID: "south_fields", active: true),
+    EnemyState(id: "crow_2", name: "Crow", position: Position(x: 14, y: 2), hp: 7, maxHP: 7, attack: 4, defense: 1, ai: .idle, glyph: "c", color: .yellow, mapID: "south_fields", active: true),
     EnemyState(id: "hound_1", name: "Root Hound", position: Position(x: 9, y: 6), hp: 10, maxHP: 10, attack: 5, defense: 2, ai: .stalk, glyph: "h", color: .red, mapID: "sunken_orchard", active: true),
+    EnemyState(id: "hound_2", name: "Root Hound", position: Position(x: 14, y: 7), hp: 10, maxHP: 10, attack: 5, defense: 2, ai: .stalk, glyph: "h", color: .red, mapID: "sunken_orchard", active: true),
     EnemyState(id: "wraith_1", name: "Mire Wraith", position: Position(x: 8, y: 5), hp: 12, maxHP: 12, attack: 6, defense: 2, ai: .stalk, glyph: "w", color: .magenta, mapID: "black_fen", active: true),
+    EnemyState(id: "wraith_2", name: "Mire Wraith", position: Position(x: 12, y: 2), hp: 12, maxHP: 12, attack: 6, defense: 2, ai: .stalk, glyph: "w", color: .magenta, mapID: "black_fen", active: true),
     EnemyState(id: "sentinel_1", name: "Barrow Sentinel", position: Position(x: 12, y: 4), hp: 15, maxHP: 15, attack: 7, defense: 3, ai: .guardian, glyph: "g", color: .white, mapID: "hollow_barrows", active: true),
+    EnemyState(id: "sentinel_2", name: "Barrow Sentinel", position: Position(x: 6, y: 7), hp: 15, maxHP: 15, attack: 7, defense: 3, ai: .guardian, glyph: "g", color: .white, mapID: "hollow_barrows", active: true),
     EnemyState(id: "keeper", name: "Shaded Keeper", position: Position(x: 12, y: 4), hp: 18, maxHP: 18, attack: 8, defense: 3, ai: .boss, glyph: "K", color: .brightBlack, mapID: "beacon_spire", active: true),
 ]

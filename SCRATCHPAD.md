@@ -19,6 +19,8 @@
 - Added actual puzzle gating: paired pressure plates in the Black Fen and an ordered mirror-switch sequence in the Beacon Spire.
 - Added a headless automation layer: `--script` for deterministic command runs and `--bridge` for stdin-driven JSON snapshots.
 - Surfaced clearer on-screen control legends so the UI states what each key actually does.
+- Reworked the native graphics renderer toward a Gemstone Warrior (1984) influence: bright chamber borders, black void framing, patterned room floors, and chunkier low-res sprites.
+- Fixed the graphics key handler so `Q` now actually behaves as back/cancel instead of quitting.
 
 ## Current Notes
 
@@ -28,6 +30,7 @@
 - After each successful build, copy the runnable binary to the project root as `./Codexitma`.
 - The current world path now includes explicit environmental puzzle steps instead of only location-based progression.
 - The new bridge is a better immediate fit than a full MCP server, and can be wrapped by MCP later if needed.
+- The graphics mode is now the strongest presentation path: Gemstone-like chamber screens on top of the existing Apple II / Ultima mechanical base.
 
 ## Next Build Targets
 
