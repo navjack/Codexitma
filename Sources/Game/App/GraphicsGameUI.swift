@@ -303,6 +303,7 @@ private struct MapBoardView: View {
                         LowResTileView(
                             tile: TileFactory.tile(for: resolved(raw)),
                             occupant: occupant(at: Position(x: x, y: y)),
+                            feature: feature(at: Position(x: x, y: y)),
                             palette: palette
                         )
                         .frame(width: cell, height: cell)
@@ -340,6 +341,30 @@ private struct MapBoardView: View {
         }
         return .none
     }
+
+    private func feature(at position: Position) -> MapFeature {
+        guard let interactable = state.world.maps[state.player.currentMapID]?.interactables.first(where: { $0.position == position }) else {
+            return .none
+        }
+        switch interactable.kind {
+        case .chest:
+            return state.world.openedInteractables.contains(interactable.id) ? .none : .chest
+        case .bed:
+            return .bed
+        case .plate:
+            return state.world.openedInteractables.contains(interactable.id) ? .plateDown : .plateUp
+        case .switchRune:
+            return state.world.openedInteractables.contains("spire_mirrors_aligned") ? .switchLit : .switchIdle
+        case .shrine:
+            return .shrine
+        case .beacon:
+            return .beacon
+        case .gate:
+            return .gate
+        case .npc:
+            return .none
+        }
+    }
 }
 
 private enum MapOccupant {
@@ -350,9 +375,23 @@ private enum MapOccupant {
     case boss
 }
 
+private enum MapFeature {
+    case none
+    case chest
+    case bed
+    case plateUp
+    case plateDown
+    case switchIdle
+    case switchLit
+    case shrine
+    case beacon
+    case gate
+}
+
 private struct LowResTileView: View {
     let tile: Tile
     let occupant: MapOccupant
+    let feature: MapFeature
     let palette: UltimaPalette
 
     var body: some View {
@@ -361,6 +400,7 @@ private struct LowResTileView: View {
             ZStack {
                 Rectangle().fill(tileColor)
                 tileMark(size: size)
+                featureMark(size: size)
                 sprite(size: size)
             }
             .overlay(Rectangle().stroke(palette.background, lineWidth: 1))
@@ -405,6 +445,32 @@ private struct LowResTileView: View {
                 .frame(width: size * 0.24, height: size * 0.24)
         default:
             EmptyView()
+        }
+    }
+
+    @ViewBuilder
+    private func featureMark(size: CGFloat) -> some View {
+        switch feature {
+        case .none:
+            EmptyView()
+        case .chest:
+            Rectangle().fill(palette.lightGold).frame(width: size * 0.45, height: size * 0.32)
+        case .bed:
+            Rectangle().fill(palette.text).frame(width: size * 0.6, height: size * 0.22)
+        case .plateUp:
+            Rectangle().fill(palette.accentViolet).frame(width: size * 0.5, height: size * 0.14)
+        case .plateDown:
+            Rectangle().fill(palette.stone).frame(width: size * 0.5, height: size * 0.14)
+        case .switchIdle:
+            Rectangle().fill(palette.accentBlue).frame(width: size * 0.24, height: size * 0.24)
+        case .switchLit:
+            Rectangle().fill(palette.lightGold).frame(width: size * 0.24, height: size * 0.24)
+        case .shrine:
+            Rectangle().fill(palette.accentViolet).frame(width: size * 0.32, height: size * 0.32)
+        case .beacon:
+            Rectangle().fill(palette.lightGold).frame(width: size * 0.34, height: size * 0.34)
+        case .gate:
+            Rectangle().fill(palette.titleGold).frame(width: size * 0.36, height: size * 0.6)
         }
     }
 

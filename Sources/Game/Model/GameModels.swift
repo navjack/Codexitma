@@ -342,6 +342,8 @@ enum InteractableKind: String, Codable {
     case bed
     case gate
     case beacon
+    case plate
+    case switchRune
 }
 
 struct InteractableDefinition: Codable {
@@ -382,6 +384,47 @@ struct WorldState: Codable {
     var npcs: [NPCState]
     var enemies: [EnemyState]
     var openedInteractables: Set<String>
+    var activeSwitchSequence: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case maps
+        case npcs
+        case enemies
+        case openedInteractables
+        case activeSwitchSequence
+    }
+
+    init(
+        maps: [String: MapDefinition],
+        npcs: [NPCState],
+        enemies: [EnemyState],
+        openedInteractables: Set<String>,
+        activeSwitchSequence: [String] = []
+    ) {
+        self.maps = maps
+        self.npcs = npcs
+        self.enemies = enemies
+        self.openedInteractables = openedInteractables
+        self.activeSwitchSequence = activeSwitchSequence
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        maps = try container.decode([String: MapDefinition].self, forKey: .maps)
+        npcs = try container.decode([NPCState].self, forKey: .npcs)
+        enemies = try container.decode([EnemyState].self, forKey: .enemies)
+        openedInteractables = try container.decode(Set<String>.self, forKey: .openedInteractables)
+        activeSwitchSequence = try container.decodeIfPresent([String].self, forKey: .activeSwitchSequence) ?? []
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(maps, forKey: .maps)
+        try container.encode(npcs, forKey: .npcs)
+        try container.encode(enemies, forKey: .enemies)
+        try container.encode(openedInteractables, forKey: .openedInteractables)
+        try container.encode(activeSwitchSequence, forKey: .activeSwitchSequence)
+    }
 }
 
 struct SaveGame: Codable {

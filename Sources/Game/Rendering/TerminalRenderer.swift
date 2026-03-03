@@ -123,6 +123,10 @@ final class TerminalRenderer {
                 buffer.put(tile.glyph, color: tile.color, x: x + 1, y: y + 1)
             }
         }
+        for interactable in map.interactables {
+            guard let marker = overlayMarker(for: interactable, opened: state.world.openedInteractables) else { continue }
+            buffer.put(marker.glyph, color: marker.color, x: interactable.position.x + 1, y: interactable.position.y + 1)
+        }
         for npc in state.world.npcs where npc.mapID == state.player.currentMapID && npc.position != state.player.position {
             buffer.put(npc.glyph, color: npc.color, x: npc.position.x + 1, y: npc.position.y + 1)
         }
@@ -163,6 +167,28 @@ final class TerminalRenderer {
             for (index, line) in dialogue.lines.prefix(4).enumerated() {
                 buffer.write(line, x: x, y: 17 + index, maxWidth: 17)
             }
+        }
+    }
+
+    private func overlayMarker(for interactable: InteractableDefinition, opened: Set<String>) -> (glyph: Character, color: ANSIColor)? {
+        switch interactable.kind {
+        case .chest:
+            if opened.contains(interactable.id) { return nil }
+            return ("$", .yellow)
+        case .bed:
+            return ("=", .white)
+        case .gate:
+            return ("+", .yellow)
+        case .plate:
+            return ("^", opened.contains(interactable.id) ? .brightBlack : .magenta)
+        case .switchRune:
+            return ("o", opened.contains("spire_mirrors_aligned") ? .yellow : .cyan)
+        case .shrine:
+            return ("*", .cyan)
+        case .beacon:
+            return ("B", .yellow)
+        case .npc:
+            return nil
         }
     }
 }

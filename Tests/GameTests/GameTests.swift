@@ -53,7 +53,7 @@ import Testing
             lastSavePosition: Position(x: 1, y: 1),
             lastSaveMapID: "merrow_village"
         ),
-        world: WorldState(maps: [:], npcs: [], enemies: [], openedInteractables: []),
+        world: WorldState(maps: [:], npcs: [], enemies: [], openedInteractables: [], activeSwitchSequence: []),
         quests: QuestState(flags: [.metElder]),
         playTimeSeconds: 42
     )
@@ -87,4 +87,9 @@ import Testing
 @Test func launchModeDefaultsToGraphicsButAllowsTerminalOverride() async throws {
     #expect(LaunchMode.parse(arguments: ["Game"]) == .graphics)
     #expect(LaunchMode.parse(arguments: ["Game", "--terminal"]) == .terminal)
+}
+
+@Test func contentLoaderLoadsSixMaps() async throws {
+    let content = try ContentLoader().load()
+    #expect(content.maps.count == 6)
 }

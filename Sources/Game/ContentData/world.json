@@ -160,11 +160,32 @@
         "from": { "x": 18, "y": 5 },
         "toMap": "beacon_spire",
         "toPosition": { "x": 1, "y": 5 },
-        "requiredFlag": "obtainedLensCore",
-        "blockedMessage": "The tower path rejects the unproven."
+        "requiredFlag": "fenCrossed",
+        "blockedMessage": "The fen still churns. The causeway has not risen."
       }
     ],
-    "interactables": []
+    "interactables": [
+      {
+        "id": "fen_plate_west",
+        "kind": "plate",
+        "position": { "x": 2, "y": 4 },
+        "title": "Fen Plate",
+        "lines": ["A stone plate groans somewhere under the bog."],
+        "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": null
+      },
+      {
+        "id": "fen_plate_east",
+        "kind": "plate",
+        "position": { "x": 14, "y": 7 },
+        "title": "Fen Plate",
+        "lines": ["Another plate sinks. Water begins to recoil."],
+        "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": null
+      }
+    ]
   },
   {
     "id": "beacon_spire",
@@ -182,6 +203,36 @@
       }
     ],
     "interactables": [
+      {
+        "id": "spire_switch_sun",
+        "kind": "switchRune",
+        "position": { "x": 6, "y": 1 },
+        "title": "Sun Rune",
+        "lines": ["A gold rune rings through the mirror cage."],
+        "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": null
+      },
+      {
+        "id": "spire_switch_moon",
+        "kind": "switchRune",
+        "position": { "x": 10, "y": 1 },
+        "title": "Moon Rune",
+        "lines": ["A pale tone answers above."],
+        "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": null
+      },
+      {
+        "id": "spire_switch_star",
+        "kind": "switchRune",
+        "position": { "x": 14, "y": 1 },
+        "title": "Star Rune",
+        "lines": ["A sharp note traces the top of the tower."],
+        "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": null
+      },
       {
         "id": "final_beacon",
         "kind": "beacon",

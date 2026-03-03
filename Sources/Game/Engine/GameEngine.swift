@@ -34,7 +34,8 @@ final class GameEngine {
             maps: content.maps,
             npcs: content.initialNPCs,
             enemies: content.initialEnemies,
-            openedInteractables: []
+            openedInteractables: [],
+            activeSwitchSequence: []
         )
         return GameState(
             mode: .title,
@@ -313,9 +314,6 @@ final class GameEngine {
             if state.player.lanternCharge == 0 {
                 state.log("The fen drinks the last of your lantern.")
             }
-            if position.x >= 14 {
-                state.quests.set(.fenCrossed)
-            }
         }
     }
 
@@ -365,13 +363,66 @@ final class GameEngine {
                 state.log(interactable.lines.first ?? "The gate will not move.")
             }
         case .beacon:
+            if state.quests.has(.beaconLit) {
+                state.log("The beacon already commands the night.")
+                return
+            }
+            guard state.world.openedInteractables.contains("spire_mirrors_aligned") else {
+                state.log("Dark mirrors starve the beacon of focus.")
+                return
+            }
             if state.quests.has(.obtainedLensCore) {
                 state.quests.set(.beaconLit)
                 state.log("Light races through the tower.")
             } else {
                 state.log("A hollow socket awaits the Lens Core.")
             }
+        case .plate:
+            resolvePressurePlate(interactable)
+        case .switchRune:
+            resolveSwitchRune(interactable)
         }
+    }
+
+    private func resolvePressurePlate(_ interactable: InteractableDefinition) {
+        if state.world.openedInteractables.contains(interactable.id) {
+            state.log("The plate is already sunk into the stone.")
+            return
+        }
+        state.world.openedInteractables.insert(interactable.id)
+        state.log(interactable.lines.first ?? "A hidden weight shifts below.")
+
+        let fenPlates: Set<String> = ["fen_plate_west", "fen_plate_east"]
+        if fenPlates.isSubset(of: state.world.openedInteractables) {
+            state.quests.set(.fenCrossed)
+            state.world.openedInteractables.insert("fen_causeway_raised")
+            state.log("Stone teeth rise from the fen and form a safe causeway.")
+        }
+    }
+
+    private func resolveSwitchRune(_ interactable: InteractableDefinition) {
+        let solution = ["spire_switch_sun", "spire_switch_moon", "spire_switch_star"]
+
+        if state.world.openedInteractables.contains("spire_mirrors_aligned") {
+            state.log("The mirror lattice is already aligned.")
+            return
+        }
+
+        state.world.activeSwitchSequence.append(interactable.id)
+        if !solution.starts(with: state.world.activeSwitchSequence) {
+            state.world.activeSwitchSequence = interactable.id == solution.first ? [interactable.id] : []
+            state.log("The tower hum snaps out of tune. The mirrors reset.")
+            return
+        }
+
+        if state.world.activeSwitchSequence.count == solution.count {
+            state.world.openedInteractables.insert("spire_mirrors_aligned")
+            state.world.activeSwitchSequence = []
+            state.log("The mirrors lock in place above the lens cradle.")
+            return
+        }
+
+        state.log(interactable.lines.first ?? "A distant mirror answers the rune.")
     }
 
     private func grantItem(_ id: ItemID, message: String) {
