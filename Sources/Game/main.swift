@@ -17,6 +17,6 @@ do {
         try app.runBridge()
     }
 } catch {
-    fputs("Ashes of Merrow failed to start: \(error)\n", stderr)
+    fputs("Codexitma failed to start: \(error)\n", stderr)
     exit(1)
 }

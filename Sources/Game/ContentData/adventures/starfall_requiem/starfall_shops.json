@@ -1,0 +1,82 @@
+[
+  {
+    "id": "signal_bazaar_general",
+    "merchantID": "bazaar_keeper",
+    "merchantName": "Rena of the Line",
+    "introLine": "Storm or not, the line still trades.",
+    "offers": [
+      {
+        "id": "bazaar_tonic",
+        "itemID": "healingTonic",
+        "price": 2,
+        "blurb": "Warm tonic for patching up after bad deck work.",
+        "repeatable": true
+      },
+      {
+        "id": "bazaar_oil",
+        "itemID": "lanternOil",
+        "price": 2,
+        "blurb": "Fresh lamp oil packed in stormproof glass.",
+        "repeatable": true
+      },
+      {
+        "id": "bazaar_charm",
+        "itemID": "charmFragment",
+        "price": 6,
+        "blurb": "A cut shard of old machine crystal. Still warm.",
+        "repeatable": false
+      }
+    ]
+  },
+  {
+    "id": "breaker_forge_armory",
+    "merchantID": "forge_master",
+    "merchantName": "Smith Dax",
+    "introLine": "If it holds an edge, it still has worth.",
+    "offers": [
+      {
+        "id": "forge_blade",
+        "itemID": "ashenBlade",
+        "price": 5,
+        "blurb": "A field sword balanced for dock fights and bad weather.",
+        "repeatable": false
+      },
+      {
+        "id": "forge_mail",
+        "itemID": "barrowMail",
+        "price": 7,
+        "blurb": "Heavy salvage plate with enough give to keep moving.",
+        "repeatable": false
+      },
+      {
+        "id": "forge_lance",
+        "itemID": "fenLance",
+        "price": 9,
+        "blurb": "A shock-spear built for beasts in shallow water.",
+        "repeatable": false
+      }
+    ]
+  },
+  {
+    "id": "archive_relics",
+    "merchantID": "archive_keeper",
+    "merchantName": "Index Shade",
+    "introLine": "Records, relics, and any truth still worth carrying.",
+    "offers": [
+      {
+        "id": "archive_charm",
+        "itemID": "mirrorCharm",
+        "price": 8,
+        "blurb": "A polished lens charm that bends light back on itself.",
+        "repeatable": false
+      },
+      {
+        "id": "archive_key",
+        "itemID": "shrineKey",
+        "price": 4,
+        "blurb": "An old service key cut for sealed maintenance locks.",
+        "repeatable": false
+      }
+    ]
+  }
+]

@@ -125,6 +125,7 @@ enum AutomationCommandParser {
 }
 
 struct AutomationSnapshot: Codable {
+    let adventureID: String
     let mode: String
     let mapID: String
     let mapName: String
@@ -133,6 +134,7 @@ struct AutomationSnapshot: Codable {
     let maxHealth: Int
     let stamina: Int
     let lanternCharge: Int
+    let marks: Int
     let inventory: [String]
     let questFlags: [String]
     let openedInteractables: [String]
@@ -145,6 +147,7 @@ struct AutomationSnapshot: Codable {
 
     static func from(state: GameState) -> AutomationSnapshot {
         AutomationSnapshot(
+            adventureID: state.currentAdventureID.rawValue,
             mode: String(describing: state.mode),
             mapID: state.player.currentMapID,
             mapName: state.world.maps[state.player.currentMapID]?.name ?? state.player.currentMapID,
@@ -153,6 +156,7 @@ struct AutomationSnapshot: Codable {
             maxHealth: state.player.maxHealth,
             stamina: state.player.stamina,
             lanternCharge: state.player.lanternCharge,
+            marks: state.player.marks,
             inventory: state.player.inventory.map(\.name),
             questFlags: state.quests.flags.map(\.rawValue).sorted(),
             openedInteractables: state.world.openedInteractables.sorted(),
@@ -161,7 +165,7 @@ struct AutomationSnapshot: Codable {
                 .filter { $0.active }
                 .map(\.id)
                 .sorted(),
-            objective: QuestSystem.objective(for: state.quests),
+            objective: QuestSystem.objective(for: state.quests, text: state.objectiveText),
             lastMessage: state.messages.last,
             dialogueSpeaker: state.currentDialogue?.speaker,
             shouldQuit: state.shouldQuit
@@ -177,15 +181,15 @@ struct AutomationResponse: Codable {
 }
 
 final class AutomationSession {
-    private let content: GameContent
+    private let library: GameContentLibrary
     private let saveRepository: SaveRepository
     private var engine: GameEngine
     private let encoder: JSONEncoder
 
-    init(content: GameContent, saveRepository: SaveRepository) {
-        self.content = content
+    init(library: GameContentLibrary, saveRepository: SaveRepository) {
+        self.library = library
         self.saveRepository = saveRepository
-        self.engine = GameEngine(content: content, saveRepository: saveRepository)
+        self.engine = GameEngine(library: library, saveRepository: saveRepository)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         self.encoder = encoder
@@ -228,7 +232,7 @@ final class AutomationSession {
         case .snapshot:
             emit(token: token, snapshot: AutomationSnapshot.from(state: engine.state))
         case .reset:
-            engine = GameEngine(content: content, saveRepository: saveRepository)
+            engine = GameEngine(library: library, saveRepository: saveRepository)
             emit(token: token, snapshot: AutomationSnapshot.from(state: engine.state))
         case .game(let command):
             engine.handle(command)

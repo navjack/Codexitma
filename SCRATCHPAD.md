@@ -23,6 +23,9 @@
 - Fixed the graphics key handler so `Q` now actually behaves as back/cancel instead of quitting.
 - Repacked the graphics HUD into a shorter two-column dashboard so the full game view fits comfortably inside the default window and stays within a 1080p-class presentation target.
 - Added selectable graphics presentation themes in the native UI: `Gemstone` for chamber-heavy contrast and `Ultima` for a flatter overworld-style board, both driven by the same engine state.
+- Added a second full adventure, `Starfall Requiem`, with a larger map graph, interior buildings, side dungeons, more NPCs, and broader encounter density.
+- Persisted the graphics visual theme between launches and added simple Apple II-style square-wave cues for intro, movement, attacks, and item use in graphics mode.
+- Moved authored content out of hardcoded Swift tables and into bundled JSON data packs: adventure catalog, class templates, items, objectives, dialogue, encounters, NPCs, enemies, and shop definitions.
 
 ## Current Notes
 
@@ -35,6 +38,7 @@
 - The graphics mode is now the strongest presentation path: Gemstone-like chamber screens on top of the existing Apple II / Ultima mechanical base.
 - Keep the graphics layout bounded for at least a 1080p window; if more UI is added later, prefer widening panels or adding compact rows before making the window taller.
 - Theme selection is now a UI concern only; keep future visual experiments in the renderer/session layer rather than pushing them into `GameEngine`.
+- Content authoring should now default to the JSON packs in `Sources/Game/ContentData`; only core rules, state transitions, and rendering logic should require Swift changes.
 
 ## Next Build Targets
 
@@ -43,3 +47,4 @@
 - Commit stable checkpoints frequently now that git is part of the workflow.
 - Add more authored map events, optional treasure loops, and denser region-specific enemy encounters.
 - Build a full scripted playthrough using the bridge so progression can be regression-tested end to end.
+- Turn the newly externalized shop definitions into live in-game merchant interfaces backed by `marks`.

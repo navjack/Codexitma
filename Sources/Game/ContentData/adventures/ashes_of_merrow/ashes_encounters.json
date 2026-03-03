@@ -1,0 +1,12 @@
+[
+  {
+    "id": "crow",
+    "enemyID": "crow_1",
+    "introLine": "A ragged crow dives from the rafters."
+  },
+  {
+    "id": "hound",
+    "enemyID": "hound_1",
+    "introLine": "A root hound snaps from the thicket."
+  }
+]

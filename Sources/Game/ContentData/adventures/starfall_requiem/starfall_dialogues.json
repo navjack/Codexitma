@@ -1,0 +1,82 @@
+[
+  {
+    "id": "elder_intro",
+    "speaker": "Admiral Vey",
+    "lines": [
+      "The sky-engine crashed before midnight.",
+      "Prime both shore capacitors, then reclaim the Star Core below."
+    ]
+  },
+  {
+    "id": "orchard_hermit",
+    "speaker": "Glass Witch Orla",
+    "lines": [
+      "The marsh keeps what falls from the heavens.",
+      "Carry charge, not bravado, and it may let you pass."
+    ]
+  },
+  {
+    "id": "fen_ferryman",
+    "speaker": "Storm Pilot Renn",
+    "lines": [
+      "The shoals only respect current and timing.",
+      "Raise the route, then move fast before the tide remembers you."
+    ]
+  },
+  {
+    "id": "field_scout",
+    "speaker": "Salvager Nox",
+    "lines": [
+      "The first wreck still spits live sparks.",
+      "Best loot in the coast is always one step past good sense."
+    ]
+  },
+  {
+    "id": "barrow_scholar",
+    "speaker": "Archivist Pell",
+    "lines": [
+      "The Reliquary only yields to those who read the old machine prayers.",
+      "Take the side vaults if you can. They kept the real prizes there."
+    ]
+  },
+  {
+    "id": "bazaar_keeper",
+    "speaker": "Rena of the Line",
+    "lines": [
+      "The bazaar still stands, so the coast still has a pulse.",
+      "Take what you need. If we survive, you can pay me in stories and scrap."
+    ]
+  },
+  {
+    "id": "forge_master",
+    "speaker": "Smith Dax",
+    "lines": [
+      "Steel is honest. Storms are not.",
+      "Bring the engine back and I'll call your tab forgiven."
+    ]
+  },
+  {
+    "id": "archive_keeper",
+    "speaker": "Index Shade",
+    "lines": [
+      "Names, ledgers, routes, dead captains. I remember all of them.",
+      "Take the records you can carry. The sea keeps the rest."
+    ]
+  },
+  {
+    "id": "storm_lookout",
+    "speaker": "Lookout Venn",
+    "lines": [
+      "Every vulture here once followed a ship in.",
+      "If you can clear the perch, the engine won't see you coming too soon."
+    ]
+  },
+  {
+    "id": "keeper",
+    "speaker": "The Fallen Helmsman",
+    "lines": [
+      "You would wake the engine that buried us?",
+      "Then prove your claim in lightning and steel."
+    ]
+  }
+]

@@ -1,20 +1,20 @@
 import Foundation
 
 struct GameApp {
-    private let content: GameContent
+    private let library: GameContentLibrary
     private let renderer: TerminalRenderer
     private let input: InputReader
     private let saves: SaveRepository
 
     init() throws {
-        content = try ContentLoader().load()
+        library = try ContentLoader().load()
         renderer = TerminalRenderer()
         input = InputReader()
         saves = SaveRepository()
     }
 
     func runTerminal() throws {
-        let engine = GameEngine(content: content, saveRepository: saves)
+        let engine = GameEngine(library: library, saveRepository: saves)
         renderer.prepare()
         defer { renderer.restore() }
 
@@ -38,20 +38,20 @@ struct GameApp {
     }
 
     func runGraphics() {
-        let content = self.content
+        let library = self.library
         let saves = self.saves
         MainActor.assumeIsolated {
-            GraphicsGameLauncher.run(content: content, saveRepository: saves)
+            GraphicsGameLauncher.run(library: library, saveRepository: saves)
         }
     }
 
     func runScript(commands: [String], emitStepSnapshots: Bool) throws {
-        let automation = AutomationSession(content: content, saveRepository: saves)
+        let automation = AutomationSession(library: library, saveRepository: saves)
         try automation.runScript(commands: commands, emitStepSnapshots: emitStepSnapshots)
     }
 
     func runBridge() throws {
-        let automation = AutomationSession(content: content, saveRepository: saves)
+        let automation = AutomationSession(library: library, saveRepository: saves)
         try automation.runBridge()
     }
 }

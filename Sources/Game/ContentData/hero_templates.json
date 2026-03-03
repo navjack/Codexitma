@@ -1,0 +1,80 @@
+[
+  {
+    "heroClass": "warden",
+    "title": "The Iron Warden",
+    "summary": "A durable fighter who begins stronger in armor and holds the line.",
+    "traits": {
+      "brawn": 7,
+      "agility": 4,
+      "grit": 8,
+      "wits": 4,
+      "lore": 3,
+      "spark": 4
+    },
+    "skills": ["bulwark", "cleave"],
+    "baseHealth": 30,
+    "baseStamina": 11,
+    "baseAttack": 6,
+    "baseDefense": 4,
+    "baseLantern": 7,
+    "startingMarks": 8,
+    "startingEquipment": {
+      "weapon": "ashenBlade",
+      "armor": "barrowMail",
+      "charm": null
+    },
+    "startingInventory": ["healingTonic"]
+  },
+  {
+    "heroClass": "wayfarer",
+    "title": "The Wild Wayfarer",
+    "summary": "A scavenging survivor with better sustain, mobility, and bag space.",
+    "traits": {
+      "brawn": 5,
+      "agility": 7,
+      "grit": 5,
+      "wits": 6,
+      "lore": 4,
+      "spark": 5
+    },
+    "skills": ["fieldMedicine", "scavenger"],
+    "baseHealth": 24,
+    "baseStamina": 13,
+    "baseAttack": 5,
+    "baseDefense": 3,
+    "baseLantern": 8,
+    "startingMarks": 10,
+    "startingEquipment": {
+      "weapon": "ashenBlade",
+      "armor": "wandererCloak",
+      "charm": null
+    },
+    "startingInventory": ["healingTonic", "lanternOil"]
+  },
+  {
+    "heroClass": "seer",
+    "title": "The Ember Seer",
+    "summary": "A light-worker who handles runes better and navigates hazard zones more safely.",
+    "traits": {
+      "brawn": 3,
+      "agility": 5,
+      "grit": 4,
+      "wits": 7,
+      "lore": 8,
+      "spark": 8
+    },
+    "skills": ["trailcraft", "runeSight"],
+    "baseHealth": 21,
+    "baseStamina": 12,
+    "baseAttack": 4,
+    "baseDefense": 2,
+    "baseLantern": 10,
+    "startingMarks": 12,
+    "startingEquipment": {
+      "weapon": null,
+      "armor": "wandererCloak",
+      "charm": "sunCharm"
+    },
+    "startingInventory": ["lanternOil", "healingTonic"]
+  }
+]

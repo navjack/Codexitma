@@ -7,16 +7,20 @@ enum SaveError: Error {
 
 final class SaveRepository: @unchecked Sendable {
     let fileURL: URL
+    let legacyFileURL: URL?
 
     init(fileManager: FileManager = .default) {
         let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSTemporaryDirectory())
-        let folder = appSupport.appendingPathComponent("AshesOfMerrow", isDirectory: true)
+        let folder = appSupport.appendingPathComponent("Codexitma", isDirectory: true)
         self.fileURL = folder.appendingPathComponent("savegame.json")
+        let legacyFolder = appSupport.appendingPathComponent("AshesOfMerrow", isDirectory: true)
+        self.legacyFileURL = legacyFolder.appendingPathComponent("savegame.json")
     }
 
     init(fileURL: URL) {
         self.fileURL = fileURL
+        self.legacyFileURL = nil
     }
 
     func save(_ save: SaveGame) throws {
@@ -30,10 +34,15 @@ final class SaveRepository: @unchecked Sendable {
     }
 
     func load() throws -> SaveGame {
-        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+        let sourceURL: URL
+        if FileManager.default.fileExists(atPath: fileURL.path) {
+            sourceURL = fileURL
+        } else if let legacyFileURL, FileManager.default.fileExists(atPath: legacyFileURL.path) {
+            sourceURL = legacyFileURL
+        } else {
             throw SaveError.notFound
         }
-        let data = try Data(contentsOf: fileURL)
+        let data = try Data(contentsOf: sourceURL)
         guard let save = try? JSONDecoder().decode(SaveGame.self, from: data) else {
             throw SaveError.corrupt
         }

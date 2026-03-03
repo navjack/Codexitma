@@ -1,0 +1,50 @@
+[
+  {
+    "id": "elder_intro",
+    "speaker": "Elder Rowan",
+    "lines": [
+      "The beacon fell dark at dawn.",
+      "Relight the outer shrines and the valley may yet hold."
+    ]
+  },
+  {
+    "id": "orchard_hermit",
+    "speaker": "Mara the Tinker",
+    "lines": [
+      "Roots remember the old roads.",
+      "Carry light, and the orchard will open what it swallowed."
+    ]
+  },
+  {
+    "id": "fen_ferryman",
+    "speaker": "Fen Ferryman",
+    "lines": [
+      "The mist listens for weak lamps.",
+      "Keep the lantern breathing and the bog will spare your feet."
+    ]
+  },
+  {
+    "id": "field_scout",
+    "speaker": "Watcher Elow",
+    "lines": [
+      "The crows have learned the roads better than we have.",
+      "Take the old tonic cache. You'll need it."
+    ]
+  },
+  {
+    "id": "barrow_scholar",
+    "speaker": "Dust Scholar",
+    "lines": [
+      "The dead built these vaults to test memory.",
+      "Take only what light can carry. The rest belongs to stone."
+    ]
+  },
+  {
+    "id": "keeper",
+    "speaker": "The Shaded Keeper",
+    "lines": [
+      "You carry the old light.",
+      "Then come. Let shadow test your will."
+    ]
+  }
+]

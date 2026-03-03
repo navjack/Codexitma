@@ -10,6 +10,12 @@ Run a fixed command sequence and print JSON state:
 ./Codexitma --script "new, e, right, right, state"
 ```
 
+Select the second adventure before starting:
+
+```sh
+./Codexitma --script "right, new, e, state"
+```
+
 Add `--step-json` to emit a JSON snapshot after every command:
 
 ```sh
@@ -55,3 +61,7 @@ state
 ```
 
 The game emits one JSON line per accepted input. This is intended as the easiest control surface to wrap in an MCP server later if you want Codex to connect through a manually-added server.
+
+Snapshots now include `adventureID`, so automation can tell which campaign is currently active.
+
+The automation bridge exercises the same data-driven content packs that the interactive game uses, so scripted runs are a good way to validate changes made in [ContentData](/Volumes/4terrybi/coding/Codexitma/Sources/Game/ContentData) without touching engine code.

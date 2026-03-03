@@ -46,21 +46,35 @@ enum GraphicsVisualTheme: String, CaseIterable, Equatable {
     }
 }
 
+@MainActor
 final class GameSessionController: ObservableObject {
     @Published private(set) var state: GameState
     @Published private(set) var visualTheme: GraphicsVisualTheme = .gemstone
 
     private let engine: GameEngine
+    private let preferenceStore: GraphicsPreferenceStore
+    private let soundEngine: AppleIISoundEngine
 
-    init(content: GameContent, saveRepository: SaveRepository) {
-        let engine = GameEngine(content: content, saveRepository: saveRepository)
+    init(
+        library: GameContentLibrary,
+        saveRepository: SaveRepository,
+        preferenceStore: GraphicsPreferenceStore = .shared,
+        soundEngine: AppleIISoundEngine = .shared
+    ) {
+        self.preferenceStore = preferenceStore
+        self.soundEngine = soundEngine
+        let engine = GameEngine(library: library, saveRepository: saveRepository)
         self.engine = engine
         self.state = engine.state
+        self.visualTheme = preferenceStore.loadTheme()
+        soundEngine.play(.introMusic)
     }
 
     func send(_ command: ActionCommand) {
+        let previous = state
         engine.handle(command)
         state = engine.state
+        playSound(for: command, previous: previous, current: state)
         if state.shouldQuit {
             Task { @MainActor in
                 NSApplication.shared.terminate(nil)
@@ -70,10 +84,54 @@ final class GameSessionController: ObservableObject {
 
     func cycleVisualTheme() {
         visualTheme = visualTheme.next()
+        preferenceStore.saveTheme(visualTheme)
     }
 
     func selectVisualTheme(_ theme: GraphicsVisualTheme) {
         visualTheme = theme
+        preferenceStore.saveTheme(theme)
+    }
+
+    private func playSound(for command: ActionCommand, previous: GameState, current: GameState) {
+        if previous.mode == .title && current.mode == .characterCreation {
+            soundEngine.play(.menuConfirm)
+            return
+        }
+
+        if previous.mode == .characterCreation && current.mode == .exploration {
+            soundEngine.play(.menuConfirm)
+            return
+        }
+
+        if command == .move(.up) || command == .move(.down) || command == .move(.left) || command == .move(.right) {
+            if previous.player.position != current.player.position {
+                soundEngine.play(.walk)
+                return
+            }
+
+            let enemyRosterChanged = previous.world.enemies != current.world.enemies
+            let healthChanged = previous.player.health != current.player.health
+            if enemyRosterChanged || healthChanged {
+                soundEngine.play(.attack)
+                return
+            }
+        }
+
+        let usedItem = previous.mode == .inventory && current.mode == .exploration &&
+            (
+                previous.player.inventory.count != current.player.inventory.count ||
+                previous.player.equipment != current.player.equipment ||
+                previous.player.health != current.player.health ||
+                previous.player.lanternCharge != current.player.lanternCharge
+            )
+        if usedItem {
+            soundEngine.play(.useItem)
+            return
+        }
+
+        if command == .interact || command == .confirm, previous.mode == .exploration, current.mode == .dialogue {
+            soundEngine.play(.menuConfirm)
+        }
     }
 }
 
@@ -81,10 +139,10 @@ final class GameSessionController: ObservableObject {
 enum GraphicsGameLauncher {
     private static var retainedDelegate: GraphicsAppDelegate?
 
-    static func run(content: GameContent, saveRepository: SaveRepository) {
+    static func run(library: GameContentLibrary, saveRepository: SaveRepository) {
         let app = NSApplication.shared
         app.setActivationPolicy(.regular)
-        let session = GameSessionController(content: content, saveRepository: saveRepository)
+        let session = GameSessionController(library: library, saveRepository: saveRepository)
         let delegate = GraphicsAppDelegate(session: session)
         retainedDelegate = delegate
         app.delegate = delegate
@@ -153,21 +211,32 @@ struct GameRootView: View {
     }
 
     private var titleView: some View {
-        VStack(spacing: 16) {
+        let selectedAdventure = session.state.selectedAdventureID()
+
+        return VStack(spacing: 16) {
             Spacer()
             PixelBanner(text: "CODEXITMA", color: palette.titleGold)
             Text("A LOW-RES APPLE II FANTASY")
                 .font(.system(size: 13, weight: .bold, design: .monospaced))
                 .foregroundStyle(palette.text)
-            Text("ASHES OF MERROW // CLASSES, TRAITS, AND LOW-RES LEGENDS")
+            Text("\(selectedAdventure.displayName.uppercased()) // CLASSES, TRAITS, AND LOW-RES LEGENDS")
                 .font(.system(size: 11, weight: .regular, design: .monospaced))
                 .foregroundStyle(palette.accentBlue)
 
             HStack(spacing: 10) {
+                menuButton("A: PREV") { session.send(.move(.left)) }
+                menuButton("D: NEXT") { session.send(.move(.right)) }
                 menuButton("N: CREATE") { session.send(.newGame) }
                 menuButton("L: LOAD") { session.send(.load) }
                 menuButton("X: QUIT") { session.send(.quit) }
             }
+            .frame(maxWidth: 900)
+
+            Text(selectedAdventure.summary.uppercased())
+                .font(.system(size: 10, weight: .regular, design: .monospaced))
+                .foregroundStyle(palette.text.opacity(0.9))
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 820)
 
             HStack(spacing: 10) {
                 menuButton("T: STYLE") { session.cycleVisualTheme() }
@@ -184,7 +253,7 @@ struct GameRootView: View {
 
             VStack(spacing: 4) {
                 Text("\(session.visualTheme.displayName.uppercased()) DISPLAY ACTIVE. CREATE A HERO BEFORE YOU ENTER THE VALLEY")
-                Text("ARROWS/WASD STEP ROOM TO ROOM")
+                Text("A/D PICK ADVENTURE   ARROWS/WASD STEP ROOM TO ROOM")
                 Text("E TALK OR USE   I OPEN PACK")
                 Text("J SHOW GOAL   K SAVE   L LOAD   T SWITCH STYLE")
                 Text("Q BACKS OUT OF MENUS   --BRIDGE / --SCRIPT FOR HEADLESS CONTROL")
@@ -211,6 +280,9 @@ struct GameRootView: View {
                 .foregroundStyle(palette.text)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
+            Text(session.state.selectedAdventureID().displayName.uppercased())
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundStyle(palette.accentBlue)
 
             HStack(spacing: 12) {
                 menuButton("A / LEFT") { session.send(.move(.left)) }
@@ -351,7 +423,7 @@ struct GameRootView: View {
                 stat("LN", "\(session.state.player.effectiveLanternCapacity())")
                 stat("BAG", "\(session.state.player.inventory.count)/\(session.state.player.inventoryCapacity())")
                 stat("STYLE", session.visualTheme.displayName.uppercased())
-                stat("GOAL", QuestSystem.objective(for: session.state.quests).uppercased())
+                stat("GOAL", QuestSystem.objective(for: session.state.quests, text: session.state.objectiveText).uppercased())
 
                 menuButton("T: STYLE") { session.cycleVisualTheme() }
             }

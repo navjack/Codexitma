@@ -1,16 +1,18 @@
 import Foundation
 
 final class GameEngine {
-    private let content: GameContent
+    private let library: GameContentLibrary
+    private var content: GameContent
     private let saveRepository: SaveRepository
     private var turnCounter = 0
 
     var state: GameState
 
-    init(content: GameContent, saveRepository: SaveRepository) {
-        self.content = content
+    init(library: GameContentLibrary, saveRepository: SaveRepository) {
+        self.library = library
+        self.content = library.content(for: .ashesOfMerrow)
         self.saveRepository = saveRepository
-        self.state = GameEngine.makeInitialState(content: content)
+        self.state = GameEngine.makeInitialState(content: self.content)
     }
 
     static func makeInitialState(content: GameContent) -> GameState {
@@ -28,8 +30,11 @@ final class GameEngine {
             player: player,
             world: world,
             quests: QuestState(),
-            messages: ["The beacon has gone dark."],
-            currentDialogue: nil
+            currentAdventureID: content.id,
+            objectiveText: content.objectiveText,
+            messages: [content.introLine],
+            currentDialogue: nil,
+            selectedAdventureIndex: AdventureID.allCases.firstIndex(of: content.id) ?? 0
         )
     }
 
@@ -48,6 +53,7 @@ final class GameEngine {
             attack: template.baseAttack,
             defense: template.baseDefense,
             lanternCharge: template.baseLantern,
+            marks: template.startingMarks,
             inventory: startingInventory,
             equipment: template.startingEquipment,
             position: startMap.spawn,
@@ -80,16 +86,26 @@ final class GameEngine {
 
     private func handleTitle(_ command: ActionCommand) {
         switch command {
+        case .move(.left), .move(.up):
+            state.selectedAdventureIndex = (state.selectedAdventureIndex - 1 + AdventureID.allCases.count) % AdventureID.allCases.count
+            logSelectedAdventure()
+        case .move(.right), .move(.down):
+            state.selectedAdventureIndex = (state.selectedAdventureIndex + 1) % AdventureID.allCases.count
+            logSelectedAdventure()
         case .newGame, .confirm:
             state.mode = .characterCreation
-            state.log("Choose a class, then confirm to begin.")
+            state.log("Choose a class for \(state.selectedAdventureID().displayName), then confirm.")
         case .load:
             do {
                 let save = try saveRepository.load()
+                content = library.content(for: save.adventureID)
                 state.player = save.player
                 state.world = save.world
                 state.quests = save.quests
                 state.playTimeSeconds = save.playTimeSeconds
+                state.currentAdventureID = save.adventureID
+                state.objectiveText = content.objectiveText
+                state.selectedAdventureIndex = AdventureID.allCases.firstIndex(of: save.adventureID) ?? 0
                 state.mode = .exploration
                 state.log("You return to the last warm light.")
             } catch SaveError.notFound {
@@ -97,6 +113,8 @@ final class GameEngine {
             } catch {
                 state.log("The save file is broken.")
             }
+        case .help:
+            logSelectedAdventure()
         case .quit, .cancel:
             state.shouldQuit = true
         default:
@@ -141,7 +159,7 @@ final class GameEngine {
                 state.mode = .inventory
             }
         case .help:
-            state.log(QuestSystem.objective(for: state.quests))
+            state.log(QuestSystem.objective(for: state.quests, text: state.objectiveText))
         case .save:
             saveAtRestPoint()
         case .cancel:
@@ -239,7 +257,8 @@ final class GameEngine {
                     player: state.player,
                     world: state.world,
                     quests: state.quests,
-                    playTimeSeconds: state.playTimeSeconds
+                    playTimeSeconds: state.playTimeSeconds,
+                    adventureID: state.currentAdventureID
                 )
             )
             state.log("The ember of memory is sealed.")
@@ -557,12 +576,22 @@ final class GameEngine {
     }
 
     private func startNewAdventure(with heroClass: HeroClass) {
+        let adventureID = state.selectedAdventureID()
+        content = library.content(for: adventureID)
         let startMap = content.maps["merrow_village"]!
         state = Self.makeInitialState(content: content)
         state.player = Self.makePlayer(for: heroClass, at: startMap)
         state.mode = .exploration
+        state.currentAdventureID = adventureID
+        state.objectiveText = content.objectiveText
+        state.selectedAdventureIndex = AdventureID.allCases.firstIndex(of: adventureID) ?? 0
         let template = heroTemplate(for: heroClass)
-        state.log("\(template.title) enters the darkened valley.")
+        state.log("\(template.title) enters \(content.title).")
+    }
+
+    private func logSelectedAdventure() {
+        let selected = state.selectedAdventureID()
+        state.log("\(selected.displayName): \(selected.summary)")
     }
 
     private func handlePortalIfNeeded(at position: Position, map: MapDefinition) {

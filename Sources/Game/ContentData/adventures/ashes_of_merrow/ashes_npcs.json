@@ -1,0 +1,52 @@
+[
+  {
+    "id": "elder",
+    "name": "Elder Rowan",
+    "position": { "x": 6, "y": 5 },
+    "mapID": "merrow_village",
+    "dialogueID": "elder_intro",
+    "glyphSymbol": "&",
+    "glyphColor": "cyan",
+    "dialogueState": 0
+  },
+  {
+    "id": "field_scout",
+    "name": "Watcher Elow",
+    "position": { "x": 4, "y": 7 },
+    "mapID": "south_fields",
+    "dialogueID": "field_scout",
+    "glyphSymbol": "s",
+    "glyphColor": "white",
+    "dialogueState": 0
+  },
+  {
+    "id": "orchard_guide",
+    "name": "Mara the Tinker",
+    "position": { "x": 4, "y": 2 },
+    "mapID": "sunken_orchard",
+    "dialogueID": "orchard_hermit",
+    "glyphSymbol": "t",
+    "glyphColor": "green",
+    "dialogueState": 0
+  },
+  {
+    "id": "barrow_scholar",
+    "name": "Dust Scholar",
+    "position": { "x": 15, "y": 7 },
+    "mapID": "hollow_barrows",
+    "dialogueID": "barrow_scholar",
+    "glyphSymbol": "d",
+    "glyphColor": "magenta",
+    "dialogueState": 0
+  },
+  {
+    "id": "fen_ferryman",
+    "name": "Fen Ferryman",
+    "position": { "x": 5, "y": 7 },
+    "mapID": "black_fen",
+    "dialogueID": "fen_ferryman",
+    "glyphSymbol": "f",
+    "glyphColor": "yellow",
+    "dialogueState": 0
+  }
+]

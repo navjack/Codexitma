@@ -27,7 +27,7 @@ final class TerminalRenderer {
     func makeFrame(for state: GameState) -> ScreenBuffer {
         switch state.mode {
         case .title:
-            return titleFrame()
+            return titleFrame(state: state)
         case .characterCreation:
             return characterCreationFrame(state: state)
         case .ending:
@@ -75,11 +75,14 @@ final class TerminalRenderer {
         return out
     }
 
-    private func titleFrame() -> ScreenBuffer {
+    private func titleFrame(state: GameState) -> ScreenBuffer {
         var buffer = ScreenBuffer()
-        let title = "ASHES OF MERROW"
+        let selectedAdventure = state.selectedAdventureID()
+        let title = selectedAdventure.displayName.uppercased()
         buffer.write(title, color: .yellow, x: 28, y: 3)
         buffer.write("A Swift terminal RPG", color: .cyan, x: 29, y: 5)
+        buffer.write(selectedAdventure.summary, x: 8, y: 7, maxWidth: 64)
+        buffer.write("A/D or arrows: choose adventure", color: .brightBlack, x: 23, y: 8)
         buffer.write("N  Create Hero", x: 27, y: 9)
         buffer.write("L  Load Game", x: 29, y: 10)
         buffer.write("X  Quit", x: 29, y: 11)
@@ -95,6 +98,7 @@ final class TerminalRenderer {
         let heroClass = state.selectedHeroClass()
         let template = heroTemplate(for: heroClass)
         buffer.write("CREATE YOUR HERO", color: .yellow, x: 29, y: 2)
+        buffer.write(state.selectedAdventureID().displayName.uppercased(), color: .magenta, x: 22, y: 3, maxWidth: 36)
         buffer.write(template.title, color: .cyan, x: 24, y: 5, maxWidth: 32)
         buffer.write(template.summary, x: 9, y: 7, maxWidth: 62)
         buffer.write("< A / LEFT        D / RIGHT >", color: .brightBlack, x: 24, y: 9)
@@ -178,7 +182,7 @@ final class TerminalRenderer {
             buffer.write(map.name, color: .cyan, x: x, y: 8, maxWidth: 17)
         }
         buffer.write("Goal:", color: .yellow, x: x, y: 10)
-        let objective = QuestSystem.objective(for: state.quests)
+        let objective = QuestSystem.objective(for: state.quests, text: state.objectiveText)
         buffer.write(objective, x: x, y: 11, maxWidth: 17)
         let keyCount = state.player.inventory.filter { $0.kind == .key || $0.kind == .quest }.count
         buffer.write("Keys \(keyCount)", x: x, y: 13)

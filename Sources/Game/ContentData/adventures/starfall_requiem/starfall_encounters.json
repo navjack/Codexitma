@@ -1,0 +1,12 @@
+[
+  {
+    "id": "vulture",
+    "enemyID": "crow_1",
+    "introLine": "A sky vulture drops from the wreckage."
+  },
+  {
+    "id": "crab",
+    "enemyID": "hound_1",
+    "introLine": "A shard crab claws out of the brine."
+  }
+]

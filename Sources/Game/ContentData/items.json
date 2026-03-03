@@ -1,0 +1,122 @@
+[
+  {
+    "id": "healingTonic",
+    "name": "Healing Tonic",
+    "kind": "consumable",
+    "value": 8,
+    "slot": null,
+    "attackBonus": 0,
+    "defenseBonus": 0,
+    "lanternBonus": 0
+  },
+  {
+    "id": "ironKey",
+    "name": "Iron Key",
+    "kind": "key",
+    "value": 0,
+    "slot": null,
+    "attackBonus": 0,
+    "defenseBonus": 0,
+    "lanternBonus": 0
+  },
+  {
+    "id": "lanternOil",
+    "name": "Lantern Oil",
+    "kind": "consumable",
+    "value": 6,
+    "slot": null,
+    "attackBonus": 0,
+    "defenseBonus": 0,
+    "lanternBonus": 0
+  },
+  {
+    "id": "charmFragment",
+    "name": "Charm Fragment",
+    "kind": "upgrade",
+    "value": 1,
+    "slot": null,
+    "attackBonus": 0,
+    "defenseBonus": 0,
+    "lanternBonus": 0
+  },
+  {
+    "id": "lensCore",
+    "name": "Lens Core",
+    "kind": "quest",
+    "value": 0,
+    "slot": null,
+    "attackBonus": 0,
+    "defenseBonus": 0,
+    "lanternBonus": 0
+  },
+  {
+    "id": "shrineKey",
+    "name": "Shrine Key",
+    "kind": "key",
+    "value": 0,
+    "slot": null,
+    "attackBonus": 0,
+    "defenseBonus": 0,
+    "lanternBonus": 0
+  },
+  {
+    "id": "ashenBlade",
+    "name": "Ashen Blade",
+    "kind": "equipment",
+    "value": 0,
+    "slot": "weapon",
+    "attackBonus": 1,
+    "defenseBonus": 0,
+    "lanternBonus": 0
+  },
+  {
+    "id": "wandererCloak",
+    "name": "Wanderer Cloak",
+    "kind": "equipment",
+    "value": 0,
+    "slot": "armor",
+    "attackBonus": 0,
+    "defenseBonus": 1,
+    "lanternBonus": 0
+  },
+  {
+    "id": "sunCharm",
+    "name": "Sun Charm",
+    "kind": "equipment",
+    "value": 0,
+    "slot": "charm",
+    "attackBonus": 0,
+    "defenseBonus": 0,
+    "lanternBonus": 3
+  },
+  {
+    "id": "barrowMail",
+    "name": "Barrow Mail",
+    "kind": "equipment",
+    "value": 0,
+    "slot": "armor",
+    "attackBonus": 0,
+    "defenseBonus": 2,
+    "lanternBonus": 0
+  },
+  {
+    "id": "fenLance",
+    "name": "Fen Lance",
+    "kind": "equipment",
+    "value": 0,
+    "slot": "weapon",
+    "attackBonus": 3,
+    "defenseBonus": 0,
+    "lanternBonus": 0
+  },
+  {
+    "id": "mirrorCharm",
+    "name": "Mirror Charm",
+    "kind": "equipment",
+    "value": 0,
+    "slot": "charm",
+    "attackBonus": 1,
+    "defenseBonus": 1,
+    "lanternBonus": 2
+  }
+]

@@ -5,25 +5,76 @@ enum ContentError: Error {
     case invalidMap(String)
 }
 
+private struct AdventurePackDefinition: Decodable {
+    let objectivesFile: String
+    let worldFile: String
+    let dialoguesFile: String
+    let encountersFile: String
+    let npcsFile: String
+    let enemiesFile: String
+    let shopsFile: String
+}
+
+private struct ResourceDescriptor {
+    let baseName: String
+    let fileExtension: String?
+    let nestedSubdirectory: String?
+
+    init(file: String) {
+        let nsFile = file as NSString
+        let pathDirectory = nsFile.deletingLastPathComponent
+        let lastPath = nsFile.lastPathComponent
+        let nsLastPath = lastPath as NSString
+        let rawExtension = nsLastPath.pathExtension
+        let rawBaseName = nsLastPath.deletingPathExtension
+
+        self.baseName = rawExtension.isEmpty ? lastPath : rawBaseName
+        self.fileExtension = rawExtension.isEmpty ? nil : rawExtension
+        self.nestedSubdirectory = pathDirectory.isEmpty ? nil : pathDirectory
+    }
+}
+
 struct ContentLoader {
-    func load() throws -> GameContent {
+    func load() throws -> GameContentLibrary {
         let bundle = Bundle.module
-        guard let worldURL = bundle.url(forResource: "world", withExtension: "json") else {
-            throw ContentError.missingResource("world.json")
+        var adventures: [AdventureID: GameContent] = [:]
+
+        for entry in adventureCatalogEntries {
+            let pack: AdventurePackDefinition = try decodeJSON(entry.packFile, bundle: bundle, subdirectory: entry.folder)
+            let maps = try loadMaps(file: pack.worldFile, bundle: bundle, subdirectory: entry.folder)
+            let dialogues = keyedByID(try decodeJSON([DialogueNode].self, file: pack.dialoguesFile, bundle: bundle, subdirectory: entry.folder))
+            let encounters = keyedByID(try decodeJSON([EncounterDefinition].self, file: pack.encountersFile, bundle: bundle, subdirectory: entry.folder))
+            let shops = keyedByMerchant(try decodeJSON([ShopDefinition].self, file: pack.shopsFile, bundle: bundle, subdirectory: entry.folder))
+            let objectives: ObjectiveTextSet = try decodeJSON(pack.objectivesFile, bundle: bundle, subdirectory: entry.folder)
+            let npcs: [NPCState] = try decodeJSON(pack.npcsFile, bundle: bundle, subdirectory: entry.folder)
+            let enemies: [EnemyState] = try decodeJSON(pack.enemiesFile, bundle: bundle, subdirectory: entry.folder)
+
+            let content = GameContent(
+                id: entry.id,
+                title: entry.title,
+                summary: entry.summary,
+                introLine: entry.introLine,
+                objectiveText: objectives,
+                maps: maps,
+                dialogues: dialogues,
+                encounters: encounters,
+                items: itemTable,
+                shops: shops,
+                initialNPCs: npcs,
+                initialEnemies: enemies
+            )
+            adventures[entry.id] = content
         }
 
-        let worldData = try Data(contentsOf: worldURL)
-        let maps = try JSONDecoder().decode([MapDefinition].self, from: worldData)
+        return GameContentLibrary(adventures: adventures)
+    }
+
+    private func loadMaps(file: String, bundle: Bundle, subdirectory: String) throws -> [String: MapDefinition] {
+        let maps: [MapDefinition] = try decodeJSON(file, bundle: bundle, subdirectory: subdirectory)
 
         var resolvedMaps: [String: MapDefinition] = [:]
         for map in maps {
-            let parts = map.layoutFile.split(separator: ".", maxSplits: 1).map(String.init)
-            let resourceName = parts.first ?? map.layoutFile
-            let resourceExtension = parts.count > 1 ? parts[1] : nil
-            guard let layoutURL = bundle.url(forResource: resourceName, withExtension: resourceExtension) else {
-                throw ContentError.missingResource(map.layoutFile)
-            }
-            let raw = try String(contentsOf: layoutURL)
+            let raw = try loadTextResource(map.layoutFile, bundle: bundle, preferredSubdirectory: subdirectory)
             let lines = raw
                 .components(separatedBy: .newlines)
                 .filter { !$0.isEmpty }
@@ -39,15 +90,7 @@ struct ContentLoader {
             try validate(map: resolved)
             resolvedMaps[resolved.id] = resolved
         }
-
-        return GameContent(
-            maps: resolvedMaps,
-            dialogues: dialogueTable,
-            encounters: encounterTable,
-            items: itemTable,
-            initialNPCs: npcSeed,
-            initialEnemies: enemySeed
-        )
+        return resolvedMaps
     }
 
     func validate(map: MapDefinition) throws {
@@ -60,140 +103,102 @@ struct ContentLoader {
             }
         }
     }
+
+    private func loadTextResource(_ file: String, bundle: Bundle, preferredSubdirectory: String?) throws -> String {
+        if let url = resourceURL(for: file, bundle: bundle, preferredSubdirectory: preferredSubdirectory) {
+            return try String(contentsOf: url)
+        }
+        throw ContentError.missingResource(file)
+    }
+
+    private func decodeJSON<T: Decodable>(_ file: String, bundle: Bundle, subdirectory: String?) throws -> T {
+        guard let url = resourceURL(for: file, bundle: bundle, preferredSubdirectory: subdirectory) else {
+            throw ContentError.missingResource(file)
+        }
+
+        let data = try Data(contentsOf: url)
+        return try JSONDecoder().decode(T.self, from: data)
+    }
+
+    private func decodeJSON<T: Decodable>(_ type: T.Type, file: String, bundle: Bundle, subdirectory: String?) throws -> T {
+        try decodeJSON(file, bundle: bundle, subdirectory: subdirectory)
+    }
+
+    private func resourceURL(for file: String, bundle: Bundle, preferredSubdirectory: String?) -> URL? {
+        let descriptor = ResourceDescriptor(file: file)
+        let nestedPreferred = join(preferredSubdirectory, descriptor.nestedSubdirectory)
+        let searchPaths = [
+            nestedPreferred,
+            descriptor.nestedSubdirectory,
+            "maps",
+            nil,
+        ]
+
+        for path in searchPaths {
+            if let url = resourceURL(
+                baseName: descriptor.baseName,
+                fileExtension: descriptor.fileExtension,
+                bundle: bundle,
+                exactSubdirectory: path
+            ) {
+                return url
+            }
+        }
+        return nil
+    }
+
+    private func resourceURL(
+        baseName: String,
+        fileExtension: String?,
+        bundle: Bundle,
+        exactSubdirectory: String?
+    ) -> URL? {
+        if let exactSubdirectory {
+            return bundle.url(forResource: baseName, withExtension: fileExtension, subdirectory: exactSubdirectory)
+        }
+        return bundle.url(forResource: baseName, withExtension: fileExtension)
+    }
+
+    private func join(_ first: String?, _ second: String?) -> String? {
+        switch (first, second) {
+        case let (lhs?, rhs?):
+            return "\(lhs)/\(rhs)"
+        case let (lhs?, nil):
+            return lhs
+        case let (nil, rhs?):
+            return rhs
+        case (nil, nil):
+            return nil
+        }
+    }
+
+    private func keyedByID<T>(_ values: [T]) -> [String: T] where T: HasStringIdentifier {
+        Dictionary(uniqueKeysWithValues: values.map { ($0.id, $0) })
+    }
+
+    private func keyedByMerchant(_ values: [ShopDefinition]) -> [NPCID: ShopDefinition] {
+        Dictionary(uniqueKeysWithValues: values.map { ($0.merchantID, $0) })
+    }
 }
 
-let itemTable: [ItemID: Item] = [
-    .healingTonic: Item(id: .healingTonic, name: "Healing Tonic", kind: .consumable, value: 8, slot: nil, attackBonus: 0, defenseBonus: 0, lanternBonus: 0),
-    .ironKey: Item(id: .ironKey, name: "Iron Key", kind: .key, value: 0, slot: nil, attackBonus: 0, defenseBonus: 0, lanternBonus: 0),
-    .lanternOil: Item(id: .lanternOil, name: "Lantern Oil", kind: .consumable, value: 6, slot: nil, attackBonus: 0, defenseBonus: 0, lanternBonus: 0),
-    .charmFragment: Item(id: .charmFragment, name: "Charm Fragment", kind: .upgrade, value: 1, slot: nil, attackBonus: 0, defenseBonus: 0, lanternBonus: 0),
-    .lensCore: Item(id: .lensCore, name: "Lens Core", kind: .quest, value: 0, slot: nil, attackBonus: 0, defenseBonus: 0, lanternBonus: 0),
-    .shrineKey: Item(id: .shrineKey, name: "Shrine Key", kind: .key, value: 0, slot: nil, attackBonus: 0, defenseBonus: 0, lanternBonus: 0),
-    .ashenBlade: Item(id: .ashenBlade, name: "Ashen Blade", kind: .equipment, value: 0, slot: .weapon, attackBonus: 1, defenseBonus: 0, lanternBonus: 0),
-    .wandererCloak: Item(id: .wandererCloak, name: "Wanderer Cloak", kind: .equipment, value: 0, slot: .armor, attackBonus: 0, defenseBonus: 1, lanternBonus: 0),
-    .sunCharm: Item(id: .sunCharm, name: "Sun Charm", kind: .equipment, value: 0, slot: .charm, attackBonus: 0, defenseBonus: 0, lanternBonus: 3),
-    .barrowMail: Item(id: .barrowMail, name: "Barrow Mail", kind: .equipment, value: 0, slot: .armor, attackBonus: 0, defenseBonus: 2, lanternBonus: 0),
-    .fenLance: Item(id: .fenLance, name: "Fen Lance", kind: .equipment, value: 0, slot: .weapon, attackBonus: 3, defenseBonus: 0, lanternBonus: 0),
-    .mirrorCharm: Item(id: .mirrorCharm, name: "Mirror Charm", kind: .equipment, value: 0, slot: .charm, attackBonus: 1, defenseBonus: 1, lanternBonus: 2),
-]
+private protocol HasStringIdentifier {
+    var id: String { get }
+}
 
-let dialogueTable: [String: DialogueNode] = [
-    "elder_intro": DialogueNode(
-        id: "elder_intro",
-        speaker: "Elder Rowan",
-        lines: [
-            "The beacon fell dark at dawn.",
-            "Relight the outer shrines and the valley may yet hold.",
-        ]
-    ),
-    "orchard_hermit": DialogueNode(
-        id: "orchard_hermit",
-        speaker: "Mara the Tinker",
-        lines: [
-            "Roots remember the old roads.",
-            "Carry light, and the orchard will open what it swallowed.",
-        ]
-    ),
-    "fen_ferryman": DialogueNode(
-        id: "fen_ferryman",
-        speaker: "Fen Ferryman",
-        lines: [
-            "The mist listens for weak lamps.",
-            "Keep the lantern breathing and the bog will spare your feet.",
-        ]
-    ),
-    "field_scout": DialogueNode(
-        id: "field_scout",
-        speaker: "Watcher Elow",
-        lines: [
-            "The crows have learned the roads better than we have.",
-            "Take the old tonic cache. You'll need it.",
-        ]
-    ),
-    "barrow_scholar": DialogueNode(
-        id: "barrow_scholar",
-        speaker: "Dust Scholar",
-        lines: [
-            "The dead built these vaults to test memory.",
-            "Take only what light can carry. The rest belongs to stone.",
-        ]
-    ),
-    "keeper": DialogueNode(
-        id: "keeper",
-        speaker: "The Shaded Keeper",
-        lines: [
-            "You carry the old light.",
-            "Then come. Let shadow test your will.",
-        ]
-    ),
-]
+extension DialogueNode: HasStringIdentifier {}
+extension EncounterDefinition: HasStringIdentifier {}
 
-let encounterTable: [String: EncounterDefinition] = [
-    "crow": EncounterDefinition(id: "crow", enemyID: "crow_1", introLine: "A ragged crow dives from the rafters."),
-    "hound": EncounterDefinition(id: "hound", enemyID: "hound_1", introLine: "A root hound snaps from the thicket."),
-]
+let itemTable: [ItemID: Item] = {
+    let descriptor = ResourceDescriptor(file: "items.json")
+    guard let url = Bundle.module.url(forResource: descriptor.baseName, withExtension: descriptor.fileExtension) else {
+        preconditionFailure("Missing items.json in bundled resources.")
+    }
 
-let npcSeed: [NPCState] = [
-    NPCState(
-        id: "elder",
-        name: "Elder Rowan",
-        position: Position(x: 6, y: 5),
-        mapID: "merrow_village",
-        dialogueID: "elder_intro",
-        glyphSymbol: "&",
-        glyphColor: .cyan,
-        dialogueState: 0
-    ),
-    NPCState(
-        id: "field_scout",
-        name: "Watcher Elow",
-        position: Position(x: 4, y: 7),
-        mapID: "south_fields",
-        dialogueID: "field_scout",
-        glyphSymbol: "s",
-        glyphColor: .white,
-        dialogueState: 0
-    ),
-    NPCState(
-        id: "orchard_guide",
-        name: "Mara the Tinker",
-        position: Position(x: 4, y: 2),
-        mapID: "sunken_orchard",
-        dialogueID: "orchard_hermit",
-        glyphSymbol: "t",
-        glyphColor: .green,
-        dialogueState: 0
-    ),
-    NPCState(
-        id: "barrow_scholar",
-        name: "Dust Scholar",
-        position: Position(x: 15, y: 7),
-        mapID: "hollow_barrows",
-        dialogueID: "barrow_scholar",
-        glyphSymbol: "d",
-        glyphColor: .magenta,
-        dialogueState: 0
-    ),
-    NPCState(
-        id: "fen_ferryman",
-        name: "Fen Ferryman",
-        position: Position(x: 5, y: 7),
-        mapID: "black_fen",
-        dialogueID: "fen_ferryman",
-        glyphSymbol: "f",
-        glyphColor: .yellow,
-        dialogueState: 0
-    ),
-]
-
-let enemySeed: [EnemyState] = [
-    EnemyState(id: "crow_1", name: "Crow", position: Position(x: 10, y: 4), hp: 7, maxHP: 7, attack: 4, defense: 1, ai: .idle, glyph: "c", color: .yellow, mapID: "south_fields", active: true),
-    EnemyState(id: "crow_2", name: "Crow", position: Position(x: 14, y: 2), hp: 7, maxHP: 7, attack: 4, defense: 1, ai: .idle, glyph: "c", color: .yellow, mapID: "south_fields", active: true),
-    EnemyState(id: "hound_1", name: "Root Hound", position: Position(x: 9, y: 6), hp: 10, maxHP: 10, attack: 5, defense: 2, ai: .stalk, glyph: "h", color: .red, mapID: "sunken_orchard", active: true),
-    EnemyState(id: "hound_2", name: "Root Hound", position: Position(x: 14, y: 7), hp: 10, maxHP: 10, attack: 5, defense: 2, ai: .stalk, glyph: "h", color: .red, mapID: "sunken_orchard", active: true),
-    EnemyState(id: "wraith_1", name: "Mire Wraith", position: Position(x: 8, y: 5), hp: 12, maxHP: 12, attack: 6, defense: 2, ai: .stalk, glyph: "w", color: .magenta, mapID: "black_fen", active: true),
-    EnemyState(id: "wraith_2", name: "Mire Wraith", position: Position(x: 12, y: 2), hp: 12, maxHP: 12, attack: 6, defense: 2, ai: .stalk, glyph: "w", color: .magenta, mapID: "black_fen", active: true),
-    EnemyState(id: "sentinel_1", name: "Barrow Sentinel", position: Position(x: 12, y: 4), hp: 15, maxHP: 15, attack: 7, defense: 3, ai: .guardian, glyph: "g", color: .white, mapID: "hollow_barrows", active: true),
-    EnemyState(id: "sentinel_2", name: "Barrow Sentinel", position: Position(x: 6, y: 7), hp: 15, maxHP: 15, attack: 7, defense: 3, ai: .guardian, glyph: "g", color: .white, mapID: "hollow_barrows", active: true),
-    EnemyState(id: "keeper", name: "Shaded Keeper", position: Position(x: 12, y: 4), hp: 18, maxHP: 18, attack: 8, defense: 3, ai: .boss, glyph: "K", color: .brightBlack, mapID: "beacon_spire", active: true),
-]
+    do {
+        let data = try Data(contentsOf: url)
+        let items = try JSONDecoder().decode([Item].self, from: data)
+        return Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
+    } catch {
+        preconditionFailure("Failed to decode items.json: \(error)")
+    }
+}()

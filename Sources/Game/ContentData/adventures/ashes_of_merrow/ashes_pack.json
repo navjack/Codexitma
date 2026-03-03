@@ -1,0 +1,9 @@
+{
+  "objectivesFile": "ashes_objectives.json",
+  "worldFile": "world.json",
+  "dialoguesFile": "ashes_dialogues.json",
+  "encountersFile": "ashes_encounters.json",
+  "npcsFile": "ashes_npcs.json",
+  "enemiesFile": "ashes_enemies.json",
+  "shopsFile": "ashes_shops.json"
+}

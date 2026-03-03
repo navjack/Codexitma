@@ -1,0 +1,92 @@
+[
+  {
+    "id": "elder",
+    "name": "Admiral Vey",
+    "position": { "x": 6, "y": 5 },
+    "mapID": "merrow_village",
+    "dialogueID": "elder_intro",
+    "glyphSymbol": "&",
+    "glyphColor": "cyan",
+    "dialogueState": 0
+  },
+  {
+    "id": "field_scout",
+    "name": "Salvager Nox",
+    "position": { "x": 3, "y": 2 },
+    "mapID": "south_fields",
+    "dialogueID": "field_scout",
+    "glyphSymbol": "n",
+    "glyphColor": "yellow",
+    "dialogueState": 0
+  },
+  {
+    "id": "orchard_guide",
+    "name": "Glass Witch Orla",
+    "position": { "x": 4, "y": 7 },
+    "mapID": "sunken_orchard",
+    "dialogueID": "orchard_hermit",
+    "glyphSymbol": "o",
+    "glyphColor": "magenta",
+    "dialogueState": 0
+  },
+  {
+    "id": "barrow_scholar",
+    "name": "Archivist Pell",
+    "position": { "x": 15, "y": 2 },
+    "mapID": "hollow_barrows",
+    "dialogueID": "barrow_scholar",
+    "glyphSymbol": "p",
+    "glyphColor": "white",
+    "dialogueState": 0
+  },
+  {
+    "id": "fen_ferryman",
+    "name": "Storm Pilot Renn",
+    "position": { "x": 10, "y": 7 },
+    "mapID": "black_fen",
+    "dialogueID": "fen_ferryman",
+    "glyphSymbol": "r",
+    "glyphColor": "green",
+    "dialogueState": 0
+  },
+  {
+    "id": "bazaar_keeper",
+    "name": "Rena of the Line",
+    "position": { "x": 9, "y": 4 },
+    "mapID": "signal_bazaar",
+    "dialogueID": "bazaar_keeper",
+    "glyphSymbol": "b",
+    "glyphColor": "yellow",
+    "dialogueState": 0
+  },
+  {
+    "id": "forge_master",
+    "name": "Smith Dax",
+    "position": { "x": 9, "y": 6 },
+    "mapID": "forge_annex",
+    "dialogueID": "forge_master",
+    "glyphSymbol": "m",
+    "glyphColor": "red",
+    "dialogueState": 0
+  },
+  {
+    "id": "archive_keeper",
+    "name": "Index Shade",
+    "position": { "x": 11, "y": 3 },
+    "mapID": "maelstrom_archive",
+    "dialogueID": "archive_keeper",
+    "glyphSymbol": "i",
+    "glyphColor": "cyan",
+    "dialogueState": 0
+  },
+  {
+    "id": "storm_lookout",
+    "name": "Lookout Venn",
+    "position": { "x": 7, "y": 7 },
+    "mapID": "storm_nest",
+    "dialogueID": "storm_lookout",
+    "glyphSymbol": "l",
+    "glyphColor": "white",
+    "dialogueState": 0
+  }
+]

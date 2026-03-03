@@ -6,6 +6,7 @@ enum GameMode: Codable {
     case exploration
     case dialogue
     case inventory
+    case shop
     case combat
     case pause
     case gameOver
@@ -224,7 +225,7 @@ enum HeroClass: String, Codable, CaseIterable {
     }
 }
 
-struct HeroTemplate {
+struct HeroTemplate: Codable {
     let heroClass: HeroClass
     let title: String
     let summary: String
@@ -235,6 +236,7 @@ struct HeroTemplate {
     let baseAttack: Int
     let baseDefense: Int
     let baseLantern: Int
+    let startingMarks: Int
     let startingEquipment: EquipmentLoadout
     let startingInventory: [ItemID]
 }
@@ -355,6 +357,59 @@ enum QuestFlag: String, Codable, Hashable, CaseIterable {
     case keeperDefeated
 }
 
+enum AdventureID: String, Codable, CaseIterable {
+    case ashesOfMerrow
+    case starfallRequiem
+
+    var displayName: String {
+        adventureCatalogTable[self]?.title ?? fallbackDisplayName
+    }
+
+    var summary: String {
+        adventureCatalogTable[self]?.summary ?? fallbackSummary
+    }
+
+    var introLine: String {
+        adventureCatalogTable[self]?.introLine ?? fallbackIntroLine
+    }
+
+    private var fallbackDisplayName: String {
+        switch self {
+        case .ashesOfMerrow:
+            return "Ashes of Merrow"
+        case .starfallRequiem:
+            return "Starfall Requiem"
+        }
+    }
+
+    private var fallbackSummary: String {
+        switch self {
+        case .ashesOfMerrow:
+            return "A dying valley, two shrines, and a final beacon against the dark."
+        case .starfallRequiem:
+            return "A fallen sky-engine, rival powers, richer loot, and a harder road back to the light."
+        }
+    }
+
+    private var fallbackIntroLine: String {
+        switch self {
+        case .ashesOfMerrow:
+            return "The beacon has gone dark."
+        case .starfallRequiem:
+            return "A star has fallen into the old machine-sea."
+        }
+    }
+}
+
+struct AdventureCatalogEntry: Codable, Equatable {
+    let id: AdventureID
+    let folder: String
+    let packFile: String
+    let title: String
+    let summary: String
+    let introLine: String
+}
+
 struct QuestState: Codable {
     var flags: Set<QuestFlag> = []
 
@@ -379,6 +434,7 @@ struct PlayerState: Codable {
     var attack: Int
     var defense: Int
     var lanternCharge: Int
+    var marks: Int
     var inventory: [Item]
     var equipment: EquipmentLoadout = EquipmentLoadout()
     var position: Position
@@ -398,6 +454,7 @@ struct PlayerState: Codable {
         case attack
         case defense
         case lanternCharge
+        case marks
         case inventory
         case equipment
         case position
@@ -418,6 +475,7 @@ struct PlayerState: Codable {
         attack: Int,
         defense: Int,
         lanternCharge: Int,
+        marks: Int,
         inventory: [Item],
         equipment: EquipmentLoadout = EquipmentLoadout(),
         position: Position,
@@ -436,6 +494,7 @@ struct PlayerState: Codable {
         self.attack = attack
         self.defense = defense
         self.lanternCharge = lanternCharge
+        self.marks = marks
         self.inventory = inventory
         self.equipment = equipment
         self.position = position
@@ -459,6 +518,7 @@ struct PlayerState: Codable {
         attack = try container.decode(Int.self, forKey: .attack)
         defense = try container.decode(Int.self, forKey: .defense)
         lanternCharge = try container.decode(Int.self, forKey: .lanternCharge)
+        marks = try container.decodeIfPresent(Int.self, forKey: .marks) ?? fallbackTemplate.startingMarks
         inventory = try container.decode([Item].self, forKey: .inventory)
         equipment = try container.decodeIfPresent(EquipmentLoadout.self, forKey: .equipment) ?? EquipmentLoadout()
         position = try container.decode(Position.self, forKey: .position)
@@ -480,6 +540,7 @@ struct PlayerState: Codable {
         try container.encode(attack, forKey: .attack)
         try container.encode(defense, forKey: .defense)
         try container.encode(lanternCharge, forKey: .lanternCharge)
+        try container.encode(marks, forKey: .marks)
         try container.encode(inventory, forKey: .inventory)
         try container.encode(equipment, forKey: .equipment)
         try container.encode(position, forKey: .position)
@@ -747,6 +808,33 @@ struct DialogueNode: Codable {
     let lines: [String]
 }
 
+struct ObjectiveTextSet: Codable, Equatable {
+    let seekElder: String
+    let restoreFirstRelay: String
+    let restoreSecondRelay: String
+    let recoverCore: String
+    let crossHazard: String
+    let ascendSpire: String
+    let defeatKeeper: String
+    let completion: String
+}
+
+struct ShopOffer: Codable, Equatable {
+    let id: String
+    let itemID: ItemID
+    let price: Int
+    let blurb: String
+    let repeatable: Bool
+}
+
+struct ShopDefinition: Codable {
+    let id: String
+    let merchantID: NPCID
+    let merchantName: String
+    let introLine: String
+    let offers: [ShopOffer]
+}
+
 struct EncounterDefinition: Codable {
     let id: String
     let enemyID: String
@@ -806,15 +894,70 @@ struct SaveGame: Codable {
     var world: WorldState
     var quests: QuestState
     var playTimeSeconds: Int
+    var adventureID: AdventureID
+
+    enum CodingKeys: String, CodingKey {
+        case player
+        case world
+        case quests
+        case playTimeSeconds
+        case adventureID
+    }
+
+    init(
+        player: PlayerState,
+        world: WorldState,
+        quests: QuestState,
+        playTimeSeconds: Int,
+        adventureID: AdventureID
+    ) {
+        self.player = player
+        self.world = world
+        self.quests = quests
+        self.playTimeSeconds = playTimeSeconds
+        self.adventureID = adventureID
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        player = try container.decode(PlayerState.self, forKey: .player)
+        world = try container.decode(WorldState.self, forKey: .world)
+        quests = try container.decode(QuestState.self, forKey: .quests)
+        playTimeSeconds = try container.decode(Int.self, forKey: .playTimeSeconds)
+        adventureID = try container.decodeIfPresent(AdventureID.self, forKey: .adventureID) ?? .ashesOfMerrow
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(player, forKey: .player)
+        try container.encode(world, forKey: .world)
+        try container.encode(quests, forKey: .quests)
+        try container.encode(playTimeSeconds, forKey: .playTimeSeconds)
+        try container.encode(adventureID, forKey: .adventureID)
+    }
 }
 
 struct GameContent: @unchecked Sendable {
+    let id: AdventureID
+    let title: String
+    let summary: String
+    let introLine: String
+    let objectiveText: ObjectiveTextSet
     let maps: [String: MapDefinition]
     let dialogues: [String: DialogueNode]
     let encounters: [String: EncounterDefinition]
     let items: [ItemID: Item]
+    let shops: [NPCID: ShopDefinition]
     let initialNPCs: [NPCState]
     let initialEnemies: [EnemyState]
+}
+
+struct GameContentLibrary: @unchecked Sendable {
+    let adventures: [AdventureID: GameContent]
+
+    func content(for adventureID: AdventureID) -> GameContent {
+        adventures[adventureID] ?? adventures[.ashesOfMerrow]!
+    }
 }
 
 struct ScreenCell: Equatable {
@@ -873,12 +1016,20 @@ struct GameState {
     var player: PlayerState
     var world: WorldState
     var quests: QuestState
+    var currentAdventureID: AdventureID
+    var objectiveText: ObjectiveTextSet
     var messages: [String]
     var currentDialogue: DialogueNode?
     var shouldQuit = false
     var playTimeSeconds = 0
     var inventorySelectionIndex = 0
+    var activeShopID: NPCID?
+    var shopSelectionIndex = 0
+    var shopTitle: String?
+    var shopLines: [String] = []
+    var shopDetail: String?
     var selectedHeroIndex = 0
+    var selectedAdventureIndex = 0
 
     mutating func log(_ message: String) {
         messages.append(message)
@@ -895,10 +1046,32 @@ struct GameState {
         }
     }
 
+    mutating func clampShopSelection(offerCount: Int) {
+        if offerCount <= 0 {
+            shopSelectionIndex = 0
+        } else {
+            shopSelectionIndex = max(0, min(shopSelectionIndex, offerCount - 1))
+        }
+    }
+
+    mutating func clearShopPanel() {
+        activeShopID = nil
+        shopSelectionIndex = 0
+        shopTitle = nil
+        shopLines = []
+        shopDetail = nil
+    }
+
     func selectedHeroClass() -> HeroClass {
         let classes = HeroClass.allCases
         guard !classes.isEmpty else { return .wayfarer }
         return classes[(selectedHeroIndex % classes.count + classes.count) % classes.count]
+    }
+
+    func selectedAdventureID() -> AdventureID {
+        let adventures = AdventureID.allCases
+        guard !adventures.isEmpty else { return .ashesOfMerrow }
+        return adventures[(selectedAdventureIndex % adventures.count + adventures.count) % adventures.count]
     }
 }
 
@@ -909,52 +1082,38 @@ extension NPCState: RenderableEntity {
     var color: ANSIColor { glyphColor }
 }
 
-func heroTemplate(for heroClass: HeroClass) -> HeroTemplate {
-    switch heroClass {
-    case .warden:
-        return HeroTemplate(
-            heroClass: .warden,
-            title: "The Iron Warden",
-            summary: "A durable fighter who begins stronger in armor and holds the line.",
-            traits: TraitProfile(brawn: 7, agility: 4, grit: 8, wits: 4, lore: 3, spark: 4),
-            skills: [.bulwark, .cleave],
-            baseHealth: 30,
-            baseStamina: 11,
-            baseAttack: 6,
-            baseDefense: 4,
-            baseLantern: 7,
-            startingEquipment: EquipmentLoadout(weapon: .ashenBlade, armor: .barrowMail, charm: nil),
-            startingInventory: [.healingTonic]
-        )
-    case .wayfarer:
-        return HeroTemplate(
-            heroClass: .wayfarer,
-            title: "The Wild Wayfarer",
-            summary: "A scavenging survivor with better sustain, mobility, and bag space.",
-            traits: TraitProfile(brawn: 5, agility: 7, grit: 5, wits: 6, lore: 4, spark: 5),
-            skills: [.fieldMedicine, .scavenger],
-            baseHealth: 24,
-            baseStamina: 13,
-            baseAttack: 5,
-            baseDefense: 3,
-            baseLantern: 8,
-            startingEquipment: EquipmentLoadout(weapon: .ashenBlade, armor: .wandererCloak, charm: nil),
-            startingInventory: [.healingTonic, .lanternOil]
-        )
-    case .seer:
-        return HeroTemplate(
-            heroClass: .seer,
-            title: "The Ember Seer",
-            summary: "A light-worker who handles runes better and navigates hazard zones more safely.",
-            traits: TraitProfile(brawn: 3, agility: 5, grit: 4, wits: 7, lore: 8, spark: 8),
-            skills: [.trailcraft, .runeSight],
-            baseHealth: 21,
-            baseStamina: 12,
-            baseAttack: 4,
-            baseDefense: 2,
-            baseLantern: 10,
-            startingEquipment: EquipmentLoadout(weapon: nil, armor: .wandererCloak, charm: .sunCharm),
-            startingInventory: [.lanternOil, .healingTonic]
-        )
+let adventureCatalogEntries: [AdventureCatalogEntry] = {
+    guard let url = Bundle.module.url(forResource: "adventure_catalog", withExtension: "json") else {
+        return []
     }
+
+    do {
+        let data = try Data(contentsOf: url)
+        return try JSONDecoder().decode([AdventureCatalogEntry].self, from: data)
+    } catch {
+        preconditionFailure("Failed to decode adventure_catalog.json: \(error)")
+    }
+}()
+
+let adventureCatalogTable: [AdventureID: AdventureCatalogEntry] = Dictionary(
+    uniqueKeysWithValues: adventureCatalogEntries.map { ($0.id, $0) }
+)
+
+let heroTemplateTable: [HeroClass: HeroTemplate] = {
+    let descriptor = ("hero_templates" as NSString)
+    guard let url = Bundle.module.url(forResource: descriptor.deletingPathExtension, withExtension: "json") else {
+        preconditionFailure("Missing hero_templates.json in bundled resources.")
+    }
+
+    do {
+        let data = try Data(contentsOf: url)
+        let templates = try JSONDecoder().decode([HeroTemplate].self, from: data)
+        return Dictionary(uniqueKeysWithValues: templates.map { ($0.heroClass, $0) })
+    } catch {
+        preconditionFailure("Failed to decode hero_templates.json: \(error)")
+    }
+}()
+
+func heroTemplate(for heroClass: HeroClass) -> HeroTemplate {
+    heroTemplateTable[heroClass] ?? heroTemplateTable[.wayfarer]!
 }

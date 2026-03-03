@@ -1,0 +1,9 @@
+{
+  "objectivesFile": "starfall_objectives.json",
+  "worldFile": "world_starfall.json",
+  "dialoguesFile": "starfall_dialogues.json",
+  "encountersFile": "starfall_encounters.json",
+  "npcsFile": "starfall_npcs.json",
+  "enemiesFile": "starfall_enemies.json",
+  "shopsFile": "starfall_shops.json"
+}

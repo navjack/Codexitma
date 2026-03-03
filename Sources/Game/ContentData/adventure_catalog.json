@@ -1,0 +1,18 @@
+[
+  {
+    "id": "ashesOfMerrow",
+    "folder": "adventures/ashes_of_merrow",
+    "packFile": "ashes_pack.json",
+    "title": "Ashes of Merrow",
+    "summary": "A dying valley, two shrines, and a final beacon against the dark.",
+    "introLine": "The beacon has gone dark."
+  },
+  {
+    "id": "starfallRequiem",
+    "folder": "adventures/starfall_requiem",
+    "packFile": "starfall_pack.json",
+    "title": "Starfall Requiem",
+    "summary": "A fallen sky-engine, rival powers, richer loot, and a harder road back to the light.",
+    "introLine": "A star has fallen into the old machine-sea."
+  }
+]

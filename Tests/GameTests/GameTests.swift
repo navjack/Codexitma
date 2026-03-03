@@ -50,6 +50,7 @@ import Testing
             attack: 4,
             defense: 2,
             lanternCharge: 3,
+            marks: 10,
             inventory: [],
             equipment: EquipmentLoadout(),
             position: Position(x: 1, y: 1),
@@ -59,7 +60,8 @@ import Testing
         ),
         world: WorldState(maps: [:], npcs: [], enemies: [], openedInteractables: [], activeSwitchSequence: []),
         quests: QuestState(flags: [.metElder]),
-        playTimeSeconds: 42
+        playTimeSeconds: 42,
+        adventureID: .ashesOfMerrow
     )
 
     try repo.save(save)
@@ -98,11 +100,33 @@ import Testing
     #expect(GraphicsVisualTheme.ultima.next() == .gemstone)
 }
 
-@Test func contentLoaderLoadsSixMaps() async throws {
-    let content = try ContentLoader().load()
-    #expect(content.maps.count == 6)
-    #expect(content.initialNPCs.count >= 5)
-    #expect(content.initialEnemies.count >= 9)
+@Test func graphicsThemePreferenceRoundTrips() async throws {
+    let suiteName = "codexitma.tests.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suiteName)!
+    defer {
+        defaults.removePersistentDomain(forName: suiteName)
+    }
+
+    let store = GraphicsPreferenceStore(defaults: defaults)
+    #expect(store.loadTheme() == .gemstone)
+    store.saveTheme(.ultima)
+    #expect(store.loadTheme() == .ultima)
+}
+
+@Test func contentLoaderLoadsAdventureLibrary() async throws {
+    let library = try ContentLoader().load()
+    #expect(library.adventures.count == 2)
+    let merrow = library.content(for: .ashesOfMerrow)
+    let starfall = library.content(for: .starfallRequiem)
+    #expect(merrow.maps.count == 6)
+    #expect(starfall.maps.count == 10)
+    #expect(merrow.initialNPCs.count >= 5)
+    #expect(starfall.initialNPCs.count >= 9)
+    #expect(starfall.initialEnemies.count >= 16)
+    #expect(merrow.shops.isEmpty)
+    #expect(starfall.shops.count >= 3)
+    #expect(adventureCatalogEntries.count == 2)
+    #expect(itemTable.count >= 12)
 }
 
 @Test func equippedItemsAffectDerivedStats() async throws {
@@ -118,6 +142,7 @@ import Testing
         attack: 6,
         defense: 3,
         lanternCharge: 8,
+        marks: 10,
         inventory: [],
         equipment: EquipmentLoadout(weapon: .fenLance, armor: .barrowMail, charm: .mirrorCharm),
         position: Position(x: 0, y: 0),

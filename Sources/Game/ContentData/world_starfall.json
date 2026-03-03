@@ -1,0 +1,538 @@
+[
+  {
+    "id": "merrow_village",
+    "name": "Cinder Wharf",
+    "layoutFile": "starfall_cinder_wharf.txt",
+    "lines": [],
+    "spawn": { "x": 3, "y": 5 },
+    "portals": [
+      {
+        "from": { "x": 18, "y": 5 },
+        "toMap": "south_fields",
+        "toPosition": { "x": 1, "y": 5 },
+        "requiredFlag": null,
+        "blockedMessage": null
+      },
+      {
+        "from": { "x": 10, "y": 1 },
+        "toMap": "signal_bazaar",
+        "toPosition": { "x": 10, "y": 7 },
+        "requiredFlag": null,
+        "blockedMessage": null
+      },
+      {
+        "from": { "x": 0, "y": 3 },
+        "toMap": "forge_annex",
+        "toPosition": { "x": 18, "y": 3 },
+        "requiredFlag": null,
+        "blockedMessage": null
+      }
+    ],
+    "interactables": [
+      {
+        "id": "village_bed",
+        "kind": "bed",
+        "position": { "x": 2, "y": 7 },
+        "title": "Dock Cot",
+        "lines": ["The dock cot smells of salt, smoke, and rain."],
+        "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": null
+      }
+    ]
+  },
+  {
+    "id": "signal_bazaar",
+    "name": "Signal Bazaar",
+    "layoutFile": "starfall_signal_bazaar.txt",
+    "lines": [],
+    "spawn": { "x": 10, "y": 7 },
+    "portals": [
+      {
+        "from": { "x": 10, "y": 9 },
+        "toMap": "merrow_village",
+        "toPosition": { "x": 10, "y": 1 },
+        "requiredFlag": null,
+        "blockedMessage": null
+      }
+    ],
+    "interactables": [
+      {
+        "id": "bazaar_stock_tonic",
+        "kind": "chest",
+        "position": { "x": 4, "y": 3 },
+        "title": "Medic Shelf",
+        "lines": ["Rena waves you over. \"Take the tonic. Settle accounts after the storm.\""],
+        "rewardItem": "healingTonic",
+        "requiredFlag": null,
+        "grantsFlag": null
+      },
+      {
+        "id": "bazaar_stock_oil",
+        "kind": "chest",
+        "position": { "x": 14, "y": 3 },
+        "title": "Line Rack",
+        "lines": ["Fresh lamp line and glass fittings wait on the rack."],
+        "rewardItem": "lanternOil",
+        "requiredFlag": null,
+        "grantsFlag": null
+      },
+      {
+        "id": "bazaar_bed",
+        "kind": "bed",
+        "position": { "x": 2, "y": 7 },
+        "title": "Back Room Bunk",
+        "lines": ["A narrow bunk behind the bazaar counter gives a brief, honest rest."],
+        "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": null
+      }
+    ]
+  },
+  {
+    "id": "forge_annex",
+    "name": "Breaker Forge",
+    "layoutFile": "starfall_breaker_forge.txt",
+    "lines": [],
+    "spawn": { "x": 18, "y": 3 },
+    "portals": [
+      {
+        "from": { "x": 19, "y": 3 },
+        "toMap": "merrow_village",
+        "toPosition": { "x": 1, "y": 3 },
+        "requiredFlag": null,
+        "blockedMessage": null
+      }
+    ],
+    "interactables": [
+      {
+        "id": "forge_cache_armor",
+        "kind": "chest",
+        "position": { "x": 4, "y": 4 },
+        "title": "Smith Rack",
+        "lines": ["The smith shoves a cloak at you. \"If you're walking into the breakers, wear this.\""],
+        "rewardItem": "wandererCloak",
+        "requiredFlag": null,
+        "grantsFlag": null
+      },
+      {
+        "id": "forge_cache_blade",
+        "kind": "chest",
+        "position": { "x": 12, "y": 4 },
+        "title": "Tool Chest",
+        "lines": ["A balanced blade gleams among the forge tools."],
+        "rewardItem": "ashenBlade",
+        "requiredFlag": null,
+        "grantsFlag": null
+      }
+    ]
+  },
+  {
+    "id": "south_fields",
+    "name": "Salt Causeway",
+    "layoutFile": "starfall_salt_causeway.txt",
+    "lines": [],
+    "spawn": { "x": 1, "y": 5 },
+    "portals": [
+      {
+        "from": { "x": 0, "y": 5 },
+        "toMap": "merrow_village",
+        "toPosition": { "x": 17, "y": 5 },
+        "requiredFlag": null,
+        "blockedMessage": null
+      },
+      {
+        "from": { "x": 18, "y": 5 },
+        "toMap": "sunken_orchard",
+        "toPosition": { "x": 1, "y": 5 },
+        "requiredFlag": null,
+        "blockedMessage": null
+      }
+    ],
+    "interactables": [
+      {
+        "id": "south_cache",
+        "kind": "chest",
+        "position": { "x": 4, "y": 6 },
+        "title": "Spark Locker",
+        "lines": ["A coil of lantern oil and fresh line charge sit inside."],
+        "rewardItem": "lanternOil",
+        "requiredFlag": null,
+        "grantsFlag": null
+      },
+      {
+        "id": "south_spare",
+        "kind": "chest",
+        "position": { "x": 15, "y": 2 },
+        "title": "Breaker Crate",
+        "lines": ["A sealed tonic survived the impact."],
+        "rewardItem": "healingTonic",
+        "requiredFlag": null,
+        "grantsFlag": null
+      },
+      {
+        "id": "south_shrine",
+        "kind": "shrine",
+        "position": { "x": 10, "y": 5 },
+        "title": "West Capacitor",
+        "lines": ["The west capacitor hums back to life."],
+        "rewardItem": null,
+        "requiredFlag": "metElder",
+        "grantsFlag": "southShrineLit"
+      }
+    ]
+  },
+  {
+    "id": "sunken_orchard",
+    "name": "Glass Marsh",
+    "layoutFile": "starfall_glass_marsh.txt",
+    "lines": [],
+    "spawn": { "x": 1, "y": 5 },
+    "portals": [
+      {
+        "from": { "x": 0, "y": 5 },
+        "toMap": "south_fields",
+        "toPosition": { "x": 17, "y": 5 },
+        "requiredFlag": null,
+        "blockedMessage": null
+      },
+      {
+        "from": { "x": 18, "y": 5 },
+        "toMap": "hollow_barrows",
+        "toPosition": { "x": 1, "y": 5 },
+        "requiredFlag": "barrowUnlocked",
+        "blockedMessage": "The vault iris stays shut until both capacitors are live."
+      },
+      {
+        "from": { "x": 10, "y": 1 },
+        "toMap": "maelstrom_archive",
+        "toPosition": { "x": 10, "y": 7 },
+        "requiredFlag": null,
+        "blockedMessage": null
+      }
+    ],
+    "interactables": [
+      {
+        "id": "orchard_shrine",
+        "kind": "shrine",
+        "position": { "x": 10, "y": 5 },
+        "title": "East Capacitor",
+        "lines": ["Static rolls through the marsh as the east capacitor catches."],
+        "rewardItem": null,
+        "requiredFlag": "metElder",
+        "grantsFlag": "orchardShrineLit"
+      },
+      {
+        "id": "barrow_gate",
+        "kind": "gate",
+        "position": { "x": 16, "y": 4 },
+        "title": "Vault Iris",
+        "lines": ["Both capacitors must be primed before the iris can unlock."],
+        "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": null
+      },
+      {
+        "id": "orchard_cache",
+        "kind": "chest",
+        "position": { "x": 2, "y": 1 },
+        "title": "Glass Cache",
+        "lines": ["A polished sun charm sits wrapped in oilcloth."],
+        "rewardItem": "sunCharm",
+        "requiredFlag": null,
+        "grantsFlag": null
+      },
+      {
+        "id": "orchard_relic",
+        "kind": "chest",
+        "position": { "x": 15, "y": 7 },
+        "title": "Sunken Satchel",
+        "lines": ["A charm fragment crackles with trapped current."],
+        "rewardItem": "charmFragment",
+        "requiredFlag": null,
+        "grantsFlag": null
+      }
+    ]
+  },
+  {
+    "id": "maelstrom_archive",
+    "name": "Maelstrom Archive",
+    "layoutFile": "starfall_maelstrom_archive.txt",
+    "lines": [],
+    "spawn": { "x": 10, "y": 7 },
+    "portals": [
+      {
+        "from": { "x": 10, "y": 9 },
+        "toMap": "sunken_orchard",
+        "toPosition": { "x": 10, "y": 1 },
+        "requiredFlag": null,
+        "blockedMessage": null
+      }
+    ],
+    "interactables": [
+      {
+        "id": "archive_cache_charm",
+        "kind": "chest",
+        "position": { "x": 3, "y": 2 },
+        "title": "Index Locker",
+        "lines": ["A mirror charm hangs in a numbered slot."],
+        "rewardItem": "mirrorCharm",
+        "requiredFlag": null,
+        "grantsFlag": null
+      },
+      {
+        "id": "archive_cache_tonic",
+        "kind": "chest",
+        "position": { "x": 16, "y": 7 },
+        "title": "Archive Cache",
+        "lines": ["A tonic and an old navigator's notes remain dry."],
+        "rewardItem": "healingTonic",
+        "requiredFlag": null,
+        "grantsFlag": null
+      }
+    ]
+  },
+  {
+    "id": "hollow_barrows",
+    "name": "Reliquary Vault",
+    "layoutFile": "starfall_reliquary_vault.txt",
+    "lines": [],
+    "spawn": { "x": 1, "y": 5 },
+    "portals": [
+      {
+        "from": { "x": 0, "y": 5 },
+        "toMap": "sunken_orchard",
+        "toPosition": { "x": 17, "y": 5 },
+        "requiredFlag": null,
+        "blockedMessage": null
+      },
+      {
+        "from": { "x": 18, "y": 5 },
+        "toMap": "black_fen",
+        "toPosition": { "x": 1, "y": 5 },
+        "requiredFlag": "obtainedLensCore",
+        "blockedMessage": "The surge gate rejects you. The Star Core is still below."
+      }
+    ],
+    "interactables": [
+      {
+        "id": "barrow_cache",
+        "kind": "chest",
+        "position": { "x": 5, "y": 1 },
+        "title": "Armored Rack",
+        "lines": ["A suit of reliquary plate still fits."],
+        "rewardItem": "barrowMail",
+        "requiredFlag": null,
+        "grantsFlag": null
+      },
+      {
+        "id": "barrow_tonic",
+        "kind": "chest",
+        "position": { "x": 16, "y": 7 },
+        "title": "Medic Locker",
+        "lines": ["Emergency tonic ampoules remain sealed."],
+        "rewardItem": "healingTonic",
+        "requiredFlag": null,
+        "grantsFlag": null
+      },
+      {
+        "id": "barrow_armory",
+        "kind": "chest",
+        "position": { "x": 2, "y": 8 },
+        "title": "Vault Armory",
+        "lines": ["A long fen lance rests in a magnetic cradle."],
+        "rewardItem": "fenLance",
+        "requiredFlag": null,
+        "grantsFlag": null
+      }
+    ]
+  },
+  {
+    "id": "black_fen",
+    "name": "Thunder Shoals",
+    "layoutFile": "starfall_thunder_shoals.txt",
+    "lines": [],
+    "spawn": { "x": 1, "y": 5 },
+    "portals": [
+      {
+        "from": { "x": 0, "y": 5 },
+        "toMap": "hollow_barrows",
+        "toPosition": { "x": 17, "y": 5 },
+        "requiredFlag": null,
+        "blockedMessage": null
+      },
+      {
+        "from": { "x": 18, "y": 5 },
+        "toMap": "beacon_spire",
+        "toPosition": { "x": 1, "y": 5 },
+        "requiredFlag": "fenCrossed",
+        "blockedMessage": "The tidegate is still submerged beneath the surf."
+      },
+      {
+        "from": { "x": 10, "y": 1 },
+        "toMap": "storm_nest",
+        "toPosition": { "x": 10, "y": 7 },
+        "requiredFlag": null,
+        "blockedMessage": null
+      }
+    ],
+    "interactables": [
+      {
+        "id": "fen_plate_west",
+        "kind": "plate",
+        "position": { "x": 2, "y": 4 },
+        "title": "West Tide Plate",
+        "lines": ["The west tide plate locks under your weight."],
+        "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": null
+      },
+      {
+        "id": "fen_plate_east",
+        "kind": "plate",
+        "position": { "x": 14, "y": 7 },
+        "title": "East Tide Plate",
+        "lines": ["The east tide plate answers with a deep metallic crack."],
+        "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": null
+      },
+      {
+        "id": "fen_cache",
+        "kind": "chest",
+        "position": { "x": 15, "y": 2 },
+        "title": "Pilot Locker",
+        "lines": ["A mirror charm and sea salt cling to the inside lid."],
+        "rewardItem": "mirrorCharm",
+        "requiredFlag": null,
+        "grantsFlag": null
+      },
+      {
+        "id": "fen_oil",
+        "kind": "chest",
+        "position": { "x": 3, "y": 8 },
+        "title": "Shore Cache",
+        "lines": ["A spare line-canister rattles inside."],
+        "rewardItem": "lanternOil",
+        "requiredFlag": null,
+        "grantsFlag": null
+      }
+    ]
+  },
+  {
+    "id": "storm_nest",
+    "name": "Storm Nest",
+    "layoutFile": "starfall_storm_nest.txt",
+    "lines": [],
+    "spawn": { "x": 10, "y": 7 },
+    "portals": [
+      {
+        "from": { "x": 10, "y": 9 },
+        "toMap": "black_fen",
+        "toPosition": { "x": 10, "y": 1 },
+        "requiredFlag": null,
+        "blockedMessage": null
+      }
+    ],
+    "interactables": [
+      {
+        "id": "nest_cache_fragment",
+        "kind": "chest",
+        "position": { "x": 4, "y": 2 },
+        "title": "High Perch Cache",
+        "lines": ["A charm fragment rings like struck glass."],
+        "rewardItem": "charmFragment",
+        "requiredFlag": null,
+        "grantsFlag": null
+      },
+      {
+        "id": "nest_cache_oil",
+        "kind": "chest",
+        "position": { "x": 15, "y": 6 },
+        "title": "Rigger Satchel",
+        "lines": ["A rigger's satchel still holds an untouched line-canister."],
+        "rewardItem": "lanternOil",
+        "requiredFlag": null,
+        "grantsFlag": null
+      }
+    ]
+  },
+  {
+    "id": "beacon_spire",
+    "name": "The Sky Engine",
+    "layoutFile": "starfall_sky_engine.txt",
+    "lines": [],
+    "spawn": { "x": 1, "y": 5 },
+    "portals": [
+      {
+        "from": { "x": 0, "y": 5 },
+        "toMap": "black_fen",
+        "toPosition": { "x": 17, "y": 5 },
+        "requiredFlag": null,
+        "blockedMessage": null
+      }
+    ],
+    "interactables": [
+      {
+        "id": "spire_switch_sun",
+        "kind": "switchRune",
+        "position": { "x": 6, "y": 1 },
+        "title": "Copper Dial",
+        "lines": ["A copper dial clicks into the first detent."],
+        "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": null
+      },
+      {
+        "id": "spire_switch_moon",
+        "kind": "switchRune",
+        "position": { "x": 10, "y": 1 },
+        "title": "Silver Dial",
+        "lines": ["The silver dial sings in a higher register."],
+        "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": null
+      },
+      {
+        "id": "spire_switch_star",
+        "kind": "switchRune",
+        "position": { "x": 14, "y": 1 },
+        "title": "Gold Dial",
+        "lines": ["The gold dial locks the lens carriage in place."],
+        "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": null
+      },
+      {
+        "id": "spire_cache",
+        "kind": "chest",
+        "position": { "x": 3, "y": 1 },
+        "title": "Engine Locker",
+        "lines": ["A charm fragment pulses in the locker tray."],
+        "rewardItem": "charmFragment",
+        "requiredFlag": null,
+        "grantsFlag": null
+      },
+      {
+        "id": "spire_vault",
+        "kind": "chest",
+        "position": { "x": 16, "y": 8 },
+        "title": "Overwatch Locker",
+        "lines": ["A final tonic waits beside the engine housing."],
+        "rewardItem": "healingTonic",
+        "requiredFlag": null,
+        "grantsFlag": null
+      },
+      {
+        "id": "final_beacon",
+        "kind": "beacon",
+        "position": { "x": 10, "y": 5 },
+        "title": "Star Engine Core",
+        "lines": ["The Star Core seats with a blinding thunderclap."],
+        "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": "beaconLit"
+      }
+    ]
+  }
+]
