@@ -44,4 +44,14 @@ struct GameApp {
             GraphicsGameLauncher.run(content: content, saveRepository: saves)
         }
     }
+
+    func runScript(commands: [String], emitStepSnapshots: Bool) throws {
+        let automation = AutomationSession(content: content, saveRepository: saves)
+        try automation.runScript(commands: commands, emitStepSnapshots: emitStepSnapshots)
+    }
+
+    func runBridge() throws {
+        let automation = AutomationSession(content: content, saveRepository: saves)
+        try automation.runBridge()
+    }
 }

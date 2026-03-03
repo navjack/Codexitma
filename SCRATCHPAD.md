@@ -17,6 +17,8 @@
 - Standardized the graphical identity around the `Codexitma` name.
 - Generalized NPCs so multiple named characters can exist across regions without hardcoded one-off map logic.
 - Added actual puzzle gating: paired pressure plates in the Black Fen and an ordered mirror-switch sequence in the Beacon Spire.
+- Added a headless automation layer: `--script` for deterministic command runs and `--bridge` for stdin-driven JSON snapshots.
+- Surfaced clearer on-screen control legends so the UI states what each key actually does.
 
 ## Current Notes
 
@@ -25,6 +27,7 @@
 - The engine is still shared between both renderers, so gameplay changes should continue to land in the core model/engine first.
 - After each successful build, copy the runnable binary to the project root as `./Codexitma`.
 - The current world path now includes explicit environmental puzzle steps instead of only location-based progression.
+- The new bridge is a better immediate fit than a full MCP server, and can be wrapped by MCP later if needed.
 
 ## Next Build Targets
 
@@ -32,3 +35,4 @@
 - Continue expanding the world/content so the current slice grows toward the full multi-phase plan.
 - Commit stable checkpoints frequently now that git is part of the workflow.
 - Add more authored map events, optional treasure loops, and denser region-specific enemy encounters.
+- Build a full scripted playthrough using the bridge so progression can be regression-tested end to end.

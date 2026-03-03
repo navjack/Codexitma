@@ -2,11 +2,19 @@ import Foundation
 
 do {
     let app = try GameApp()
-    switch LaunchMode.parse(arguments: CommandLine.arguments) {
-    case .graphics:
-        app.runGraphics()
-    case .terminal:
-        try app.runTerminal()
+    let options = try LaunchOptions.parse(arguments: CommandLine.arguments)
+    switch options.target {
+    case .interactive(let mode):
+        switch mode {
+        case .graphics:
+            app.runGraphics()
+        case .terminal:
+            try app.runTerminal()
+        }
+    case .script:
+        try app.runScript(commands: options.commands, emitStepSnapshots: options.emitStepSnapshots)
+    case .bridge:
+        try app.runBridge()
     }
 } catch {
     fputs("Ashes of Merrow failed to start: \(error)\n", stderr)

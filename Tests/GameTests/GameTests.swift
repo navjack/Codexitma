@@ -93,3 +93,20 @@ import Testing
     let content = try ContentLoader().load()
     #expect(content.maps.count == 6)
 }
+
+@Test func automationTokenizerSplitsScriptsAndComments() async throws {
+    let tokens = AutomationTokenizer.tokens(from: "new, right  # comment\nleft\nstate")
+    #expect(tokens == ["new", "right", "left", "state"])
+}
+
+@Test func automationCommandParserRecognizesMovementAndState() async throws {
+    #expect(try AutomationCommandParser.parse("a") == .game(.move(.left)))
+    #expect(try AutomationCommandParser.parse("state") == .snapshot)
+}
+
+@Test func launchOptionsParseScriptMode() async throws {
+    let options = try LaunchOptions.parse(arguments: ["Game", "--script", "new,right,e", "--step-json"])
+    #expect(options.target == .script)
+    #expect(options.commands == ["new", "right", "e"])
+    #expect(options.emitStepSnapshots == true)
+}

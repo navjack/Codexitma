@@ -81,8 +81,9 @@ final class TerminalRenderer {
         buffer.write("N  New Game", x: 29, y: 9)
         buffer.write("L  Load Game", x: 29, y: 10)
         buffer.write("X  Quit", x: 29, y: 11)
-        buffer.write("Use WASD or arrows. E to interact. I for inventory.", x: 12, y: 16)
-        buffer.write("Expect an 80x24 terminal for the full retro frame.", color: .brightBlack, x: 14, y: 18)
+        buffer.write("WASD/Arrows move. E talk/use. I use first item.", x: 9, y: 16)
+        buffer.write("J hint, K save, L load, X quit. --bridge for JSON control.", x: 6, y: 17)
+        buffer.write("Expect an 80x24 terminal for the full retro frame.", color: .brightBlack, x: 14, y: 19)
         return buffer
     }
 
@@ -161,12 +162,18 @@ final class TerminalRenderer {
             for (index, item) in state.player.inventory.prefix(5).enumerated() {
                 buffer.write(item.name, x: x, y: 17 + index, maxWidth: 17)
             }
-        }
-        if state.mode == .dialogue, let dialogue = state.currentDialogue {
+        } else if state.mode == .dialogue, let dialogue = state.currentDialogue {
             buffer.write(dialogue.speaker, color: .yellow, x: x, y: 16, maxWidth: 17)
             for (index, line) in dialogue.lines.prefix(4).enumerated() {
                 buffer.write(line, x: x, y: 17 + index, maxWidth: 17)
             }
+        }
+        if state.mode != .inventory && state.mode != .dialogue {
+            buffer.write("WASD Move", color: .brightBlack, x: x, y: 16, maxWidth: 17)
+            buffer.write("E Act/Talk", color: .brightBlack, x: x, y: 17, maxWidth: 17)
+            buffer.write("I Use 1st Item", color: .brightBlack, x: x, y: 18, maxWidth: 17)
+            buffer.write("J Hint  K Save", color: .brightBlack, x: x, y: 19, maxWidth: 17)
+            buffer.write("L Load  X Quit", color: .brightBlack, x: x, y: 20, maxWidth: 17)
         }
     }
 

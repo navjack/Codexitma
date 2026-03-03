@@ -123,9 +123,10 @@ struct GameRootView: View {
             }
 
             VStack(spacing: 4) {
-                Text("MOVE WITH ARROWS OR WASD")
-                Text("E ACT   I USE ITEM   J HINT   K SAVE")
-                Text("RUN WITH --TERMINAL FOR THE TEXT MODE")
+                Text("ARROWS/WASD MOVE")
+                Text("E TALK OR USE   I USE FIRST ITEM")
+                Text("J SHOW GOAL   K SAVE   L LOAD   X QUIT")
+                Text("USE --BRIDGE OR --SCRIPT FOR HEADLESS CONTROL")
             }
             .font(.system(size: 10, weight: .regular, design: .monospaced))
             .foregroundStyle(palette.text.opacity(0.85))
@@ -207,7 +208,24 @@ struct GameRootView: View {
                 }
 
                 PixelPanel(title: "INPUT", palette: palette) {
-                    VStack(spacing: 8) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("ARROWS/WASD MOVE")
+                            .font(.system(size: 10, weight: .regular, design: .monospaced))
+                            .foregroundStyle(palette.text)
+                        Text("E ACT/TALK")
+                            .font(.system(size: 10, weight: .regular, design: .monospaced))
+                            .foregroundStyle(palette.text)
+                        Text("I USE FIRST ITEM")
+                            .font(.system(size: 10, weight: .regular, design: .monospaced))
+                            .foregroundStyle(palette.text)
+                        Text("J SHOW GOAL  K SAVE")
+                            .font(.system(size: 10, weight: .regular, design: .monospaced))
+                            .foregroundStyle(palette.text)
+                        Text("L LOAD SAVE  X QUIT")
+                            .font(.system(size: 10, weight: .regular, design: .monospaced))
+                            .foregroundStyle(palette.text)
+
+                        VStack(spacing: 8) {
                         HStack(spacing: 8) {
                             menuButton("I") {
                                 session.send(.openInventory)
@@ -220,6 +238,7 @@ struct GameRootView: View {
                             menuButton("K") { session.send(.save) }
                             menuButton("L") { session.send(.load) }
                             menuButton("X") { session.send(.quit) }
+                        }
                         }
                     }
                 }
