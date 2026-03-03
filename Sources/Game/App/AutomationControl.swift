@@ -143,6 +143,8 @@ struct AutomationSnapshot: Codable {
     let objective: String
     let lastMessage: String?
     let dialogueSpeaker: String?
+    let shopTitle: String?
+    let shopOffers: [String]
     let shouldQuit: Bool
 
     static func from(state: GameState) -> AutomationSnapshot {
@@ -165,9 +167,15 @@ struct AutomationSnapshot: Codable {
                 .filter { $0.active }
                 .map(\.id)
                 .sorted(),
-            objective: QuestSystem.objective(for: state.quests, text: state.objectiveText),
+            objective: QuestSystem.objective(for: state.quests, flow: state.questFlow),
             lastMessage: state.messages.last,
             dialogueSpeaker: state.currentDialogue?.speaker,
+            shopTitle: state.shopTitle,
+            shopOffers: state.shopOffers.map {
+                let itemName = itemTable[$0.itemID]?.name ?? $0.itemID.rawValue
+                let soldOut = !$0.repeatable && state.world.purchasedShopOffers.contains($0.id)
+                return soldOut ? "\(itemName) [SOLD]" : "\(itemName) [\($0.price)M]"
+            },
             shouldQuit: state.shouldQuit
         )
     }

@@ -10,12 +10,13 @@ final class GameEngine {
 
     init(library: GameContentLibrary, saveRepository: SaveRepository) {
         self.library = library
-        self.content = library.content(for: .ashesOfMerrow)
+        let initialAdventure = library.catalog.first?.id ?? .ashesOfMerrow
+        self.content = library.content(for: initialAdventure)
         self.saveRepository = saveRepository
-        self.state = GameEngine.makeInitialState(content: self.content)
+        self.state = GameEngine.makeInitialState(content: self.content, availableAdventures: library.catalog)
     }
 
-    static func makeInitialState(content: GameContent) -> GameState {
+    static func makeInitialState(content: GameContent, availableAdventures: [AdventureCatalogEntry]) -> GameState {
         let startMap = content.maps["merrow_village"]!
         let player = makePlayer(for: .wayfarer, at: startMap)
         let world = WorldState(
@@ -23,7 +24,8 @@ final class GameEngine {
             npcs: content.initialNPCs,
             enemies: content.initialEnemies,
             openedInteractables: [],
-            activeSwitchSequence: []
+            activeSwitchSequence: [],
+            purchasedShopOffers: []
         )
         return GameState(
             mode: .title,
@@ -31,10 +33,11 @@ final class GameEngine {
             world: world,
             quests: QuestState(),
             currentAdventureID: content.id,
-            objectiveText: content.objectiveText,
+            availableAdventures: availableAdventures,
+            questFlow: content.questFlow,
             messages: [content.introLine],
             currentDialogue: nil,
-            selectedAdventureIndex: AdventureID.allCases.firstIndex(of: content.id) ?? 0
+            selectedAdventureIndex: availableAdventures.firstIndex { $0.id == content.id } ?? 0
         )
     }
 
@@ -77,6 +80,8 @@ final class GameEngine {
             handleDialogue(command)
         case .inventory:
             handleInventory(command)
+        case .shop:
+            handleShop(command)
         case .ending:
             if command == .quit || command == .cancel { state.shouldQuit = true }
         default:
@@ -85,27 +90,34 @@ final class GameEngine {
     }
 
     private func handleTitle(_ command: ActionCommand) {
+        let adventureCount = max(state.availableAdventures.count, 1)
         switch command {
         case .move(.left), .move(.up):
-            state.selectedAdventureIndex = (state.selectedAdventureIndex - 1 + AdventureID.allCases.count) % AdventureID.allCases.count
+            state.selectedAdventureIndex = (state.selectedAdventureIndex - 1 + adventureCount) % adventureCount
             logSelectedAdventure()
         case .move(.right), .move(.down):
-            state.selectedAdventureIndex = (state.selectedAdventureIndex + 1) % AdventureID.allCases.count
+            state.selectedAdventureIndex = (state.selectedAdventureIndex + 1) % adventureCount
             logSelectedAdventure()
         case .newGame, .confirm:
             state.mode = .characterCreation
-            state.log("Choose a class for \(state.selectedAdventureID().displayName), then confirm.")
+            state.log("Choose a class for \(state.selectedAdventureTitle()), then confirm.")
         case .load:
             do {
                 let save = try saveRepository.load()
+                guard library.contains(save.adventureID) else {
+                    state.log("The saved road is missing. Reinstall that adventure pack first.")
+                    return
+                }
                 content = library.content(for: save.adventureID)
                 state.player = save.player
                 state.world = save.world
                 state.quests = save.quests
                 state.playTimeSeconds = save.playTimeSeconds
                 state.currentAdventureID = save.adventureID
-                state.objectiveText = content.objectiveText
-                state.selectedAdventureIndex = AdventureID.allCases.firstIndex(of: save.adventureID) ?? 0
+                state.availableAdventures = library.catalog
+                state.questFlow = content.questFlow
+                state.selectedAdventureIndex = library.catalog.firstIndex { $0.id == save.adventureID } ?? 0
+                state.clearShopPanel()
                 state.mode = .exploration
                 state.log("You return to the last warm light.")
             } catch SaveError.notFound {
@@ -159,7 +171,7 @@ final class GameEngine {
                 state.mode = .inventory
             }
         case .help:
-            state.log(QuestSystem.objective(for: state.quests, text: state.objectiveText))
+            state.log(QuestSystem.objective(for: state.quests, flow: state.questFlow))
         case .save:
             saveAtRestPoint()
         case .cancel:
@@ -206,6 +218,25 @@ final class GameEngine {
         }
     }
 
+    private func handleShop(_ command: ActionCommand) {
+        switch command {
+        case .move(let direction):
+            moveShopSelection(direction)
+        case .help:
+            describeSelectedShopOffer()
+        case .interact, .confirm:
+            purchaseSelectedShopOffer()
+        case .cancel, .openInventory:
+            state.clearShopPanel()
+            state.mode = .exploration
+            state.log("You step back from the counter.")
+        case .quit:
+            state.shouldQuit = true
+        default:
+            break
+        }
+    }
+
     private func movePlayer(_ direction: Direction) {
         guard let map = state.world.maps[state.player.currentMapID] else { return }
         let target = state.player.position + direction.delta
@@ -227,6 +258,11 @@ final class GameEngine {
     }
 
     private func interact() {
+        if let shop = shopNearPlayer() {
+            open(shop: shop)
+            return
+        }
+
         if let dialogue = npcDialogueNearPlayer() {
             state.currentDialogue = dialogue
             state.mode = .dialogue
@@ -579,19 +615,19 @@ final class GameEngine {
         let adventureID = state.selectedAdventureID()
         content = library.content(for: adventureID)
         let startMap = content.maps["merrow_village"]!
-        state = Self.makeInitialState(content: content)
+        let selectedIndex = library.catalog.firstIndex { $0.id == adventureID } ?? 0
+        state = Self.makeInitialState(content: content, availableAdventures: library.catalog)
         state.player = Self.makePlayer(for: heroClass, at: startMap)
         state.mode = .exploration
         state.currentAdventureID = adventureID
-        state.objectiveText = content.objectiveText
-        state.selectedAdventureIndex = AdventureID.allCases.firstIndex(of: adventureID) ?? 0
+        state.questFlow = content.questFlow
+        state.selectedAdventureIndex = selectedIndex
         let template = heroTemplate(for: heroClass)
         state.log("\(template.title) enters \(content.title).")
     }
 
     private func logSelectedAdventure() {
-        let selected = state.selectedAdventureID()
-        state.log("\(selected.displayName): \(selected.summary)")
+        state.log("\(state.selectedAdventureTitle()): \(state.selectedAdventureSummary())")
     }
 
     private func handlePortalIfNeeded(at position: Position, map: MapDefinition) {
@@ -643,11 +679,21 @@ final class GameEngine {
         return state.world.maps[state.player.currentMapID]?.interactables.first { adjacent.contains($0.position) }
     }
 
+    private func shopNearPlayer() -> ShopDefinition? {
+        guard let npc = npcNearPlayer() else { return nil }
+        return content.shops[npc.id]
+    }
+
+    private func npcNearPlayer() -> NPCState? {
+        let adjacent = Direction.allCases.map { state.player.position + $0.delta } + [state.player.position]
+        return state.world.npcs.first(where: {
+            $0.mapID == state.player.currentMapID && adjacent.contains($0.position)
+        })
+    }
+
     private func npcDialogueNearPlayer() -> DialogueNode? {
         let adjacent = Direction.allCases.map { state.player.position + $0.delta } + [state.player.position]
-        if let npc = state.world.npcs.first(where: {
-            $0.mapID == state.player.currentMapID && adjacent.contains($0.position)
-        }) {
+        if let npc = npcNearPlayer() {
             if npc.id == "elder" {
                 state.quests.set(.metElder)
             }
@@ -674,5 +720,98 @@ final class GameEngine {
             return Position(x: dx == 0 ? 0 : (dx > 0 ? 1 : -1), y: 0)
         }
         return Position(x: 0, y: dy == 0 ? 0 : (dy > 0 ? 1 : -1))
+    }
+
+    private func open(shop: ShopDefinition) {
+        state.activeShopID = shop.id
+        state.shopTitle = "\(shop.merchantName)'s Goods"
+        state.shopLines = [
+            shop.introLine,
+            "Spend marks on supplies, gear, and relic salvage."
+        ]
+        state.shopOffers = shop.offers
+        state.shopDetail = nil
+        state.clampShopSelection(offerCount: shop.offers.count)
+        state.mode = .shop
+        state.log("\(shop.merchantName) opens the trade ledger.")
+    }
+
+    private func currentShop() -> ShopDefinition? {
+        guard let activeShopID = state.activeShopID else { return nil }
+        return content.shops.values.first(where: { $0.id == activeShopID })
+    }
+
+    private func moveShopSelection(_ direction: Direction) {
+        guard let shop = currentShop(), !shop.offers.isEmpty else { return }
+        let delta: Int = (direction == .up || direction == .left) ? -1 : 1
+        let count = shop.offers.count
+        state.shopSelectionIndex = (state.shopSelectionIndex + delta + count) % count
+        describeSelectedShopOffer()
+    }
+
+    private func describeSelectedShopOffer() {
+        guard let shop = currentShop(), !shop.offers.isEmpty else {
+            state.log("This counter is bare.")
+            return
+        }
+        state.clampShopSelection(offerCount: shop.offers.count)
+        let offer = shop.offers[state.shopSelectionIndex]
+        let itemName = content.items[offer.itemID]?.name ?? offer.itemID.rawValue
+        let soldOut = !offer.repeatable && state.world.purchasedShopOffers.contains(offer.id)
+        state.shopDetail = offer.blurb
+        state.log(soldOut ? "\(itemName) is sold out." : "\(itemName): \(offer.price) marks.")
+    }
+
+    private func purchaseSelectedShopOffer() {
+        guard let shop = currentShop(), !shop.offers.isEmpty else {
+            state.log("Nothing here can be bought.")
+            return
+        }
+
+        state.clampShopSelection(offerCount: shop.offers.count)
+        let offer = shop.offers[state.shopSelectionIndex]
+        let itemName = content.items[offer.itemID]?.name ?? offer.itemID.rawValue
+
+        if !offer.repeatable && state.world.purchasedShopOffers.contains(offer.id) {
+            state.log("\(itemName) has already been claimed.")
+            return
+        }
+
+        if state.player.marks < offer.price {
+            state.log("You need \(offer.price - state.player.marks) more marks.")
+            return
+        }
+
+        let didReceive = grantShopItem(offer.itemID, purchaseMessage: "You buy \(itemName).")
+        guard didReceive else { return }
+
+        state.player.marks -= offer.price
+        if !offer.repeatable {
+            state.world.purchasedShopOffers.insert(offer.id)
+        }
+        state.shopDetail = offer.blurb
+        state.log("\(shop.merchantName) takes \(offer.price) marks. \(state.player.marks) remain.")
+    }
+
+    private func grantShopItem(_ id: ItemID, purchaseMessage: String) -> Bool {
+        guard let item = content.items[id] else {
+            state.log("The merchant's stock ledger is wrong.")
+            return false
+        }
+        if item.isEquippable,
+           let slot = item.slot,
+           state.player.equipment.itemID(for: slot) == nil {
+            state.player.equipment.set(item.id, for: slot)
+            state.log(purchaseMessage)
+            state.log("\(item.name) is fitted to your \(slot.rawValue).")
+            return true
+        }
+        guard state.player.inventory.count < state.player.inventoryCapacity() else {
+            state.log("Your satchel is too full.")
+            return false
+        }
+        state.player.inventory.append(item)
+        state.log(purchaseMessage)
+        return true
     }
 }

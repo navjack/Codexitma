@@ -129,6 +129,22 @@ final class GameSessionController: ObservableObject {
             return
         }
 
+        let boughtFromShop = previous.mode == .shop && current.mode == .shop &&
+            (
+                previous.player.marks != current.player.marks ||
+                previous.player.inventory.count != current.player.inventory.count ||
+                previous.player.equipment != current.player.equipment
+            )
+        if boughtFromShop {
+            soundEngine.play(.useItem)
+            return
+        }
+
+        if (command == .interact || command == .confirm), previous.mode == .exploration, current.mode == .shop {
+            soundEngine.play(.menuConfirm)
+            return
+        }
+
         if command == .interact || command == .confirm, previous.mode == .exploration, current.mode == .dialogue {
             soundEngine.play(.menuConfirm)
         }
@@ -211,15 +227,13 @@ struct GameRootView: View {
     }
 
     private var titleView: some View {
-        let selectedAdventure = session.state.selectedAdventureID()
-
         return VStack(spacing: 16) {
             Spacer()
             PixelBanner(text: "CODEXITMA", color: palette.titleGold)
             Text("A LOW-RES APPLE II FANTASY")
                 .font(.system(size: 13, weight: .bold, design: .monospaced))
                 .foregroundStyle(palette.text)
-            Text("\(selectedAdventure.displayName.uppercased()) // CLASSES, TRAITS, AND LOW-RES LEGENDS")
+            Text("\(session.state.selectedAdventureTitle().uppercased()) // CLASSES, TRAITS, AND LOW-RES LEGENDS")
                 .font(.system(size: 11, weight: .regular, design: .monospaced))
                 .foregroundStyle(palette.accentBlue)
 
@@ -232,7 +246,7 @@ struct GameRootView: View {
             }
             .frame(maxWidth: 900)
 
-            Text(selectedAdventure.summary.uppercased())
+            Text(session.state.selectedAdventureSummary().uppercased())
                 .font(.system(size: 10, weight: .regular, design: .monospaced))
                 .foregroundStyle(palette.text.opacity(0.9))
                 .multilineTextAlignment(.center)
@@ -280,7 +294,7 @@ struct GameRootView: View {
                 .foregroundStyle(palette.text)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
-            Text(session.state.selectedAdventureID().displayName.uppercased())
+            Text(session.state.selectedAdventureTitle().uppercased())
                 .font(.system(size: 10, weight: .bold, design: .monospaced))
                 .foregroundStyle(palette.accentBlue)
 
@@ -386,7 +400,7 @@ struct GameRootView: View {
                     HStack(alignment: .top, spacing: 10) {
                         statusPanel
                             .frame(width: sidebarPanelWidth)
-                        packPanel
+                        commercePanel
                             .frame(width: sidebarPanelWidth)
                     }
 
@@ -421,13 +435,24 @@ struct GameRootView: View {
                 stat("ATK", "\(session.state.player.effectiveAttack())")
                 stat("DEF", "\(session.state.player.effectiveDefense())")
                 stat("LN", "\(session.state.player.effectiveLanternCapacity())")
+                stat("MARKS", "\(session.state.player.marks)")
                 stat("BAG", "\(session.state.player.inventory.count)/\(session.state.player.inventoryCapacity())")
                 stat("STYLE", session.visualTheme.displayName.uppercased())
-                stat("GOAL", QuestSystem.objective(for: session.state.quests, text: session.state.objectiveText).uppercased())
+                stat("GOAL", QuestSystem.objective(for: session.state.quests, flow: session.state.questFlow).uppercased())
 
                 menuButton("T: STYLE") { session.cycleVisualTheme() }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var commercePanel: some View {
+        Group {
+            if session.state.mode == .shop {
+                shopPanel
+            } else {
+                packPanel
+            }
         }
     }
 
@@ -456,6 +481,51 @@ struct GameRootView: View {
         }
     }
 
+    private var shopPanel: some View {
+        PixelPanel(title: "SHOP", palette: palette) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text((session.state.shopTitle ?? "MERCHANT").uppercased())
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundStyle(palette.lightGold)
+                    .lineLimit(2)
+
+                ForEach(Array(session.state.shopOffers.enumerated()), id: \.offset) { index, offer in
+                    let itemName = itemTable[offer.itemID]?.name.uppercased() ?? offer.itemID.rawValue.uppercased()
+                    let soldOut = !offer.repeatable && session.state.world.purchasedShopOffers.contains(offer.id)
+
+                    HStack(spacing: 5) {
+                        Text(index == session.state.shopSelectionIndex ? ">" : " ")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .foregroundStyle(palette.text)
+                        Text(itemName)
+                            .font(.system(size: 10, weight: .regular, design: .monospaced))
+                            .foregroundStyle(palette.text)
+                            .lineLimit(1)
+                        Spacer(minLength: 4)
+                        Text(soldOut ? "SOLD" : "\(offer.price)M")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .foregroundStyle(soldOut ? palette.accentBlue : palette.lightGold)
+                    }
+                }
+
+                if let detail = session.state.shopDetail {
+                    Text(detail.uppercased())
+                        .font(.system(size: 10, weight: .regular, design: .monospaced))
+                        .foregroundStyle(palette.text.opacity(0.82))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 4)
+                }
+
+                HStack(spacing: 8) {
+                    menuButton("E: BUY") { session.send(.interact) }
+                    menuButton("Q: LEAVE") { session.send(.cancel) }
+                }
+                .padding(.top, 4)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
     private var paperDollPanel: some View {
         PixelPanel(title: "PAPER DOLL", palette: palette) {
             VStack(alignment: .leading, spacing: 8) {
@@ -477,16 +547,16 @@ struct GameRootView: View {
     private var inputPanel: some View {
         PixelPanel(title: "INPUT", palette: palette) {
             VStack(alignment: .leading, spacing: 5) {
-                Text("ARROWS/WASD MOVE")
+                Text(session.state.mode == .shop ? "ARROWS/WASD BROWSE" : "ARROWS/WASD MOVE")
                     .font(.system(size: 10, weight: .regular, design: .monospaced))
                     .foregroundStyle(palette.text)
-                Text("E ACT   I PACK   Q BACK")
+                Text(session.state.mode == .shop ? "E BUY   J INFO   Q LEAVE" : "E ACT   I PACK   Q BACK")
                     .font(.system(size: 10, weight: .regular, design: .monospaced))
                     .foregroundStyle(palette.text)
-                Text("J GOAL  K SAVE  L LOAD")
+                Text(session.state.mode == .shop ? "K SAVE  L LOAD  X QUIT" : "J GOAL  K SAVE  L LOAD")
                     .font(.system(size: 10, weight: .regular, design: .monospaced))
                     .foregroundStyle(palette.text)
-                Text("T STYLE  X QUIT")
+                Text(session.state.mode == .shop ? "T STYLE  I ALSO LEAVES" : "T STYLE  X QUIT")
                     .font(.system(size: 10, weight: .regular, design: .monospaced))
                     .foregroundStyle(palette.text)
 

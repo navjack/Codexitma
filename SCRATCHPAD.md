@@ -26,6 +26,9 @@
 - Added a second full adventure, `Starfall Requiem`, with a larger map graph, interior buildings, side dungeons, more NPCs, and broader encounter density.
 - Persisted the graphics visual theme between launches and added simple Apple II-style square-wave cues for intro, movement, attacks, and item use in graphics mode.
 - Moved authored content out of hardcoded Swift tables and into bundled JSON data packs: adventure catalog, class templates, items, objectives, dialogue, encounters, NPCs, enemies, and shop definitions.
+- Added live merchant support: externalized shop definitions now open real in-game stores, spend `marks`, persist sold-out stock, and surface through both renderers plus the automation bridge.
+- Replaced hardcoded quest objective sequencing with JSON quest-flow stages so progression order now lives in data packs.
+- Added support for third-party adventure packs loaded from `~/Library/Application Support/Codexitma/Adventures`, with dynamic title-screen discovery.
 
 ## Current Notes
 
@@ -39,6 +42,7 @@
 - Keep the graphics layout bounded for at least a 1080p window; if more UI is added later, prefer widening panels or adding compact rows before making the window taller.
 - Theme selection is now a UI concern only; keep future visual experiments in the renderer/session layer rather than pushing them into `GameEngine`.
 - Content authoring should now default to the JSON packs in `Sources/Game/ContentData`; only core rules, state transitions, and rendering logic should require Swift changes.
+- External content packs can now extend the title menu without modifying the app bundle, as long as they follow the expected manifest and JSON file layout.
 
 ## Next Build Targets
 
@@ -47,4 +51,4 @@
 - Commit stable checkpoints frequently now that git is part of the workflow.
 - Add more authored map events, optional treasure loops, and denser region-specific enemy encounters.
 - Build a full scripted playthrough using the bridge so progression can be regression-tested end to end.
-- Turn the newly externalized shop definitions into live in-game merchant interfaces backed by `marks`.
+- Expand the external pack format so third-party adventures can define custom quest flags and bespoke item tables, not just reuse the built-in systems.

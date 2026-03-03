@@ -357,48 +357,19 @@ enum QuestFlag: String, Codable, Hashable, CaseIterable {
     case keeperDefeated
 }
 
-enum AdventureID: String, Codable, CaseIterable {
-    case ashesOfMerrow
-    case starfallRequiem
+struct AdventureID: RawRepresentable, Codable, Hashable, Equatable, ExpressibleByStringLiteral, Sendable {
+    let rawValue: String
 
-    var displayName: String {
-        adventureCatalogTable[self]?.title ?? fallbackDisplayName
+    init(rawValue: String) {
+        self.rawValue = rawValue
     }
 
-    var summary: String {
-        adventureCatalogTable[self]?.summary ?? fallbackSummary
+    init(stringLiteral value: String) {
+        self.rawValue = value
     }
 
-    var introLine: String {
-        adventureCatalogTable[self]?.introLine ?? fallbackIntroLine
-    }
-
-    private var fallbackDisplayName: String {
-        switch self {
-        case .ashesOfMerrow:
-            return "Ashes of Merrow"
-        case .starfallRequiem:
-            return "Starfall Requiem"
-        }
-    }
-
-    private var fallbackSummary: String {
-        switch self {
-        case .ashesOfMerrow:
-            return "A dying valley, two shrines, and a final beacon against the dark."
-        case .starfallRequiem:
-            return "A fallen sky-engine, rival powers, richer loot, and a harder road back to the light."
-        }
-    }
-
-    private var fallbackIntroLine: String {
-        switch self {
-        case .ashesOfMerrow:
-            return "The beacon has gone dark."
-        case .starfallRequiem:
-            return "A star has fallen into the old machine-sea."
-        }
-    }
+    static let ashesOfMerrow = AdventureID(rawValue: "ashesOfMerrow")
+    static let starfallRequiem = AdventureID(rawValue: "starfallRequiem")
 }
 
 struct AdventureCatalogEntry: Codable, Equatable {
@@ -808,15 +779,14 @@ struct DialogueNode: Codable {
     let lines: [String]
 }
 
-struct ObjectiveTextSet: Codable, Equatable {
-    let seekElder: String
-    let restoreFirstRelay: String
-    let restoreSecondRelay: String
-    let recoverCore: String
-    let crossHazard: String
-    let ascendSpire: String
-    let defeatKeeper: String
-    let completion: String
+struct QuestStageDefinition: Codable, Equatable {
+    let objective: String
+    let completeWhenFlag: QuestFlag
+}
+
+struct QuestFlowDefinition: Codable, Equatable {
+    let stages: [QuestStageDefinition]
+    let completionText: String
 }
 
 struct ShopOffer: Codable, Equatable {
@@ -847,6 +817,7 @@ struct WorldState: Codable {
     var enemies: [EnemyState]
     var openedInteractables: Set<String>
     var activeSwitchSequence: [String]
+    var purchasedShopOffers: Set<String>
 
     enum CodingKeys: String, CodingKey {
         case maps
@@ -854,6 +825,7 @@ struct WorldState: Codable {
         case enemies
         case openedInteractables
         case activeSwitchSequence
+        case purchasedShopOffers
     }
 
     init(
@@ -861,13 +833,15 @@ struct WorldState: Codable {
         npcs: [NPCState],
         enemies: [EnemyState],
         openedInteractables: Set<String>,
-        activeSwitchSequence: [String] = []
+        activeSwitchSequence: [String] = [],
+        purchasedShopOffers: Set<String> = []
     ) {
         self.maps = maps
         self.npcs = npcs
         self.enemies = enemies
         self.openedInteractables = openedInteractables
         self.activeSwitchSequence = activeSwitchSequence
+        self.purchasedShopOffers = purchasedShopOffers
     }
 
     init(from decoder: any Decoder) throws {
@@ -877,6 +851,7 @@ struct WorldState: Codable {
         enemies = try container.decode([EnemyState].self, forKey: .enemies)
         openedInteractables = try container.decode(Set<String>.self, forKey: .openedInteractables)
         activeSwitchSequence = try container.decodeIfPresent([String].self, forKey: .activeSwitchSequence) ?? []
+        purchasedShopOffers = try container.decodeIfPresent(Set<String>.self, forKey: .purchasedShopOffers) ?? []
     }
 
     func encode(to encoder: any Encoder) throws {
@@ -886,6 +861,7 @@ struct WorldState: Codable {
         try container.encode(enemies, forKey: .enemies)
         try container.encode(openedInteractables, forKey: .openedInteractables)
         try container.encode(activeSwitchSequence, forKey: .activeSwitchSequence)
+        try container.encode(purchasedShopOffers, forKey: .purchasedShopOffers)
     }
 }
 
@@ -942,7 +918,7 @@ struct GameContent: @unchecked Sendable {
     let title: String
     let summary: String
     let introLine: String
-    let objectiveText: ObjectiveTextSet
+    let questFlow: QuestFlowDefinition
     let maps: [String: MapDefinition]
     let dialogues: [String: DialogueNode]
     let encounters: [String: EncounterDefinition]
@@ -953,10 +929,25 @@ struct GameContent: @unchecked Sendable {
 }
 
 struct GameContentLibrary: @unchecked Sendable {
+    let catalog: [AdventureCatalogEntry]
     let adventures: [AdventureID: GameContent]
 
     func content(for adventureID: AdventureID) -> GameContent {
-        adventures[adventureID] ?? adventures[.ashesOfMerrow]!
+        if let content = adventures[adventureID] {
+            return content
+        }
+        if let first = catalog.first, let content = adventures[first.id] {
+            return content
+        }
+        return adventures[.ashesOfMerrow]!
+    }
+
+    func entry(for adventureID: AdventureID) -> AdventureCatalogEntry? {
+        catalog.first { $0.id == adventureID }
+    }
+
+    func contains(_ adventureID: AdventureID) -> Bool {
+        adventures[adventureID] != nil
     }
 }
 
@@ -1017,7 +1008,8 @@ struct GameState {
     var world: WorldState
     var quests: QuestState
     var currentAdventureID: AdventureID
-    var objectiveText: ObjectiveTextSet
+    var availableAdventures: [AdventureCatalogEntry]
+    var questFlow: QuestFlowDefinition
     var messages: [String]
     var currentDialogue: DialogueNode?
     var shouldQuit = false
@@ -1027,6 +1019,7 @@ struct GameState {
     var shopSelectionIndex = 0
     var shopTitle: String?
     var shopLines: [String] = []
+    var shopOffers: [ShopOffer] = []
     var shopDetail: String?
     var selectedHeroIndex = 0
     var selectedAdventureIndex = 0
@@ -1059,6 +1052,7 @@ struct GameState {
         shopSelectionIndex = 0
         shopTitle = nil
         shopLines = []
+        shopOffers = []
         shopDetail = nil
     }
 
@@ -1069,9 +1063,21 @@ struct GameState {
     }
 
     func selectedAdventureID() -> AdventureID {
-        let adventures = AdventureID.allCases
-        guard !adventures.isEmpty else { return .ashesOfMerrow }
-        return adventures[(selectedAdventureIndex % adventures.count + adventures.count) % adventures.count]
+        selectedAdventureEntry()?.id ?? .ashesOfMerrow
+    }
+
+    func selectedAdventureEntry() -> AdventureCatalogEntry? {
+        guard !availableAdventures.isEmpty else { return nil }
+        let index = (selectedAdventureIndex % availableAdventures.count + availableAdventures.count) % availableAdventures.count
+        return availableAdventures[index]
+    }
+
+    func selectedAdventureTitle() -> String {
+        selectedAdventureEntry()?.title ?? "Ashes of Merrow"
+    }
+
+    func selectedAdventureSummary() -> String {
+        selectedAdventureEntry()?.summary ?? "A dying valley, two shrines, and a final beacon against the dark."
     }
 }
 
@@ -1094,10 +1100,6 @@ let adventureCatalogEntries: [AdventureCatalogEntry] = {
         preconditionFailure("Failed to decode adventure_catalog.json: \(error)")
     }
 }()
-
-let adventureCatalogTable: [AdventureID: AdventureCatalogEntry] = Dictionary(
-    uniqueKeysWithValues: adventureCatalogEntries.map { ($0.id, $0) }
-)
 
 let heroTemplateTable: [HeroClass: HeroTemplate] = {
     let descriptor = ("hero_templates" as NSString)

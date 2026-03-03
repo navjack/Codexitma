@@ -77,11 +77,10 @@ final class TerminalRenderer {
 
     private func titleFrame(state: GameState) -> ScreenBuffer {
         var buffer = ScreenBuffer()
-        let selectedAdventure = state.selectedAdventureID()
-        let title = selectedAdventure.displayName.uppercased()
+        let title = state.selectedAdventureTitle().uppercased()
         buffer.write(title, color: .yellow, x: 28, y: 3)
         buffer.write("A Swift terminal RPG", color: .cyan, x: 29, y: 5)
-        buffer.write(selectedAdventure.summary, x: 8, y: 7, maxWidth: 64)
+        buffer.write(state.selectedAdventureSummary(), x: 8, y: 7, maxWidth: 64)
         buffer.write("A/D or arrows: choose adventure", color: .brightBlack, x: 23, y: 8)
         buffer.write("N  Create Hero", x: 27, y: 9)
         buffer.write("L  Load Game", x: 29, y: 10)
@@ -98,7 +97,7 @@ final class TerminalRenderer {
         let heroClass = state.selectedHeroClass()
         let template = heroTemplate(for: heroClass)
         buffer.write("CREATE YOUR HERO", color: .yellow, x: 29, y: 2)
-        buffer.write(state.selectedAdventureID().displayName.uppercased(), color: .magenta, x: 22, y: 3, maxWidth: 36)
+        buffer.write(state.selectedAdventureTitle().uppercased(), color: .magenta, x: 22, y: 3, maxWidth: 36)
         buffer.write(template.title, color: .cyan, x: 24, y: 5, maxWidth: 32)
         buffer.write(template.summary, x: 9, y: 7, maxWidth: 62)
         buffer.write("< A / LEFT        D / RIGHT >", color: .brightBlack, x: 24, y: 9)
@@ -178,11 +177,12 @@ final class TerminalRenderer {
         buffer.write("ST \(state.player.stamina)/\(state.player.maxStamina)", x: x, y: 4)
         buffer.write("LN \(state.player.effectiveLanternCapacity())", x: x, y: 5)
         buffer.write("AT \(state.player.effectiveAttack()) DF \(state.player.effectiveDefense())", x: x, y: 6, maxWidth: 17)
+        buffer.write("MK \(state.player.marks)", x: x, y: 7)
         if let map = state.world.maps[state.player.currentMapID] {
             buffer.write(map.name, color: .cyan, x: x, y: 8, maxWidth: 17)
         }
         buffer.write("Goal:", color: .yellow, x: x, y: 10)
-        let objective = QuestSystem.objective(for: state.quests, text: state.objectiveText)
+        let objective = QuestSystem.objective(for: state.quests, flow: state.questFlow)
         buffer.write(objective, x: x, y: 11, maxWidth: 17)
         let keyCount = state.player.inventory.filter { $0.kind == .key || $0.kind == .quest }.count
         buffer.write("Keys \(keyCount)", x: x, y: 13)
@@ -201,13 +201,33 @@ final class TerminalRenderer {
                 let marker: Character = actualIndex == state.inventorySelectionIndex ? ">" : " "
                 buffer.write("\(marker)\(item.name)", x: x, y: 16 + offset, maxWidth: 17)
             }
+        } else if state.mode == .shop {
+            buffer.write(state.shopTitle ?? "Store", color: .yellow, x: x, y: 15, maxWidth: 17)
+            for (offset, line) in state.shopLines.prefix(2).enumerated() {
+                buffer.write(line, x: x, y: 16 + offset, maxWidth: 17)
+            }
+            if let detail = state.shopDetail {
+                buffer.write(detail, color: .brightBlack, x: x, y: 18, maxWidth: 17)
+            }
+            buffer.write("E Buy  Q Leave", color: .brightBlack, x: x, y: 20, maxWidth: 17)
+            buffer.write("W/S Pick J Info", color: .brightBlack, x: x, y: 21, maxWidth: 17)
         } else if state.mode == .dialogue, let dialogue = state.currentDialogue {
             buffer.write(dialogue.speaker, color: .yellow, x: x, y: 15, maxWidth: 17)
             for (index, line) in dialogue.lines.prefix(4).enumerated() {
                 buffer.write(line, x: x, y: 16 + index, maxWidth: 17)
             }
         }
-        if state.mode != .inventory && state.mode != .dialogue {
+        if state.mode == .shop {
+            let offers = Array(state.shopOffers.prefix(4))
+            for (offset, offer) in offers.enumerated() {
+                let marker = offset == state.shopSelectionIndex ? ">" : " "
+                let itemName = itemTable[offer.itemID]?.name ?? offer.itemID.rawValue
+                let soldOut = !offer.repeatable && state.world.purchasedShopOffers.contains(offer.id)
+                let status = soldOut ? " SOLD" : " \(offer.price)M"
+                buffer.write("\(marker)\(shortShopName(itemName, suffix: status))", x: 2, y: 18 + offset, maxWidth: 56)
+            }
+        }
+        if state.mode != .inventory && state.mode != .dialogue && state.mode != .shop {
             buffer.write("W \(shortName(state.player.equippedName(for: .weapon)))", color: .brightBlack, x: x, y: 15, maxWidth: 17)
             buffer.write("A \(shortName(state.player.equippedName(for: .armor)))", color: .brightBlack, x: x, y: 16, maxWidth: 17)
             buffer.write("C \(shortName(state.player.equippedName(for: .charm)))", color: .brightBlack, x: x, y: 17, maxWidth: 17)
@@ -220,6 +240,11 @@ final class TerminalRenderer {
 
     private func shortName(_ value: String) -> String {
         String(value.prefix(15))
+    }
+
+    private func shortShopName(_ value: String, suffix: String) -> String {
+        let trimmed = String(value.prefix(max(1, 16 - suffix.count)))
+        return trimmed + suffix
     }
 
     private func overlayMarker(for interactable: InteractableDefinition, opened: Set<String>) -> (glyph: Character, color: ANSIColor)? {

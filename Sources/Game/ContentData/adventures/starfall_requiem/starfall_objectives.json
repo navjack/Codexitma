@@ -1,10 +1,33 @@
 {
-  "seekElder": "Find Admiral Vey at Cinder Wharf.",
-  "restoreFirstRelay": "Prime the west capacitor on the Salt Causeway.",
-  "restoreSecondRelay": "Prime the east capacitor in the Glass Marsh.",
-  "recoverCore": "Recover the Star Core from the Reliquary Vault.",
-  "crossHazard": "Raise a safe route through the Thunder Shoals.",
-  "ascendSpire": "Climb the Sky Engine and align its lenses.",
-  "defeatKeeper": "Defeat the Fallen Helmsman.",
-  "completion": "The sky-engine sings again."
+  "stages": [
+    {
+      "objective": "Find Admiral Vey at Cinder Wharf.",
+      "completeWhenFlag": "metElder"
+    },
+    {
+      "objective": "Prime the west capacitor on the Salt Causeway.",
+      "completeWhenFlag": "southShrineLit"
+    },
+    {
+      "objective": "Prime the east capacitor in the Glass Marsh.",
+      "completeWhenFlag": "orchardShrineLit"
+    },
+    {
+      "objective": "Recover the Star Core from the Reliquary Vault.",
+      "completeWhenFlag": "obtainedLensCore"
+    },
+    {
+      "objective": "Raise a safe route through the Thunder Shoals.",
+      "completeWhenFlag": "fenCrossed"
+    },
+    {
+      "objective": "Climb the Sky Engine and align its lenses.",
+      "completeWhenFlag": "beaconLit"
+    },
+    {
+      "objective": "Defeat the Fallen Helmsman.",
+      "completeWhenFlag": "keeperDefeated"
+    }
+  ],
+  "completionText": "The sky-engine sings again."
 }

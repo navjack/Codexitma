@@ -1,10 +1,33 @@
 {
-  "seekElder": "Seek Elder Rowan in Merrow.",
-  "restoreFirstRelay": "Restore the shrine in South Fields.",
-  "restoreSecondRelay": "Bring light to the Sunken Orchard.",
-  "recoverCore": "Recover the Lens Core in the Barrows.",
-  "crossHazard": "Cross the Black Fen.",
-  "ascendSpire": "Ascend the Beacon Spire.",
-  "defeatKeeper": "Defeat the Shaded Keeper.",
-  "completion": "The beacon burns again."
+  "stages": [
+    {
+      "objective": "Seek Elder Rowan in Merrow.",
+      "completeWhenFlag": "metElder"
+    },
+    {
+      "objective": "Restore the shrine in South Fields.",
+      "completeWhenFlag": "southShrineLit"
+    },
+    {
+      "objective": "Bring light to the Sunken Orchard.",
+      "completeWhenFlag": "orchardShrineLit"
+    },
+    {
+      "objective": "Recover the Lens Core in the Barrows.",
+      "completeWhenFlag": "obtainedLensCore"
+    },
+    {
+      "objective": "Cross the Black Fen.",
+      "completeWhenFlag": "fenCrossed"
+    },
+    {
+      "objective": "Ascend the Beacon Spire.",
+      "completeWhenFlag": "beaconLit"
+    },
+    {
+      "objective": "Defeat the Shaded Keeper.",
+      "completeWhenFlag": "keeperDefeated"
+    }
+  ],
+  "completionText": "The beacon burns again."
 }

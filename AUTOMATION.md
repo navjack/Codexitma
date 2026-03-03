@@ -62,6 +62,6 @@ state
 
 The game emits one JSON line per accepted input. This is intended as the easiest control surface to wrap in an MCP server later if you want Codex to connect through a manually-added server.
 
-Snapshots now include `adventureID`, so automation can tell which campaign is currently active.
+Snapshots now include `adventureID`, `marks`, and active shop data (`shopTitle`, `shopOffers`), so automation can tell which campaign is loaded and what a merchant currently offers.
 
 The automation bridge exercises the same data-driven content packs that the interactive game uses, so scripted runs are a good way to validate changes made in [ContentData](/Volumes/4terrybi/coding/Codexitma/Sources/Game/ContentData) without touching engine code.

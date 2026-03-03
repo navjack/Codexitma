@@ -47,6 +47,13 @@ After successful local builds, a runnable copy is also kept at the project root:
 - `X`: quit
 - `T` in graphics mode: cycle the visual theme (`Gemstone` / `Ultima`)
 
+When a merchant is open:
+
+- `WASD` or arrows: browse offers
+- `E`: buy the highlighted offer
+- `J`: inspect the highlighted offer
+- `Q` or `I`: leave the counter
+
 ## Adventures
 
 - `Ashes of Merrow`: the original beacon-restoration campaign through a dark valley.
@@ -63,6 +70,32 @@ Most authored game content now lives in bundled JSON data packs instead of Swift
 - shared map graphs and layouts: [ContentData](/Volumes/4terrybi/coding/Codexitma/Sources/Game/ContentData)
 
 That includes adventure metadata, class templates, items, objectives, dialogue, encounters, NPCs, enemies, and shop inventories. Core engine rules and quest-flag control flow still live in Swift.
+
+Quest objectives are now stage-driven from JSON quest-flow files, so the stage order and objective text live in content data instead of hardcoded `if` chains.
+
+## External Adventures
+
+`Codexitma` now scans for third-party adventure packs in:
+
+`~/Library/Application Support/Codexitma/Adventures`
+
+Each adventure lives in its own folder, for example:
+
+`~/Library/Application Support/Codexitma/Adventures/stormkeep_trial`
+
+Required minimum files:
+
+- `adventure.json`
+- `quest_flow.json` (or any file named by `objectivesFile`)
+- `world.json`
+- `dialogues.json`
+- `encounters.json`
+- `npcs.json`
+- `enemies.json`
+- `shops.json`
+- one or more map `.txt` files referenced by `world.json`
+
+The external `adventure.json` manifest includes metadata (`id`, `title`, `summary`, `introLine`) plus filenames for the content files. External packs are added to the title-screen adventure list automatically on launch.
 
 ## Automation
 

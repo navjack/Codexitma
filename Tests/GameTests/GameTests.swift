@@ -129,6 +129,104 @@ import Testing
     #expect(itemTable.count >= 12)
 }
 
+@Test func shopsSpendMarksAndRecordStock() async throws {
+    let library = try ContentLoader().load()
+    let saveURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString).appendingPathExtension("json")
+    let engine = GameEngine(library: library, saveRepository: SaveRepository(fileURL: saveURL))
+
+    engine.handle(.move(.right))
+    engine.handle(.newGame)
+    engine.handle(.confirm)
+
+    for _ in 0..<7 {
+        engine.handle(.move(.right))
+    }
+    for _ in 0..<4 {
+        engine.handle(.move(.up))
+    }
+
+    #expect(engine.state.player.currentMapID == "signal_bazaar")
+
+    for _ in 0..<3 {
+        engine.handle(.move(.up))
+    }
+
+    engine.handle(.interact)
+    #expect(engine.state.mode == .shop)
+    #expect(engine.state.shopOffers.count >= 3)
+
+    let marksBefore = engine.state.player.marks
+    let inventoryBefore = engine.state.player.inventory.count
+    engine.handle(.confirm)
+
+    #expect(engine.state.player.marks == marksBefore - 2)
+    #expect(engine.state.player.inventory.count == inventoryBefore + 1)
+    #expect(engine.state.world.purchasedShopOffers.isEmpty)
+}
+
+@Test func contentLoaderLoadsExternalAdventurePackFromFilesystem() async throws {
+    let root = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString, isDirectory: true)
+    let packFolder = root.appendingPathComponent("stormkeep_trial", isDirectory: true)
+    try FileManager.default.createDirectory(at: packFolder, withIntermediateDirectories: true)
+
+    try """
+    {
+      "id": "stormkeepTrial",
+      "title": "Stormkeep Trial",
+      "summary": "A compact external pack for loader validation.",
+      "introLine": "A hidden tower hums beyond the surf.",
+      "objectivesFile": "quest_flow.json",
+      "worldFile": "world.json",
+      "dialoguesFile": "dialogues.json",
+      "encountersFile": "encounters.json",
+      "npcsFile": "npcs.json",
+      "enemiesFile": "enemies.json",
+      "shopsFile": "shops.json"
+    }
+    """.write(to: packFolder.appendingPathComponent("adventure.json"), atomically: true, encoding: .utf8)
+
+    try """
+    {
+      "stages": [
+        { "objective": "Reach the tower gate.", "completeWhenFlag": "metElder" }
+      ],
+      "completionText": "The trial is complete."
+    }
+    """.write(to: packFolder.appendingPathComponent("quest_flow.json"), atomically: true, encoding: .utf8)
+
+    try """
+    [
+      {
+        "id": "merrow_village",
+        "name": "Stormkeep Gate",
+        "layoutFile": "stormkeep_map.txt",
+        "lines": [],
+        "spawn": { "x": 1, "y": 1 },
+        "portals": [],
+        "interactables": []
+      }
+    ]
+    """.write(to: packFolder.appendingPathComponent("world.json"), atomically: true, encoding: .utf8)
+
+    try "###\n#.#\n###\n".write(to: packFolder.appendingPathComponent("stormkeep_map.txt"), atomically: true, encoding: .utf8)
+    try "[]\n".write(to: packFolder.appendingPathComponent("dialogues.json"), atomically: true, encoding: .utf8)
+    try "[]\n".write(to: packFolder.appendingPathComponent("encounters.json"), atomically: true, encoding: .utf8)
+    try "[]\n".write(to: packFolder.appendingPathComponent("npcs.json"), atomically: true, encoding: .utf8)
+    try "[]\n".write(to: packFolder.appendingPathComponent("enemies.json"), atomically: true, encoding: .utf8)
+    try "[]\n".write(to: packFolder.appendingPathComponent("shops.json"), atomically: true, encoding: .utf8)
+
+    defer {
+        try? FileManager.default.removeItem(at: root)
+    }
+
+    let library = try ContentLoader(externalRootURL: root).load()
+    let externalID = AdventureID(rawValue: "stormkeepTrial")
+
+    #expect(library.catalog.count == 3)
+    #expect(library.contains(externalID))
+    #expect(library.content(for: externalID).title == "Stormkeep Trial")
+}
+
 @Test func equippedItemsAffectDerivedStats() async throws {
     let player = PlayerState(
         name: "Mira",
