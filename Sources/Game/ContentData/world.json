@@ -1,0 +1,197 @@
+[
+  {
+    "id": "merrow_village",
+    "name": "Village of Merrow",
+    "layoutFile": "merrow_village.txt",
+    "lines": [],
+    "spawn": { "x": 3, "y": 5 },
+    "portals": [
+      {
+        "from": { "x": 18, "y": 5 },
+        "toMap": "south_fields",
+        "toPosition": { "x": 1, "y": 5 },
+        "requiredFlag": null,
+        "blockedMessage": null
+      }
+    ],
+    "interactables": [
+      {
+        "id": "village_bed",
+        "kind": "bed",
+        "position": { "x": 2, "y": 7 },
+        "title": "Cot",
+        "lines": ["The village cot still holds warmth."],
+        "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": null
+      }
+    ]
+  },
+  {
+    "id": "south_fields",
+    "name": "South Fields",
+    "layoutFile": "south_fields.txt",
+    "lines": [],
+    "spawn": { "x": 1, "y": 5 },
+    "portals": [
+      {
+        "from": { "x": 0, "y": 5 },
+        "toMap": "merrow_village",
+        "toPosition": { "x": 17, "y": 5 },
+        "requiredFlag": null,
+        "blockedMessage": null
+      },
+      {
+        "from": { "x": 18, "y": 5 },
+        "toMap": "sunken_orchard",
+        "toPosition": { "x": 1, "y": 5 },
+        "requiredFlag": null,
+        "blockedMessage": null
+      }
+    ],
+    "interactables": [
+      {
+        "id": "south_shrine",
+        "kind": "shrine",
+        "position": { "x": 10, "y": 5 },
+        "title": "South Shrine",
+        "lines": ["The first relay shrine wakes in pale blue."],
+        "rewardItem": null,
+        "requiredFlag": "metElder",
+        "grantsFlag": "southShrineLit"
+      }
+    ]
+  },
+  {
+    "id": "sunken_orchard",
+    "name": "Sunken Orchard",
+    "layoutFile": "sunken_orchard.txt",
+    "lines": [],
+    "spawn": { "x": 1, "y": 5 },
+    "portals": [
+      {
+        "from": { "x": 0, "y": 5 },
+        "toMap": "south_fields",
+        "toPosition": { "x": 17, "y": 5 },
+        "requiredFlag": null,
+        "blockedMessage": null
+      },
+      {
+        "from": { "x": 18, "y": 5 },
+        "toMap": "hollow_barrows",
+        "toPosition": { "x": 1, "y": 5 },
+        "requiredFlag": "barrowUnlocked",
+        "blockedMessage": "The barrow gate sleeps until both shrines burn."
+      }
+    ],
+    "interactables": [
+      {
+        "id": "orchard_shrine",
+        "kind": "shrine",
+        "position": { "x": 10, "y": 5 },
+        "title": "Orchard Shrine",
+        "lines": ["Light threads through the drowned trees."],
+        "rewardItem": null,
+        "requiredFlag": "metElder",
+        "grantsFlag": "orchardShrineLit"
+      },
+      {
+        "id": "barrow_gate",
+        "kind": "gate",
+        "position": { "x": 16, "y": 5 },
+        "title": "Ancient Gate",
+        "lines": ["Twin shrines must burn before the gate will move."],
+        "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": null
+      }
+    ]
+  },
+  {
+    "id": "hollow_barrows",
+    "name": "Hollow Barrows",
+    "layoutFile": "hollow_barrows.txt",
+    "lines": [],
+    "spawn": { "x": 1, "y": 5 },
+    "portals": [
+      {
+        "from": { "x": 0, "y": 5 },
+        "toMap": "sunken_orchard",
+        "toPosition": { "x": 17, "y": 5 },
+        "requiredFlag": null,
+        "blockedMessage": null
+      },
+      {
+        "from": { "x": 18, "y": 5 },
+        "toMap": "black_fen",
+        "toPosition": { "x": 1, "y": 5 },
+        "requiredFlag": "obtainedLensCore",
+        "blockedMessage": "An iron ward bars the path. Something still lies below."
+      }
+    ],
+    "interactables": [
+      {
+        "id": "barrow_cache",
+        "kind": "chest",
+        "position": { "x": 7, "y": 3 },
+        "title": "Barrow Cache",
+        "lines": ["You salvage a charm fragment from the dust."],
+        "rewardItem": "charmFragment",
+        "requiredFlag": null,
+        "grantsFlag": null
+      }
+    ]
+  },
+  {
+    "id": "black_fen",
+    "name": "Black Fen",
+    "layoutFile": "black_fen.txt",
+    "lines": [],
+    "spawn": { "x": 1, "y": 5 },
+    "portals": [
+      {
+        "from": { "x": 0, "y": 5 },
+        "toMap": "hollow_barrows",
+        "toPosition": { "x": 17, "y": 5 },
+        "requiredFlag": null,
+        "blockedMessage": null
+      },
+      {
+        "from": { "x": 18, "y": 5 },
+        "toMap": "beacon_spire",
+        "toPosition": { "x": 1, "y": 5 },
+        "requiredFlag": "obtainedLensCore",
+        "blockedMessage": "The tower path rejects the unproven."
+      }
+    ],
+    "interactables": []
+  },
+  {
+    "id": "beacon_spire",
+    "name": "Beacon Spire",
+    "layoutFile": "beacon_spire.txt",
+    "lines": [],
+    "spawn": { "x": 1, "y": 5 },
+    "portals": [
+      {
+        "from": { "x": 0, "y": 5 },
+        "toMap": "black_fen",
+        "toPosition": { "x": 17, "y": 5 },
+        "requiredFlag": null,
+        "blockedMessage": null
+      }
+    ],
+    "interactables": [
+      {
+        "id": "final_beacon",
+        "kind": "beacon",
+        "position": { "x": 10, "y": 5 },
+        "title": "Beacon Lens",
+        "lines": ["The beacon frame drinks the Lens Core and blazes."],
+        "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": "beaconLit"
+      }
+    ]
+  }
+]
