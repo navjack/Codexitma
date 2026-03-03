@@ -14,8 +14,41 @@ enum LaunchMode: Equatable {
     }
 }
 
+enum GraphicsVisualTheme: String, CaseIterable, Equatable {
+    case gemstone
+    case ultima
+
+    var displayName: String {
+        switch self {
+        case .gemstone:
+            return "Gemstone"
+        case .ultima:
+            return "Ultima"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .gemstone:
+            return "Bright chamber borders, black void framing, and chunkier sprites."
+        case .ultima:
+            return "Cleaner overworld boards with flatter tiles and a stricter classic field look."
+        }
+    }
+
+    func next() -> GraphicsVisualTheme {
+        switch self {
+        case .gemstone:
+            return .ultima
+        case .ultima:
+            return .gemstone
+        }
+    }
+}
+
 final class GameSessionController: ObservableObject {
     @Published private(set) var state: GameState
+    @Published private(set) var visualTheme: GraphicsVisualTheme = .gemstone
 
     private let engine: GameEngine
 
@@ -33,6 +66,14 @@ final class GameSessionController: ObservableObject {
                 NSApplication.shared.terminate(nil)
             }
         }
+    }
+
+    func cycleVisualTheme() {
+        visualTheme = visualTheme.next()
+    }
+
+    func selectVisualTheme(_ theme: GraphicsVisualTheme) {
+        visualTheme = theme
     }
 }
 
@@ -89,8 +130,11 @@ struct GameRootView: View {
     var body: some View {
         ZStack {
             palette.background.ignoresSafeArea()
-            PixelStars(color: palette.accentBlue).ignoresSafeArea()
-            PixelKeyCapture { session.send($0) }
+            PixelStars(color: session.visualTheme == .gemstone ? palette.accentBlue : palette.accentGreen).ignoresSafeArea()
+            PixelKeyCapture(
+                onCommand: { session.send($0) },
+                onThemeToggle: { session.cycleVisualTheme() }
+            )
                 .frame(width: 1, height: 1)
                 .allowsHitTesting(false)
 
@@ -125,11 +169,24 @@ struct GameRootView: View {
                 menuButton("X: QUIT") { session.send(.quit) }
             }
 
+            HStack(spacing: 10) {
+                menuButton("T: STYLE") { session.cycleVisualTheme() }
+                    .frame(width: 150)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("DISPLAY \(session.visualTheme.displayName.uppercased())")
+                    Text(session.visualTheme.summary.uppercased())
+                        .lineLimit(2)
+                }
+                .font(.system(size: 10, weight: .regular, design: .monospaced))
+                .foregroundStyle(palette.text.opacity(0.9))
+            }
+            .frame(maxWidth: 760)
+
             VStack(spacing: 4) {
-                Text("GEMSTONE-STYLE CHAMBERS. CREATE A HERO BEFORE YOU ENTER THE VALLEY")
+                Text("\(session.visualTheme.displayName.uppercased()) DISPLAY ACTIVE. CREATE A HERO BEFORE YOU ENTER THE VALLEY")
                 Text("ARROWS/WASD STEP ROOM TO ROOM")
                 Text("E TALK OR USE   I OPEN PACK")
-                Text("J SHOW GOAL   K SAVE   L LOAD   X QUIT")
+                Text("J SHOW GOAL   K SAVE   L LOAD   T SWITCH STYLE")
                 Text("Q BACKS OUT OF MENUS   --BRIDGE / --SCRIPT FOR HEADLESS CONTROL")
             }
             .font(.system(size: 10, weight: .regular, design: .monospaced))
@@ -198,10 +255,14 @@ struct GameRootView: View {
             }
 
             HStack(spacing: 10) {
+                menuButton("T: STYLE") { session.cycleVisualTheme() }
+                Text(session.visualTheme.displayName.uppercased())
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundStyle(palette.accentBlue)
                 menuButton("E: BEGIN") { session.send(.confirm) }
                 menuButton("Q: BACK") { session.send(.cancel) }
             }
-            .frame(width: 320)
+            .frame(width: 520)
             Spacer()
         }
         .padding(28)
@@ -231,8 +292,8 @@ struct GameRootView: View {
         return ScrollView([.vertical, .horizontal], showsIndicators: false) {
             HStack(alignment: .top, spacing: 14) {
                 VStack(alignment: .leading, spacing: 10) {
-                    PixelPanel(title: "\(currentMapName.uppercased()) CHAMBER", palette: palette) {
-                        MapBoardView(state: session.state, palette: palette)
+                    PixelPanel(title: mapPanelTitle, palette: palette) {
+                        MapBoardView(state: session.state, palette: palette, visualTheme: session.visualTheme)
                     }
 
                     PixelPanel(title: "LOG", palette: palette) {
@@ -289,7 +350,10 @@ struct GameRootView: View {
                 stat("DEF", "\(session.state.player.effectiveDefense())")
                 stat("LN", "\(session.state.player.effectiveLanternCapacity())")
                 stat("BAG", "\(session.state.player.inventory.count)/\(session.state.player.inventoryCapacity())")
+                stat("STYLE", session.visualTheme.displayName.uppercased())
                 stat("GOAL", QuestSystem.objective(for: session.state.quests).uppercased())
+
+                menuButton("T: STYLE") { session.cycleVisualTheme() }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -350,7 +414,7 @@ struct GameRootView: View {
                 Text("J GOAL  K SAVE  L LOAD")
                     .font(.system(size: 10, weight: .regular, design: .monospaced))
                     .foregroundStyle(palette.text)
-                Text("X QUIT")
+                Text("T STYLE  X QUIT")
                     .font(.system(size: 10, weight: .regular, design: .monospaced))
                     .foregroundStyle(palette.text)
 
@@ -480,25 +544,38 @@ struct GameRootView: View {
             return palette.titleGold
         }
     }
+
+    private var mapPanelTitle: String {
+        switch session.visualTheme {
+        case .gemstone:
+            return "\(currentMapName.uppercased()) CHAMBER"
+        case .ultima:
+            return "\(currentMapName.uppercased()) OVERWORLD"
+        }
+    }
 }
 
 private struct MapBoardView: View {
     let state: GameState
     let palette: UltimaPalette
+    let visualTheme: GraphicsVisualTheme
 
     private let cell: CGFloat = 14
-    private let boardScale: CGFloat = 2
 
     var body: some View {
         let map = state.world.maps[state.player.currentMapID]
         let theme = regionTheme
+        let boardPadding = visualTheme == .gemstone ? 4.0 : 2.0
+        let boardScale = visualTheme == .gemstone ? 2.0 : 1.84
         let boardWidth = CGFloat(map?.lines.first?.count ?? 0) * cell
         let boardHeight = CGFloat(map?.lines.count ?? 0) * cell
 
         return ZStack(alignment: .topLeading) {
-            Rectangle()
-                .fill(theme.roomShadow)
-                .offset(x: 3, y: 3)
+            if visualTheme == .gemstone {
+                Rectangle()
+                    .fill(theme.roomShadow)
+                    .offset(x: 3, y: 3)
+            }
 
             VStack(spacing: 0) {
                 ForEach(Array((map?.lines ?? []).enumerated()), id: \.offset) { y, line in
@@ -509,29 +586,36 @@ private struct MapBoardView: View {
                                 occupant: occupant(at: Position(x: x, y: y)),
                                 feature: feature(at: Position(x: x, y: y)),
                                 palette: palette,
-                                regionTheme: theme
+                                regionTheme: theme,
+                                visualTheme: visualTheme
                             )
                             .frame(width: cell, height: cell)
                         }
                     }
                 }
             }
-            .padding(4)
-            .background(Color.black)
+            .padding(boardPadding)
+            .background(visualTheme == .gemstone ? Color.black : theme.floor.opacity(0.22))
             .overlay(
                 Rectangle()
-                    .stroke(theme.roomHighlight, lineWidth: 2)
-                    .padding(3)
+                    .stroke(
+                        visualTheme == .gemstone ? theme.roomHighlight : palette.lightGold.opacity(0.75),
+                        lineWidth: visualTheme == .gemstone ? 2 : 1
+                    )
+                    .padding(visualTheme == .gemstone ? 3 : 0)
             )
             .overlay(
                 Rectangle()
-                    .stroke(theme.roomBorder, lineWidth: 4)
+                    .stroke(
+                        visualTheme == .gemstone ? theme.roomBorder : palette.lightGold,
+                        lineWidth: visualTheme == .gemstone ? 4 : 2
+                    )
             )
         }
         .scaleEffect(boardScale, anchor: .topLeading)
         .frame(
-            width: (boardWidth + 8) * boardScale,
-            height: (boardHeight + 8) * boardScale,
+            width: (boardWidth + (boardPadding * 2)) * boardScale,
+            height: (boardHeight + (boardPadding * 2)) * boardScale,
             alignment: .topLeading
         )
         .clipped()
@@ -729,6 +813,7 @@ private struct LowResTileView: View {
     let feature: MapFeature
     let palette: UltimaPalette
     let regionTheme: RegionTheme
+    let visualTheme: GraphicsVisualTheme
 
     var body: some View {
         GeometryReader { proxy in
@@ -761,6 +846,9 @@ private struct LowResTileView: View {
     }
 
     private var tileEdgeColor: Color {
+        if visualTheme == .ultima {
+            return Color.black.opacity(0.25)
+        }
         if tile.type == .wall {
             return Color.black.opacity(0.65)
         }
@@ -769,54 +857,92 @@ private struct LowResTileView: View {
 
     @ViewBuilder
     private func tilePattern(size: CGFloat) -> some View {
+        if visualTheme == .ultima {
+            ultimaTilePattern(size: size)
+        } else {
+            switch tile.type {
+            case .floor:
+                floorPattern(size: size)
+            case .wall:
+                ZStack {
+                    Rectangle()
+                        .fill(regionTheme.roomHighlight.opacity(0.16))
+                        .frame(width: size, height: max(2, size * 0.18))
+                    Rectangle()
+                        .fill(Color.black.opacity(0.28))
+                        .frame(width: max(2, size * 0.18), height: size)
+                }
+            case .water:
+                VStack(spacing: max(1, size * 0.08)) {
+                    Rectangle().fill(Color.white.opacity(0.20)).frame(width: size * 0.95, height: max(1, size * 0.10))
+                    Rectangle().fill(Color.black.opacity(0.18)).frame(width: size * 0.75, height: max(1, size * 0.10))
+                    Rectangle().fill(Color.white.opacity(0.18)).frame(width: size * 0.55, height: max(1, size * 0.10))
+                }
+            case .brush:
+                HStack(alignment: .bottom, spacing: max(1, size * 0.08)) {
+                    Rectangle().fill(Color.black.opacity(0.18)).frame(width: max(1, size * 0.12), height: size * 0.45)
+                    Rectangle().fill(Color.white.opacity(0.18)).frame(width: max(1, size * 0.12), height: size * 0.68)
+                    Rectangle().fill(Color.black.opacity(0.18)).frame(width: max(1, size * 0.12), height: size * 0.52)
+                }
+            case .doorLocked, .doorOpen:
+                ZStack {
+                    Rectangle()
+                        .fill(Color.black.opacity(0.35))
+                        .frame(width: size * 0.52, height: size * 0.78)
+                    Rectangle()
+                        .fill(regionTheme.roomHighlight.opacity(0.25))
+                        .frame(width: max(1, size * 0.08), height: size * 0.62)
+                }
+            case .shrine:
+                ZStack {
+                    Rectangle().fill(Color.white.opacity(0.18)).frame(width: size * 0.54, height: size * 0.54)
+                    Rectangle().fill(Color.black.opacity(0.15)).frame(width: size * 0.18, height: size * 0.70)
+                }
+            case .beacon:
+                ZStack {
+                    Rectangle().fill(Color.white.opacity(0.22)).frame(width: size * 0.58, height: size * 0.58)
+                    Rectangle().fill(Color.black.opacity(0.22)).frame(width: size * 0.18, height: size * 0.82)
+                }
+            case .stairs:
+                VStack(alignment: .trailing, spacing: max(1, size * 0.08)) {
+                    Rectangle().fill(Color.black.opacity(0.22)).frame(width: size * 0.32, height: max(1, size * 0.10))
+                    Rectangle().fill(Color.white.opacity(0.18)).frame(width: size * 0.52, height: max(1, size * 0.10))
+                    Rectangle().fill(Color.black.opacity(0.22)).frame(width: size * 0.72, height: max(1, size * 0.10))
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func ultimaTilePattern(size: CGFloat) -> some View {
         switch tile.type {
         case .floor:
-            floorPattern(size: size)
+            if Int(size).isMultiple(of: 2) {
+                Rectangle()
+                    .fill(Color.white.opacity(0.08))
+                    .frame(width: size * 0.24, height: size * 0.24)
+                    .offset(x: -size * 0.20, y: -size * 0.18)
+            }
         case .wall:
-            ZStack {
-                Rectangle()
-                    .fill(regionTheme.roomHighlight.opacity(0.16))
-                    .frame(width: size, height: max(2, size * 0.18))
-                Rectangle()
-                    .fill(Color.black.opacity(0.28))
-                    .frame(width: max(2, size * 0.18), height: size)
+            VStack(spacing: max(1, size * 0.10)) {
+                Rectangle().fill(Color.black.opacity(0.18)).frame(width: size, height: max(1, size * 0.08))
+                Rectangle().fill(Color.white.opacity(0.08)).frame(width: size * 0.72, height: max(1, size * 0.08))
             }
         case .water:
-            VStack(spacing: max(1, size * 0.08)) {
-                Rectangle().fill(Color.white.opacity(0.20)).frame(width: size * 0.95, height: max(1, size * 0.10))
-                Rectangle().fill(Color.black.opacity(0.18)).frame(width: size * 0.75, height: max(1, size * 0.10))
-                Rectangle().fill(Color.white.opacity(0.18)).frame(width: size * 0.55, height: max(1, size * 0.10))
+            HStack(spacing: max(1, size * 0.08)) {
+                Rectangle().fill(Color.white.opacity(0.14)).frame(width: size * 0.22, height: size * 0.52)
+                Rectangle().fill(Color.white.opacity(0.10)).frame(width: size * 0.22, height: size * 0.34)
             }
         case .brush:
-            HStack(alignment: .bottom, spacing: max(1, size * 0.08)) {
-                Rectangle().fill(Color.black.opacity(0.18)).frame(width: max(1, size * 0.12), height: size * 0.45)
-                Rectangle().fill(Color.white.opacity(0.18)).frame(width: max(1, size * 0.12), height: size * 0.68)
-                Rectangle().fill(Color.black.opacity(0.18)).frame(width: max(1, size * 0.12), height: size * 0.52)
-            }
+            Rectangle().fill(Color.black.opacity(0.16)).frame(width: size * 0.44, height: size * 0.44)
         case .doorLocked, .doorOpen:
-            ZStack {
-                Rectangle()
-                    .fill(Color.black.opacity(0.35))
-                    .frame(width: size * 0.52, height: size * 0.78)
-                Rectangle()
-                    .fill(regionTheme.roomHighlight.opacity(0.25))
-                    .frame(width: max(1, size * 0.08), height: size * 0.62)
-            }
-        case .shrine:
-            ZStack {
-                Rectangle().fill(Color.white.opacity(0.18)).frame(width: size * 0.54, height: size * 0.54)
-                Rectangle().fill(Color.black.opacity(0.15)).frame(width: size * 0.18, height: size * 0.70)
-            }
-        case .beacon:
-            ZStack {
-                Rectangle().fill(Color.white.opacity(0.22)).frame(width: size * 0.58, height: size * 0.58)
-                Rectangle().fill(Color.black.opacity(0.22)).frame(width: size * 0.18, height: size * 0.82)
-            }
+            Rectangle().fill(Color.black.opacity(0.25)).frame(width: size * 0.34, height: size * 0.60)
+        case .shrine, .beacon:
+            Rectangle().fill(Color.white.opacity(0.14)).frame(width: size * 0.38, height: size * 0.38)
         case .stairs:
-            VStack(alignment: .trailing, spacing: max(1, size * 0.08)) {
-                Rectangle().fill(Color.black.opacity(0.22)).frame(width: size * 0.32, height: max(1, size * 0.10))
-                Rectangle().fill(Color.white.opacity(0.18)).frame(width: size * 0.52, height: max(1, size * 0.10))
-                Rectangle().fill(Color.black.opacity(0.22)).frame(width: size * 0.72, height: max(1, size * 0.10))
+            VStack(spacing: max(1, size * 0.08)) {
+                Rectangle().fill(Color.black.opacity(0.18)).frame(width: size * 0.28, height: max(1, size * 0.08))
+                Rectangle().fill(Color.black.opacity(0.12)).frame(width: size * 0.54, height: max(1, size * 0.08))
             }
         }
     }
@@ -876,89 +1002,147 @@ private struct LowResTileView: View {
 
     @ViewBuilder
     private func featureMark(size: CGFloat) -> some View {
+        if visualTheme == .ultima {
+            ultimaFeatureMark(size: size)
+        } else {
+            switch feature {
+            case .none:
+                EmptyView()
+            case .chest:
+                PixelSprite(color: palette.lightGold, pattern: [
+                    [0,1,1,0],
+                    [1,1,1,1],
+                    [1,0,0,1]
+                ])
+                .frame(width: size * 0.62, height: size * 0.54)
+            case .bed:
+                Rectangle().fill(palette.text).frame(width: size * 0.66, height: size * 0.20)
+            case .plateUp:
+                Rectangle().fill(palette.accentViolet).frame(width: size * 0.58, height: size * 0.16)
+            case .plateDown:
+                Rectangle().fill(Color.black.opacity(0.28)).frame(width: size * 0.58, height: size * 0.16)
+            case .switchIdle:
+                PixelSprite(color: palette.accentBlue, pattern: [
+                    [0,1,0],
+                    [1,1,1],
+                    [0,1,0]
+                ])
+                .frame(width: size * 0.48, height: size * 0.48)
+            case .switchLit:
+                PixelSprite(color: palette.lightGold, pattern: [
+                    [0,1,0],
+                    [1,1,1],
+                    [0,1,0]
+                ])
+                .frame(width: size * 0.48, height: size * 0.48)
+            case .shrine:
+                PixelSprite(color: palette.accentViolet, pattern: [
+                    [0,1,0],
+                    [1,1,1],
+                    [1,0,1],
+                    [0,1,0]
+                ])
+                .frame(width: size * 0.52, height: size * 0.62)
+            case .beacon:
+                PixelSprite(color: palette.lightGold, pattern: [
+                    [0,1,0],
+                    [1,1,1],
+                    [1,1,1],
+                    [0,1,0]
+                ])
+                .frame(width: size * 0.56, height: size * 0.64)
+            case .gate:
+                Rectangle().fill(palette.titleGold).frame(width: size * 0.40, height: size * 0.74)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func ultimaFeatureMark(size: CGFloat) -> some View {
         switch feature {
         case .none:
             EmptyView()
         case .chest:
-            PixelSprite(color: palette.lightGold, pattern: [
-                [0,1,1,0],
-                [1,1,1,1],
-                [1,0,0,1]
-            ])
-            .frame(width: size * 0.62, height: size * 0.54)
+            Rectangle().fill(palette.lightGold).frame(width: size * 0.44, height: size * 0.28)
         case .bed:
-            Rectangle().fill(palette.text).frame(width: size * 0.66, height: size * 0.20)
+            Rectangle().fill(palette.text).frame(width: size * 0.56, height: size * 0.14)
         case .plateUp:
-            Rectangle().fill(palette.accentViolet).frame(width: size * 0.58, height: size * 0.16)
+            Rectangle().fill(palette.accentViolet).frame(width: size * 0.40, height: size * 0.12)
         case .plateDown:
-            Rectangle().fill(Color.black.opacity(0.28)).frame(width: size * 0.58, height: size * 0.16)
+            Rectangle().fill(Color.black.opacity(0.24)).frame(width: size * 0.40, height: size * 0.12)
         case .switchIdle:
-            PixelSprite(color: palette.accentBlue, pattern: [
-                [0,1,0],
-                [1,1,1],
-                [0,1,0]
-            ])
-            .frame(width: size * 0.48, height: size * 0.48)
+            Rectangle().fill(palette.accentBlue).frame(width: size * 0.20, height: size * 0.20)
         case .switchLit:
-            PixelSprite(color: palette.lightGold, pattern: [
-                [0,1,0],
-                [1,1,1],
-                [0,1,0]
-            ])
-            .frame(width: size * 0.48, height: size * 0.48)
+            Rectangle().fill(palette.lightGold).frame(width: size * 0.20, height: size * 0.20)
         case .shrine:
-            PixelSprite(color: palette.accentViolet, pattern: [
-                [0,1,0],
-                [1,1,1],
-                [1,0,1],
-                [0,1,0]
-            ])
-            .frame(width: size * 0.52, height: size * 0.62)
+            Rectangle().fill(palette.accentViolet).frame(width: size * 0.26, height: size * 0.42)
         case .beacon:
-            PixelSprite(color: palette.lightGold, pattern: [
-                [0,1,0],
-                [1,1,1],
-                [1,1,1],
-                [0,1,0]
-            ])
-            .frame(width: size * 0.56, height: size * 0.64)
+            Rectangle().fill(palette.lightGold).frame(width: size * 0.30, height: size * 0.46)
         case .gate:
-            Rectangle().fill(palette.titleGold).frame(width: size * 0.40, height: size * 0.74)
+            Rectangle().fill(palette.titleGold).frame(width: size * 0.24, height: size * 0.56)
         }
     }
 
     @ViewBuilder
     private func sprite(size: CGFloat) -> some View {
-        switch occupant {
-        case .none:
-            EmptyView()
-        case .player:
-            gemstoneSprite(
-                color: palette.text,
-                pattern: [
-                    [0,1,1,0],
-                    [1,1,1,1],
-                    [1,0,0,1],
-                    [1,0,0,1]
-                ],
-                size: size * 0.78
-            )
-        case .npc(let id):
-            gemstoneSprite(color: npcColor(for: id), pattern: npcPattern(for: id), size: size * 0.76)
-        case .enemy(let id):
-            gemstoneSprite(color: enemyColor(for: id), pattern: enemyPattern(for: id), size: size * 0.84)
-        case .boss:
-            gemstoneSprite(
-                color: palette.accentViolet,
-                pattern: [
-                    [1,0,1,0,1],
-                    [1,1,1,1,1],
-                    [0,1,1,1,0],
-                    [1,0,1,0,1]
-                ],
-                size: size * 0.90
-            )
+        if visualTheme == .ultima {
+            switch occupant {
+            case .none:
+                EmptyView()
+            case .player:
+                simpleSprite(color: palette.text, pattern: [
+                    [0,1,0],
+                    [1,1,1],
+                    [1,0,1]
+                ], size: size * 0.62)
+            case .npc(let id):
+                simpleSprite(color: npcColor(for: id), pattern: ultimaNPCPattern(for: id), size: size * 0.58)
+            case .enemy(let id):
+                simpleSprite(color: enemyColor(for: id), pattern: ultimaEnemyPattern(for: id), size: size * 0.64)
+            case .boss:
+                simpleSprite(color: palette.accentViolet, pattern: [
+                    [1,1,1],
+                    [1,0,1],
+                    [1,1,1]
+                ], size: size * 0.68)
+            }
+        } else {
+            switch occupant {
+            case .none:
+                EmptyView()
+            case .player:
+                gemstoneSprite(
+                    color: palette.text,
+                    pattern: [
+                        [0,1,1,0],
+                        [1,1,1,1],
+                        [1,0,0,1],
+                        [1,0,0,1]
+                    ],
+                    size: size * 0.78
+                )
+            case .npc(let id):
+                gemstoneSprite(color: npcColor(for: id), pattern: npcPattern(for: id), size: size * 0.76)
+            case .enemy(let id):
+                gemstoneSprite(color: enemyColor(for: id), pattern: enemyPattern(for: id), size: size * 0.84)
+            case .boss:
+                gemstoneSprite(
+                    color: palette.accentViolet,
+                    pattern: [
+                        [1,0,1,0,1],
+                        [1,1,1,1,1],
+                        [0,1,1,1,0],
+                        [1,0,1,0,1]
+                    ],
+                    size: size * 0.90
+                )
+            }
         }
+    }
+
+    private func simpleSprite(color: Color, pattern: [[Int]], size: CGFloat) -> some View {
+        PixelSprite(color: color, pattern: pattern)
+            .frame(width: size, height: size)
     }
 
     private func gemstoneSprite(color: Color, pattern: [[Int]], size: CGFloat) -> some View {
@@ -999,6 +1183,35 @@ private struct LowResTileView: View {
                 [1,1,1,1],
                 [0,1,1,0],
                 [1,0,1,0]
+            ]
+        }
+    }
+
+    private func ultimaNPCPattern(for id: String) -> [[Int]] {
+        switch id {
+        case "elder":
+            return [
+                [0,1,0],
+                [1,1,1],
+                [1,0,1]
+            ]
+        case "field_scout":
+            return [
+                [1,0,1],
+                [0,1,0],
+                [0,1,0]
+            ]
+        case "orchard_guide":
+            return [
+                [0,1,0],
+                [1,1,0],
+                [0,1,1]
+            ]
+        default:
+            return [
+                [0,1,0],
+                [1,1,1],
+                [0,1,0]
             ]
         }
     }
@@ -1048,6 +1261,35 @@ private struct LowResTileView: View {
             [1,0,0,1],
             [1,1,1,1],
             [0,1,1,0]
+        ]
+    }
+
+    private func ultimaEnemyPattern(for id: String) -> [[Int]] {
+        if id.hasPrefix("crow") {
+            return [
+                [1,0,1],
+                [1,1,1],
+                [0,1,0]
+            ]
+        }
+        if id.hasPrefix("hound") {
+            return [
+                [1,0,0],
+                [1,1,1],
+                [0,0,1]
+            ]
+        }
+        if id.hasPrefix("wraith") {
+            return [
+                [0,1,0],
+                [1,1,1],
+                [1,1,1]
+            ]
+        }
+        return [
+            [1,1,1],
+            [1,0,1],
+            [1,1,1]
         ]
     }
 
@@ -1189,10 +1431,12 @@ private struct PixelStars: View {
 
 private struct PixelKeyCapture: NSViewRepresentable {
     let onCommand: (ActionCommand) -> Void
+    let onThemeToggle: () -> Void
 
     func makeNSView(context: Context) -> KeyCaptureView {
         let view = KeyCaptureView()
         view.onCommand = onCommand
+        view.onThemeToggle = onThemeToggle
         DispatchQueue.main.async {
             view.window?.makeFirstResponder(view)
         }
@@ -1201,6 +1445,7 @@ private struct PixelKeyCapture: NSViewRepresentable {
 
     func updateNSView(_ nsView: KeyCaptureView, context: Context) {
         nsView.onCommand = onCommand
+        nsView.onThemeToggle = onThemeToggle
         DispatchQueue.main.async {
             nsView.window?.makeFirstResponder(nsView)
         }
@@ -1209,15 +1454,26 @@ private struct PixelKeyCapture: NSViewRepresentable {
 
 private final class KeyCaptureView: NSView {
     var onCommand: ((ActionCommand) -> Void)?
+    var onThemeToggle: (() -> Void)?
 
     override var acceptsFirstResponder: Bool { true }
 
     override func keyDown(with event: NSEvent) {
-        if let command = parse(event) {
+        if isThemeToggle(event) {
+            onThemeToggle?()
+        } else if let command = parse(event) {
             onCommand?(command)
         } else {
             super.keyDown(with: event)
         }
+    }
+
+    private func isThemeToggle(_ event: NSEvent) -> Bool {
+        guard let chars = event.charactersIgnoringModifiers?.lowercased(),
+              let char = chars.first else {
+            return false
+        }
+        return char == "t"
     }
 
     private func parse(_ event: NSEvent) -> ActionCommand? {

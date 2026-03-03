@@ -1,6 +1,6 @@
 # Codexitma
 
-`Codexitma` is a Swift 6 macOS RPG in the spirit of early Ultima and Apple II fantasy games, now with a Gemstone Warrior-inspired graphics mode: tile-based exploration, turn-driven movement and combat, fixed-color low-resolution presentation, and a compact but expanding handcrafted world.
+`Codexitma` is a Swift 6 macOS RPG in the spirit of early Ultima and Apple II fantasy games, with selectable low-res graphics themes: a Gemstone Warrior-inspired chamber mode and a stricter Ultima-style overworld mode on top of the same engine.
 
 ## Current State
 
@@ -45,6 +45,7 @@ After successful local builds, a runnable copy is also kept at the project root:
 - `L`: load
 - `Q`: cancel / back
 - `X`: quit
+- `T` in graphics mode: cycle the visual theme (`Gemstone` / `Ultima`)
 
 ## Automation
 
@@ -65,6 +66,7 @@ The current adventure is `Ashes of Merrow`, but the codebase is being pushed tow
 - more region-specific encounters
 - more optional treasure and side discoveries
 - Gemstone Warrior-style chamber rendering in graphics mode
+- switchable Gemstone / Ultima presentation themes in graphics mode
 - more readable low-resolution sprites and stronger room silhouettes
 - eventually, richer content packaging once quest flow is less hardcoded
 

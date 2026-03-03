@@ -93,6 +93,11 @@ import Testing
     #expect(LaunchMode.parse(arguments: ["Game", "--terminal"]) == .terminal)
 }
 
+@Test func graphicsVisualThemeCyclesBetweenModes() async throws {
+    #expect(GraphicsVisualTheme.gemstone.next() == .ultima)
+    #expect(GraphicsVisualTheme.ultima.next() == .gemstone)
+}
+
 @Test func contentLoaderLoadsSixMaps() async throws {
     let content = try ContentLoader().load()
     #expect(content.maps.count == 6)

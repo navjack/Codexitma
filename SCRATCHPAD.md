@@ -22,6 +22,7 @@
 - Reworked the native graphics renderer toward a Gemstone Warrior (1984) influence: bright chamber borders, black void framing, patterned room floors, and chunkier low-res sprites.
 - Fixed the graphics key handler so `Q` now actually behaves as back/cancel instead of quitting.
 - Repacked the graphics HUD into a shorter two-column dashboard so the full game view fits comfortably inside the default window and stays within a 1080p-class presentation target.
+- Added selectable graphics presentation themes in the native UI: `Gemstone` for chamber-heavy contrast and `Ultima` for a flatter overworld-style board, both driven by the same engine state.
 
 ## Current Notes
 
@@ -33,6 +34,7 @@
 - The new bridge is a better immediate fit than a full MCP server, and can be wrapped by MCP later if needed.
 - The graphics mode is now the strongest presentation path: Gemstone-like chamber screens on top of the existing Apple II / Ultima mechanical base.
 - Keep the graphics layout bounded for at least a 1080p window; if more UI is added later, prefer widening panels or adding compact rows before making the window taller.
+- Theme selection is now a UI concern only; keep future visual experiments in the renderer/session layer rather than pushing them into `GameEngine`.
 
 ## Next Build Targets
 
