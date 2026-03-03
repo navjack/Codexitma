@@ -21,6 +21,7 @@
 - Surfaced clearer on-screen control legends so the UI states what each key actually does.
 - Reworked the native graphics renderer toward a Gemstone Warrior (1984) influence: bright chamber borders, black void framing, patterned room floors, and chunkier low-res sprites.
 - Fixed the graphics key handler so `Q` now actually behaves as back/cancel instead of quitting.
+- Repacked the graphics HUD into a shorter two-column dashboard so the full game view fits comfortably inside the default window and stays within a 1080p-class presentation target.
 
 ## Current Notes
 
@@ -31,6 +32,7 @@
 - The current world path now includes explicit environmental puzzle steps instead of only location-based progression.
 - The new bridge is a better immediate fit than a full MCP server, and can be wrapped by MCP later if needed.
 - The graphics mode is now the strongest presentation path: Gemstone-like chamber screens on top of the existing Apple II / Ultima mechanical base.
+- Keep the graphics layout bounded for at least a 1080p window; if more UI is added later, prefer widening panels or adding compact rows before making the window taller.
 
 ## Next Build Targets
 

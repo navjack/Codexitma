@@ -62,13 +62,14 @@ final class GraphicsAppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 920, height: 720),
+            contentRect: NSRect(x: 0, y: 0, width: 1280, height: 760),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
         window.title = "Codexitma"
         window.backgroundColor = .black
+        window.contentMinSize = NSSize(width: 1100, height: 700)
         window.center()
         window.contentView = NSHostingView(rootView: GameRootView(session: session))
         window.makeKeyAndOrderFront(nil)
@@ -225,140 +226,174 @@ struct GameRootView: View {
     }
 
     private var worldView: some View {
-        HStack(alignment: .top, spacing: 14) {
-            VStack(alignment: .leading, spacing: 10) {
-                PixelPanel(title: "\(currentMapName.uppercased()) CHAMBER", palette: palette) {
-                    MapBoardView(state: session.state, palette: palette)
-                }
+        let sidebarPanelWidth: CGFloat = 192
 
-                PixelPanel(title: "LOG", palette: palette) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        ForEach(Array(session.state.messages.suffix(5).enumerated()), id: \.offset) { _, line in
-                            Text(line.uppercased())
-                                .font(.system(size: 10, weight: .regular, design: .monospaced))
-                                .foregroundStyle(palette.text)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
+        return ScrollView([.vertical, .horizontal], showsIndicators: false) {
+            HStack(alignment: .top, spacing: 14) {
+                VStack(alignment: .leading, spacing: 10) {
+                    PixelPanel(title: "\(currentMapName.uppercased()) CHAMBER", palette: palette) {
+                        MapBoardView(state: session.state, palette: palette)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
 
-            VStack(alignment: .leading, spacing: 10) {
-                PixelPanel(title: "STATUS", palette: palette) {
-                    VStack(alignment: .leading, spacing: 5) {
-                        stat("NAME", session.state.player.name.uppercased())
-                        stat("CLASS", session.state.player.heroClass.displayName.uppercased())
-                        stat("HP", "\(session.state.player.health)/\(session.state.player.maxHealth)")
-                        stat("ST", "\(session.state.player.stamina)/\(session.state.player.maxStamina)")
-                        stat("ATK", "\(session.state.player.effectiveAttack())")
-                        stat("DEF", "\(session.state.player.effectiveDefense())")
-                        stat("LN", "\(session.state.player.effectiveLanternCapacity())")
-                        stat("BAG", "\(session.state.player.inventory.count)/\(session.state.player.inventoryCapacity())")
-                        stat("GOAL", QuestSystem.objective(for: session.state.quests).uppercased())
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-
-                PixelPanel(title: "PACK", palette: palette) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        if session.state.player.inventory.isEmpty {
-                            Text("EMPTY")
-                                .font(.system(size: 10, weight: .regular, design: .monospaced))
-                                .foregroundStyle(palette.text)
-                        } else {
-                            ForEach(Array(session.state.player.inventory.prefix(6).enumerated()), id: \.offset) { _, item in
-                                HStack(spacing: 5) {
-                                    Rectangle()
-                                        .fill(itemColor(item))
-                                        .frame(width: 8, height: 8)
-                                    Text(item.name.uppercased())
-                                        .font(.system(size: 10, weight: .regular, design: .monospaced))
-                                        .foregroundStyle(palette.text)
-                                }
+                    PixelPanel(title: "LOG", palette: palette) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            ForEach(Array(session.state.messages.suffix(4).enumerated()), id: \.offset) { _, line in
+                                Text(line.uppercased())
+                                    .font(.system(size: 10, weight: .regular, design: .monospaced))
+                                    .foregroundStyle(palette.text)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
                             }
                         }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-
-                PixelPanel(title: "PAPER DOLL", palette: palette) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        PixelSprite(color: palette.text, pattern: [
-                            [0,1,0],
-                            [1,1,1],
-                            [1,1,1],
-                            [1,0,1]
-                        ])
-                        .frame(width: 44, height: 56)
-
-                        equipmentRow("WPN", session.state.player.equippedName(for: .weapon).uppercased())
-                        equipmentRow("ARM", session.state.player.equippedName(for: .armor).uppercased())
-                        equipmentRow("CHM", session.state.player.equippedName(for: .charm).uppercased())
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
+                .frame(width: 620, alignment: .leading)
 
-                PixelPanel(title: "INPUT", palette: palette) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("ARROWS/WASD MOVE")
-                            .font(.system(size: 10, weight: .regular, design: .monospaced))
-                            .foregroundStyle(palette.text)
-                        Text("E ACT/TALK")
-                            .font(.system(size: 10, weight: .regular, design: .monospaced))
-                            .foregroundStyle(palette.text)
-                            Text("I OPEN PACK")
-                            .font(.system(size: 10, weight: .regular, design: .monospaced))
-                            .foregroundStyle(palette.text)
-                        Text("J SHOW GOAL  K SAVE")
-                            .font(.system(size: 10, weight: .regular, design: .monospaced))
-                            .foregroundStyle(palette.text)
-                        Text("L LOAD SAVE  X QUIT")
-                            .font(.system(size: 10, weight: .regular, design: .monospaced))
-                            .foregroundStyle(palette.text)
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .top, spacing: 10) {
+                        statusPanel
+                            .frame(width: sidebarPanelWidth)
+                        packPanel
+                            .frame(width: sidebarPanelWidth)
+                    }
 
-                        VStack(spacing: 8) {
-                        HStack(spacing: 8) {
-                            menuButton("I") {
-                                session.send(.openInventory)
-                                session.send(.confirm)
-                            }
-                            menuButton("J") { session.send(.help) }
-                            menuButton("E") { session.send(.interact) }
-                        }
-                        HStack(spacing: 8) {
-                            menuButton("K") { session.send(.save) }
-                            menuButton("L") { session.send(.load) }
-                            menuButton("X") { session.send(.quit) }
-                        }
-                        }
+                    HStack(alignment: .top, spacing: 10) {
+                        paperDollPanel
+                            .frame(width: sidebarPanelWidth)
+                        inputPanel
+                            .frame(width: sidebarPanelWidth)
+                    }
+
+                    HStack(alignment: .top, spacing: 10) {
+                        legendPanel
+                            .frame(width: sidebarPanelWidth)
+                        traitsPanel
+                            .frame(width: sidebarPanelWidth)
                     }
                 }
-
-                PixelPanel(title: "LEGEND", palette: palette) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        legendRow(color: palette.text, label: "PLAYER")
-                        legendRow(color: palette.lightGold, label: "NPC / TREASURE")
-                        legendRow(color: palette.titleGold, label: "HOSTILE")
-                        legendRow(color: palette.accentViolet, label: "RUNE / BOSS")
-                        legendRow(color: palette.accentBlue, label: "WATER / SIGNAL")
-                        legendRow(color: palette.accentGreen, label: "BRUSH / FIELD")
-                    }
-                }
-
-                PixelPanel(title: "TRAITS", palette: palette) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(session.state.player.traitSummaryLine())
-                            .font(.system(size: 10, weight: .regular, design: .monospaced))
-                            .foregroundStyle(palette.text)
-                        Text(session.state.player.traitSummaryLineSecondary())
-                            .font(.system(size: 10, weight: .regular, design: .monospaced))
-                            .foregroundStyle(palette.text)
-                    }
-                }
+                .frame(width: (sidebarPanelWidth * 2) + 10, alignment: .leading)
             }
-            .frame(width: 250)
+            .frame(minWidth: 1048, alignment: .topLeading)
+            .padding(18)
         }
-        .padding(18)
+    }
+
+    private var statusPanel: some View {
+        PixelPanel(title: "STATUS", palette: palette) {
+            VStack(alignment: .leading, spacing: 5) {
+                stat("NAME", session.state.player.name.uppercased())
+                stat("CLASS", session.state.player.heroClass.displayName.uppercased())
+                stat("HP", "\(session.state.player.health)/\(session.state.player.maxHealth)")
+                stat("ST", "\(session.state.player.stamina)/\(session.state.player.maxStamina)")
+                stat("ATK", "\(session.state.player.effectiveAttack())")
+                stat("DEF", "\(session.state.player.effectiveDefense())")
+                stat("LN", "\(session.state.player.effectiveLanternCapacity())")
+                stat("BAG", "\(session.state.player.inventory.count)/\(session.state.player.inventoryCapacity())")
+                stat("GOAL", QuestSystem.objective(for: session.state.quests).uppercased())
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var packPanel: some View {
+        PixelPanel(title: "PACK", palette: palette) {
+            VStack(alignment: .leading, spacing: 4) {
+                if session.state.player.inventory.isEmpty {
+                    Text("EMPTY")
+                        .font(.system(size: 10, weight: .regular, design: .monospaced))
+                        .foregroundStyle(palette.text)
+                } else {
+                    ForEach(Array(session.state.player.inventory.prefix(5).enumerated()), id: \.offset) { _, item in
+                        HStack(spacing: 5) {
+                            Rectangle()
+                                .fill(itemColor(item))
+                                .frame(width: 8, height: 8)
+                            Text(item.name.uppercased())
+                                .font(.system(size: 10, weight: .regular, design: .monospaced))
+                                .foregroundStyle(palette.text)
+                                .lineLimit(1)
+                        }
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var paperDollPanel: some View {
+        PixelPanel(title: "PAPER DOLL", palette: palette) {
+            VStack(alignment: .leading, spacing: 8) {
+                PixelSprite(color: palette.text, pattern: [
+                    [0,1,0],
+                    [1,1,1],
+                    [1,1,1],
+                    [1,0,1]
+                ])
+                .frame(width: 44, height: 56)
+
+                equipmentRow("WPN", session.state.player.equippedName(for: .weapon).uppercased())
+                equipmentRow("ARM", session.state.player.equippedName(for: .armor).uppercased())
+                equipmentRow("CHM", session.state.player.equippedName(for: .charm).uppercased())
+            }
+        }
+    }
+
+    private var inputPanel: some View {
+        PixelPanel(title: "INPUT", palette: palette) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text("ARROWS/WASD MOVE")
+                    .font(.system(size: 10, weight: .regular, design: .monospaced))
+                    .foregroundStyle(palette.text)
+                Text("E ACT   I PACK   Q BACK")
+                    .font(.system(size: 10, weight: .regular, design: .monospaced))
+                    .foregroundStyle(palette.text)
+                Text("J GOAL  K SAVE  L LOAD")
+                    .font(.system(size: 10, weight: .regular, design: .monospaced))
+                    .foregroundStyle(palette.text)
+                Text("X QUIT")
+                    .font(.system(size: 10, weight: .regular, design: .monospaced))
+                    .foregroundStyle(palette.text)
+
+                VStack(spacing: 8) {
+                    HStack(spacing: 8) {
+                        menuButton("I") { session.send(.openInventory) }
+                        menuButton("J") { session.send(.help) }
+                        menuButton("E") { session.send(.interact) }
+                    }
+                    HStack(spacing: 8) {
+                        menuButton("K") { session.send(.save) }
+                        menuButton("L") { session.send(.load) }
+                        menuButton("X") { session.send(.quit) }
+                    }
+                }
+            }
+        }
+    }
+
+    private var legendPanel: some View {
+        PixelPanel(title: "LEGEND", palette: palette) {
+            VStack(alignment: .leading, spacing: 4) {
+                legendRow(color: palette.text, label: "PLAYER")
+                legendRow(color: palette.lightGold, label: "NPC / TREASURE")
+                legendRow(color: palette.titleGold, label: "HOSTILE")
+                legendRow(color: palette.accentViolet, label: "RUNE / BOSS")
+                legendRow(color: palette.accentBlue, label: "WATER / SIGNAL")
+                legendRow(color: palette.accentGreen, label: "BRUSH / FIELD")
+            }
+        }
+    }
+
+    private var traitsPanel: some View {
+        PixelPanel(title: "TRAITS", palette: palette) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(session.state.player.traitSummaryLine())
+                    .font(.system(size: 10, weight: .regular, design: .monospaced))
+                    .foregroundStyle(palette.text)
+                Text(session.state.player.traitSummaryLineSecondary())
+                    .font(.system(size: 10, weight: .regular, design: .monospaced))
+                    .foregroundStyle(palette.text)
+            }
+        }
     }
 
     private func stat(_ label: String, _ value: String) -> some View {
