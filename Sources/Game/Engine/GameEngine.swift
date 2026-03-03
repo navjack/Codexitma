@@ -433,16 +433,18 @@ final class GameEngine {
     }
 
     private func npcDialogueNearPlayer() -> DialogueNode? {
-        if state.player.currentMapID == "merrow_village" {
-            let elderPos = Position(x: 6, y: 5)
-            let adjacent = Direction.allCases.map { state.player.position + $0.delta } + [state.player.position]
-            if adjacent.contains(elderPos) {
-                return content.dialogues["elder_intro"]
+        let adjacent = Direction.allCases.map { state.player.position + $0.delta } + [state.player.position]
+        if let npc = state.world.npcs.first(where: {
+            $0.mapID == state.player.currentMapID && adjacent.contains($0.position)
+        }) {
+            if npc.id == "elder" {
+                state.quests.set(.metElder)
             }
+            return content.dialogues[npc.dialogueID]
         }
+
         if state.player.currentMapID == "beacon_spire" && state.quests.has(.beaconLit) {
             let keeperPos = Position(x: 12, y: 4)
-            let adjacent = Direction.allCases.map { state.player.position + $0.delta } + [state.player.position]
             if adjacent.contains(keeperPos), state.world.enemies.contains(where: { $0.id == "keeper" && $0.active }) {
                 return content.dialogues["keeper"]
             }

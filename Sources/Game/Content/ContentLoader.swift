@@ -80,6 +80,22 @@ let dialogueTable: [String: DialogueNode] = [
             "Relight the outer shrines and the valley may yet hold.",
         ]
     ),
+    "orchard_hermit": DialogueNode(
+        id: "orchard_hermit",
+        speaker: "Mara the Tinker",
+        lines: [
+            "Roots remember the old roads.",
+            "Carry light, and the orchard will open what it swallowed.",
+        ]
+    ),
+    "fen_ferryman": DialogueNode(
+        id: "fen_ferryman",
+        speaker: "Fen Ferryman",
+        lines: [
+            "The mist listens for weak lamps.",
+            "Keep the lantern breathing and the bog will spare your feet.",
+        ]
+    ),
     "keeper": DialogueNode(
         id: "keeper",
         speaker: "The Shaded Keeper",
@@ -96,7 +112,36 @@ let encounterTable: [String: EncounterDefinition] = [
 ]
 
 let npcSeed: [NPCState] = [
-    NPCState(id: "elder", position: Position(x: 6, y: 5), dialogueState: 0),
+    NPCState(
+        id: "elder",
+        name: "Elder Rowan",
+        position: Position(x: 6, y: 5),
+        mapID: "merrow_village",
+        dialogueID: "elder_intro",
+        glyphSymbol: "&",
+        glyphColor: .cyan,
+        dialogueState: 0
+    ),
+    NPCState(
+        id: "orchard_guide",
+        name: "Mara the Tinker",
+        position: Position(x: 4, y: 2),
+        mapID: "sunken_orchard",
+        dialogueID: "orchard_hermit",
+        glyphSymbol: "t",
+        glyphColor: .green,
+        dialogueState: 0
+    ),
+    NPCState(
+        id: "fen_ferryman",
+        name: "Fen Ferryman",
+        position: Position(x: 5, y: 7),
+        mapID: "black_fen",
+        dialogueID: "fen_ferryman",
+        glyphSymbol: "f",
+        glyphColor: .yellow,
+        dialogueState: 0
+    ),
 ]
 
 let enemySeed: [EnemyState] = [

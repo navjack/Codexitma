@@ -15,6 +15,7 @@
 - Added a SwiftUI/AppKit windowed interface with tile-like shapes, HUD panels, on-screen controls, and arrow-key movement support.
 - Tightened the graphics direction toward an Apple II / early Ultima look with a fixed palette, hard-edged panels, enlarged low-res tiles, and block sprites.
 - Standardized the graphical identity around the `Codexitma` name.
+- Generalized NPCs so multiple named characters can exist across regions without hardcoded one-off map logic.
 
 ## Current Notes
 

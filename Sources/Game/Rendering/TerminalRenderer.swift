@@ -123,10 +123,8 @@ final class TerminalRenderer {
                 buffer.put(tile.glyph, color: tile.color, x: x + 1, y: y + 1)
             }
         }
-        for npc in state.world.npcs where npc.position == state.player.position ? false : npc.position != Position(x: -1, y: -1) {
-            if npc.id == "elder" && state.player.currentMapID == "merrow_village" {
-                buffer.put(npc.glyph, color: npc.color, x: npc.position.x + 1, y: npc.position.y + 1)
-            }
+        for npc in state.world.npcs where npc.mapID == state.player.currentMapID && npc.position != state.player.position {
+            buffer.put(npc.glyph, color: npc.color, x: npc.position.x + 1, y: npc.position.y + 1)
         }
         for enemy in state.world.enemies where enemy.mapID == state.player.currentMapID && enemy.active {
             buffer.put(enemy.glyph, color: enemy.color, x: enemy.position.x + 1, y: enemy.position.y + 1)

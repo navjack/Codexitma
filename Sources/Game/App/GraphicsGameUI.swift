@@ -330,7 +330,7 @@ private struct MapBoardView: View {
         if state.player.position == position {
             return .player
         }
-        if state.player.currentMapID == "merrow_village", position == Position(x: 6, y: 5) {
+        if state.world.npcs.contains(where: { $0.mapID == state.player.currentMapID && $0.position == position }) {
             return .npc
         }
         if let enemy = state.world.enemies.first(where: {

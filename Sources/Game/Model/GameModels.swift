@@ -171,8 +171,69 @@ struct PlayerState: Codable {
 
 struct NPCState: Codable {
     let id: NPCID
+    var name: String
     var position: Position
+    var mapID: String
+    var dialogueID: String
+    var glyphSymbol: Character
+    var glyphColor: ANSIColor
     var dialogueState: Int
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case position
+        case mapID
+        case dialogueID
+        case glyphSymbol
+        case glyphColor
+        case dialogueState
+    }
+
+    init(
+        id: NPCID,
+        name: String,
+        position: Position,
+        mapID: String,
+        dialogueID: String,
+        glyphSymbol: Character,
+        glyphColor: ANSIColor,
+        dialogueState: Int
+    ) {
+        self.id = id
+        self.name = name
+        self.position = position
+        self.mapID = mapID
+        self.dialogueID = dialogueID
+        self.glyphSymbol = glyphSymbol
+        self.glyphColor = glyphColor
+        self.dialogueState = dialogueState
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        position = try container.decode(Position.self, forKey: .position)
+        mapID = try container.decode(String.self, forKey: .mapID)
+        dialogueID = try container.decode(String.self, forKey: .dialogueID)
+        let glyphString = try container.decode(String.self, forKey: .glyphSymbol)
+        glyphSymbol = glyphString.first ?? "&"
+        glyphColor = try container.decode(ANSIColor.self, forKey: .glyphColor)
+        dialogueState = try container.decode(Int.self, forKey: .dialogueState)
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(position, forKey: .position)
+        try container.encode(mapID, forKey: .mapID)
+        try container.encode(dialogueID, forKey: .dialogueID)
+        try container.encode(String(glyphSymbol), forKey: .glyphSymbol)
+        try container.encode(glyphColor, forKey: .glyphColor)
+        try container.encode(dialogueState, forKey: .dialogueState)
+    }
 }
 
 struct EnemyState: Codable, Equatable {
@@ -411,6 +472,6 @@ struct GameState {
 extension EnemyState: RenderableEntity {}
 
 extension NPCState: RenderableEntity {
-    var glyph: Character { "&" }
-    var color: ANSIColor { .cyan }
+    var glyph: Character { glyphSymbol }
+    var color: ANSIColor { glyphColor }
 }
