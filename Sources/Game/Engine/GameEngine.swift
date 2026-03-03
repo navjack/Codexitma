@@ -170,6 +170,8 @@ final class GameEngine {
                 state.clampInventorySelection()
                 state.mode = .inventory
             }
+        case .dropInventoryItem:
+            state.log("Open your pack before you drop anything.")
         case .help:
             state.log(QuestSystem.objective(for: state.quests, flow: state.questFlow))
         case .save:
@@ -206,6 +208,8 @@ final class GameEngine {
         switch command {
         case .move(let direction):
             moveInventorySelection(direction)
+        case .dropInventoryItem:
+            dropSelectedInventoryItem()
         case .help:
             describeSelectedItem()
         case .interact, .confirm:
@@ -597,6 +601,27 @@ final class GameEngine {
             state.log("\(item.name): important, but not directly usable.")
         case .equipment:
             state.log("\(item.name): equipable gear.")
+        }
+    }
+
+    private func dropSelectedInventoryItem() {
+        state.clampInventorySelection()
+        guard !state.player.inventory.isEmpty else {
+            state.log("There is nothing to drop.")
+            return
+        }
+
+        let item = state.player.inventory[state.inventorySelectionIndex]
+        if item.kind == .key || item.kind == .quest {
+            state.log("\(item.name) is too important to abandon.")
+            return
+        }
+
+        _ = state.player.inventory.remove(at: state.inventorySelectionIndex)
+        state.log("You leave \(item.name) behind.")
+        state.clampInventorySelection()
+        if state.player.inventory.isEmpty {
+            state.mode = .exploration
         }
     }
 

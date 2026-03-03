@@ -106,6 +106,8 @@ enum AutomationCommandParser {
             return .game(.interact)
         case "inventory", "item", "pack", "i":
             return .game(.openInventory)
+        case "drop", "discard", "trash", "r":
+            return .game(.dropInventoryItem)
         case "help", "hint", "goal", "j", "h":
             return .game(.help)
         case "save", "k":

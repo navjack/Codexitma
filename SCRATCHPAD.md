@@ -29,6 +29,7 @@
 - Added live merchant support: externalized shop definitions now open real in-game stores, spend `marks`, persist sold-out stock, and surface through both renderers plus the automation bridge.
 - Replaced hardcoded quest objective sequencing with JSON quest-flow stages so progression order now lives in data packs.
 - Added support for third-party adventure packs loaded from `~/Library/Application Support/Codexitma/Adventures`, with dynamic title-screen discovery.
+- Fixed the inventory UI so packs scroll past five items, clearly highlight the active selection, and allow dropping non-essential items with `R`.
 
 ## Current Notes
 

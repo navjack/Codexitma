@@ -84,6 +84,11 @@ import Testing
     #expect(parsed == .move(.right))
 }
 
+@Test func inputParserRecognizesDropCommands() async throws {
+    #expect(InputParser.parse(character: "r") == .dropInventoryItem)
+    #expect(try AutomationCommandParser.parse("drop") == .game(.dropInventoryItem))
+}
+
 @Test func screenBufferRendersExpectedLine() async throws {
     var buffer = ScreenBuffer(width: 8, height: 2)
     buffer.write("MERROW", x: 1, y: 0)
@@ -162,6 +167,69 @@ import Testing
     #expect(engine.state.player.marks == marksBefore - 2)
     #expect(engine.state.player.inventory.count == inventoryBefore + 1)
     #expect(engine.state.world.purchasedShopOffers.isEmpty)
+}
+
+@Test func terminalInventoryPanelScrollsPastFiveItems() async throws {
+    let library = try ContentLoader().load()
+    let saveURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString).appendingPathExtension("json")
+    let engine = GameEngine(library: library, saveRepository: SaveRepository(fileURL: saveURL))
+
+    engine.handle(.newGame)
+    engine.handle(.confirm)
+    engine.state.mode = .inventory
+    engine.state.messages = []
+    engine.state.player.inventory = [
+        itemTable[.healingTonic]!,
+        itemTable[.ironKey]!,
+        itemTable[.lanternOil]!,
+        itemTable[.charmFragment]!,
+        itemTable[.shrineKey]!,
+        itemTable[.fenLance]!
+    ]
+    engine.state.inventorySelectionIndex = 5
+
+    let frame = TerminalRenderer().makeFrame(for: engine.state)
+
+    #expect(frame.line(16).contains(itemTable[.ironKey]!.name))
+    #expect(!frame.line(16).contains(itemTable[.healingTonic]!.name))
+    #expect(frame.line(20).contains(">\(itemTable[.fenLance]!.name)"))
+}
+
+@Test func droppingInventoryItemsRemovesConsumablesAndProtectsQuestItems() async throws {
+    let library = try ContentLoader().load()
+    let saveURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString).appendingPathExtension("json")
+    let engine = GameEngine(library: library, saveRepository: SaveRepository(fileURL: saveURL))
+
+    engine.handle(.newGame)
+    engine.handle(.confirm)
+
+    engine.state.player.inventory = [
+        itemTable[.healingTonic]!,
+        itemTable[.lanternOil]!
+    ]
+    engine.state.mode = .inventory
+    engine.state.inventorySelectionIndex = 1
+    engine.handle(.dropInventoryItem)
+
+    #expect(engine.state.player.inventory.map(\.id) == [.healingTonic])
+    #expect(engine.state.inventorySelectionIndex == 0)
+    #expect(engine.state.mode == .inventory)
+
+    engine.state.player.inventory = [itemTable[.lensCore]!]
+    engine.state.mode = .inventory
+    engine.state.inventorySelectionIndex = 0
+    engine.handle(.dropInventoryItem)
+
+    #expect(engine.state.player.inventory.map(\.id) == [.lensCore])
+    #expect(engine.state.messages.last == "\(itemTable[.lensCore]!.name) is too important to abandon.")
+
+    engine.state.player.inventory = [itemTable[.healingTonic]!]
+    engine.state.mode = .inventory
+    engine.state.inventorySelectionIndex = 0
+    engine.handle(.dropInventoryItem)
+
+    #expect(engine.state.player.inventory.isEmpty)
+    #expect(engine.state.mode == .exploration)
 }
 
 @Test func contentLoaderLoadsExternalAdventurePackFromFilesystem() async throws {

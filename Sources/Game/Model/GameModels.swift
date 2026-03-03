@@ -45,6 +45,7 @@ enum ActionCommand: Equatable {
     case move(Direction)
     case interact
     case openInventory
+    case dropInventoryItem
     case confirm
     case cancel
     case help

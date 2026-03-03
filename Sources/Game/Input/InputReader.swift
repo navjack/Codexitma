@@ -28,6 +28,7 @@ struct InputParser {
         case "d": return .move(.right)
         case "e", " ": return .interact
         case "i": return .openInventory
+        case "r": return .dropInventoryItem
         case "j", "h": return .help
         case "q": return .cancel
         case "x": return .quit

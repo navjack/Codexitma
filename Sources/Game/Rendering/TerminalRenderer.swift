@@ -194,13 +194,25 @@ final class TerminalRenderer {
         }
         if state.mode == .inventory {
             buffer.write("Inventory", color: .yellow, x: x, y: 15)
-            let start = max(0, min(state.inventorySelectionIndex, max(0, state.player.inventory.count - 5)))
+            let start = scrollingStartIndex(
+                selection: state.inventorySelectionIndex,
+                total: state.player.inventory.count,
+                windowSize: 5
+            )
             let visible = state.player.inventory.dropFirst(start).prefix(5)
             for (offset, item) in visible.enumerated() {
                 let actualIndex = start + offset
                 let marker: Character = actualIndex == state.inventorySelectionIndex ? ">" : " "
-                buffer.write("\(marker)\(item.name)", x: x, y: 16 + offset, maxWidth: 17)
+                let color: ANSIColor = actualIndex == state.inventorySelectionIndex ? .yellow : .reset
+                buffer.write("\(marker)\(item.name)", color: color, x: x, y: 16 + offset, maxWidth: 17)
             }
+            if start > 0 {
+                buffer.put("^", color: .brightBlack, x: x + 16, y: 15)
+            }
+            if start + 5 < state.player.inventory.count {
+                buffer.put("v", color: .brightBlack, x: x + 16, y: 21)
+            }
+            buffer.write("E Use R Drop", color: .brightBlack, x: x, y: 21, maxWidth: 17)
         } else if state.mode == .shop {
             buffer.write(state.shopTitle ?? "Store", color: .yellow, x: x, y: 15, maxWidth: 17)
             for (offset, line) in state.shopLines.prefix(2).enumerated() {
@@ -245,6 +257,12 @@ final class TerminalRenderer {
     private func shortShopName(_ value: String, suffix: String) -> String {
         let trimmed = String(value.prefix(max(1, 16 - suffix.count)))
         return trimmed + suffix
+    }
+
+    private func scrollingStartIndex(selection: Int, total: Int, windowSize: Int) -> Int {
+        guard total > windowSize else { return 0 }
+        let centered = selection - (windowSize / 2)
+        return max(0, min(centered, total - windowSize))
     }
 
     private func overlayMarker(for interactable: InteractableDefinition, opened: Set<String>) -> (glyph: Character, color: ANSIColor)? {

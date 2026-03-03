@@ -464,17 +464,35 @@ struct GameRootView: View {
                         .font(.system(size: 10, weight: .regular, design: .monospaced))
                         .foregroundStyle(palette.text)
                 } else {
-                    ForEach(Array(session.state.player.inventory.prefix(5).enumerated()), id: \.offset) { _, item in
+                    ForEach(visibleInventoryRows, id: \.index) { row in
+                        let isSelected = row.index == session.state.inventorySelectionIndex
                         HStack(spacing: 5) {
+                            Text(isSelected ? ">" : " ")
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .foregroundStyle(isSelected ? palette.background : palette.text)
                             Rectangle()
-                                .fill(itemColor(item))
+                                .fill(itemColor(row.item))
                                 .frame(width: 8, height: 8)
-                            Text(item.name.uppercased())
+                            Text(row.item.name.uppercased())
                                 .font(.system(size: 10, weight: .regular, design: .monospaced))
-                                .foregroundStyle(palette.text)
+                                .foregroundStyle(isSelected ? palette.background : palette.text)
                                 .lineLimit(1)
+                            Spacer(minLength: 0)
                         }
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                        .background(isSelected ? palette.lightGold : .clear)
                     }
+                }
+
+                if session.state.mode == .inventory, let selected = selectedInventoryItem {
+                    Text("SEL \(selected.name.uppercased())")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundStyle(palette.lightGold)
+                        .padding(.top, 4)
+                    Text("E USE  R DROP  Q LEAVE")
+                        .font(.system(size: 10, weight: .regular, design: .monospaced))
+                        .foregroundStyle(palette.text.opacity(0.82))
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -547,16 +565,16 @@ struct GameRootView: View {
     private var inputPanel: some View {
         PixelPanel(title: "INPUT", palette: palette) {
             VStack(alignment: .leading, spacing: 5) {
-                Text(session.state.mode == .shop ? "ARROWS/WASD BROWSE" : "ARROWS/WASD MOVE")
+                Text(session.state.mode == .shop || session.state.mode == .inventory ? "ARROWS/WASD BROWSE" : "ARROWS/WASD MOVE")
                     .font(.system(size: 10, weight: .regular, design: .monospaced))
                     .foregroundStyle(palette.text)
-                Text(session.state.mode == .shop ? "E BUY   J INFO   Q LEAVE" : "E ACT   I PACK   Q BACK")
+                Text(inputPrimaryLine)
                     .font(.system(size: 10, weight: .regular, design: .monospaced))
                     .foregroundStyle(palette.text)
-                Text(session.state.mode == .shop ? "K SAVE  L LOAD  X QUIT" : "J GOAL  K SAVE  L LOAD")
+                Text(inputSecondaryLine)
                     .font(.system(size: 10, weight: .regular, design: .monospaced))
                     .foregroundStyle(palette.text)
-                Text(session.state.mode == .shop ? "T STYLE  I ALSO LEAVES" : "T STYLE  X QUIT")
+                Text(inputTertiaryLine)
                     .font(.system(size: 10, weight: .regular, design: .monospaced))
                     .foregroundStyle(palette.text)
 
@@ -567,9 +585,15 @@ struct GameRootView: View {
                         menuButton("E") { session.send(.interact) }
                     }
                     HStack(spacing: 8) {
-                        menuButton("K") { session.send(.save) }
-                        menuButton("L") { session.send(.load) }
-                        menuButton("X") { session.send(.quit) }
+                        if session.state.mode == .inventory {
+                            menuButton("R") { session.send(.dropInventoryItem) }
+                            menuButton("K") { session.send(.save) }
+                            menuButton("Q") { session.send(.cancel) }
+                        } else {
+                            menuButton("K") { session.send(.save) }
+                            menuButton("L") { session.send(.load) }
+                            menuButton("X") { session.send(.quit) }
+                        }
                     }
                 }
             }
@@ -693,6 +717,62 @@ struct GameRootView: View {
             return "\(currentMapName.uppercased()) CHAMBER"
         case .ultima:
             return "\(currentMapName.uppercased()) OVERWORLD"
+        }
+    }
+
+    private var visibleInventoryRows: [(index: Int, item: Item)] {
+        let items = session.state.player.inventory
+        guard !items.isEmpty else { return [] }
+
+        let selection = session.state.inventorySelectionIndex
+        let windowSize = 5
+        let start: Int
+        if items.count <= windowSize {
+            start = 0
+        } else {
+            let centered = selection - (windowSize / 2)
+            start = max(0, min(centered, items.count - windowSize))
+        }
+
+        return Array(items.enumerated().dropFirst(start).prefix(windowSize)).map { ($0.offset, $0.element) }
+    }
+
+    private var selectedInventoryItem: Item? {
+        guard !session.state.player.inventory.isEmpty else { return nil }
+        let index = max(0, min(session.state.inventorySelectionIndex, session.state.player.inventory.count - 1))
+        return session.state.player.inventory[index]
+    }
+
+    private var inputPrimaryLine: String {
+        switch session.state.mode {
+        case .shop:
+            return "E BUY   J INFO   Q LEAVE"
+        case .inventory:
+            return "E USE   R DROP   Q LEAVE"
+        default:
+            return "E ACT   I PACK   Q BACK"
+        }
+    }
+
+    private var inputSecondaryLine: String {
+        switch session.state.mode {
+        case .shop:
+            return "K SAVE  L LOAD  X QUIT"
+        case .inventory:
+            return "J INFO  K SAVE  L LOAD"
+        default:
+            return "J GOAL  K SAVE  L LOAD"
+        }
+    }
+
+    private var inputTertiaryLine: String {
+        switch session.state.mode {
+        case .shop:
+            return "T STYLE  I ALSO LEAVES"
+        case .inventory:
+            return "T STYLE  I ALSO LEAVES"
+        default:
+            return "T STYLE  X QUIT"
         }
     }
 }
@@ -1639,6 +1719,7 @@ private final class KeyCaptureView: NSView {
         case "d": return .move(.right)
         case "e", " ": return .interact
         case "i": return .openInventory
+        case "r": return .dropInventoryItem
         case "j", "h": return .help
         case "k": return .save
         case "l": return .load
