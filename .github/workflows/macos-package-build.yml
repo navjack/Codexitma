@@ -19,6 +19,7 @@ jobs:
         with:
           swift-version: swift-6.3-branch
           swift-build: 6.3-DEVELOPMENT-SNAPSHOT-2026-02-27-a
+          build_arch: arm64
 
       - name: Verify Swift Toolchain
         run: swift --version
