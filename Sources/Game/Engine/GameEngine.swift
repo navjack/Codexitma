@@ -98,6 +98,12 @@ final class GameEngine {
         case .move(.right), .move(.down):
             state.selectedAdventureIndex = (state.selectedAdventureIndex + 1) % adventureCount
             logSelectedAdventure()
+        case .turnLeft:
+            state.selectedAdventureIndex = (state.selectedAdventureIndex - 1 + adventureCount) % adventureCount
+            logSelectedAdventure()
+        case .turnRight:
+            state.selectedAdventureIndex = (state.selectedAdventureIndex + 1) % adventureCount
+            logSelectedAdventure()
         case .newGame, .confirm:
             state.mode = .characterCreation
             state.log("Choose a class for \(state.selectedAdventureTitle()), then confirm.")
@@ -129,6 +135,8 @@ final class GameEngine {
             logSelectedAdventure()
         case .quit, .cancel:
             state.shouldQuit = true
+        case .moveBackward:
+            break
         default:
             break
         }
@@ -142,6 +150,12 @@ final class GameEngine {
         case .move(.right), .move(.down):
             state.selectedHeroIndex = (state.selectedHeroIndex + 1) % HeroClass.allCases.count
             state.log("\(heroTemplate(for: state.selectedHeroClass()).title) selected.")
+        case .turnLeft:
+            state.selectedHeroIndex = (state.selectedHeroIndex - 1 + HeroClass.allCases.count) % HeroClass.allCases.count
+            state.log("\(heroTemplate(for: state.selectedHeroClass()).title) selected.")
+        case .turnRight:
+            state.selectedHeroIndex = (state.selectedHeroIndex + 1) % HeroClass.allCases.count
+            state.log("\(heroTemplate(for: state.selectedHeroClass()).title) selected.")
         case .interact, .confirm, .newGame:
             startNewAdventure(with: state.selectedHeroClass())
         case .help:
@@ -152,6 +166,8 @@ final class GameEngine {
             state.log("The campfire waits while you reconsider.")
         case .quit:
             state.shouldQuit = true
+        case .moveBackward:
+            break
         default:
             break
         }
@@ -161,6 +177,14 @@ final class GameEngine {
         switch command {
         case .move(let direction):
             movePlayer(direction)
+        case .turnLeft:
+            state.player.facing = state.player.facing.leftTurn
+            state.log("You turn left.")
+        case .turnRight:
+            state.player.facing = state.player.facing.rightTurn
+            state.log("You turn right.")
+        case .moveBackward:
+            movePlayer(state.player.facing.opposite, preserveFacing: true)
         case .interact, .confirm:
             interact()
         case .openInventory:
@@ -208,6 +232,12 @@ final class GameEngine {
         switch command {
         case .move(let direction):
             moveInventorySelection(direction)
+        case .turnLeft:
+            moveInventorySelection(.left)
+        case .turnRight:
+            moveInventorySelection(.right)
+        case .moveBackward:
+            moveInventorySelection(.up)
         case .dropInventoryItem:
             dropSelectedInventoryItem()
         case .help:
@@ -226,6 +256,12 @@ final class GameEngine {
         switch command {
         case .move(let direction):
             moveShopSelection(direction)
+        case .turnLeft:
+            moveShopSelection(.left)
+        case .turnRight:
+            moveShopSelection(.right)
+        case .moveBackward:
+            moveShopSelection(.up)
         case .help:
             describeSelectedShopOffer()
         case .interact, .confirm:
@@ -241,8 +277,11 @@ final class GameEngine {
         }
     }
 
-    private func movePlayer(_ direction: Direction) {
+    private func movePlayer(_ direction: Direction, preserveFacing: Bool = false) {
         guard let map = state.world.maps[state.player.currentMapID] else { return }
+        if !preserveFacing {
+            state.player.facing = direction
+        }
         let target = state.player.position + direction.delta
 
         if let enemyIndex = currentEnemyIndex(at: target) {

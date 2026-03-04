@@ -39,10 +39,44 @@ enum Direction: String, Codable, CaseIterable {
         case .right: return Position(x: 1, y: 0)
         }
     }
+
+    var leftTurn: Direction {
+        switch self {
+        case .up: return .left
+        case .left: return .down
+        case .down: return .right
+        case .right: return .up
+        }
+    }
+
+    var rightTurn: Direction {
+        switch self {
+        case .up: return .right
+        case .right: return .down
+        case .down: return .left
+        case .left: return .up
+        }
+    }
+
+    var opposite: Direction {
+        leftTurn.leftTurn
+    }
+
+    var shortLabel: String {
+        switch self {
+        case .up: return "N"
+        case .down: return "S"
+        case .left: return "W"
+        case .right: return "E"
+        }
+    }
 }
 
 enum ActionCommand: Equatable {
     case move(Direction)
+    case turnLeft
+    case turnRight
+    case moveBackward
     case interact
     case openInventory
     case dropInventoryItem
@@ -409,6 +443,7 @@ struct PlayerState: Codable {
     var marks: Int
     var inventory: [Item]
     var equipment: EquipmentLoadout = EquipmentLoadout()
+    var facing: Direction = .up
     var position: Position
     var currentMapID: String
     var lastSavePosition: Position
@@ -429,6 +464,7 @@ struct PlayerState: Codable {
         case marks
         case inventory
         case equipment
+        case facing
         case position
         case currentMapID
         case lastSavePosition
@@ -450,6 +486,7 @@ struct PlayerState: Codable {
         marks: Int,
         inventory: [Item],
         equipment: EquipmentLoadout = EquipmentLoadout(),
+        facing: Direction = .up,
         position: Position,
         currentMapID: String,
         lastSavePosition: Position,
@@ -469,6 +506,7 @@ struct PlayerState: Codable {
         self.marks = marks
         self.inventory = inventory
         self.equipment = equipment
+        self.facing = facing
         self.position = position
         self.currentMapID = currentMapID
         self.lastSavePosition = lastSavePosition
@@ -493,6 +531,7 @@ struct PlayerState: Codable {
         marks = try container.decodeIfPresent(Int.self, forKey: .marks) ?? fallbackTemplate.startingMarks
         inventory = try container.decode([Item].self, forKey: .inventory)
         equipment = try container.decodeIfPresent(EquipmentLoadout.self, forKey: .equipment) ?? EquipmentLoadout()
+        facing = try container.decodeIfPresent(Direction.self, forKey: .facing) ?? .up
         position = try container.decode(Position.self, forKey: .position)
         currentMapID = try container.decode(String.self, forKey: .currentMapID)
         lastSavePosition = try container.decode(Position.self, forKey: .lastSavePosition)
@@ -515,6 +554,7 @@ struct PlayerState: Codable {
         try container.encode(marks, forKey: .marks)
         try container.encode(inventory, forKey: .inventory)
         try container.encode(equipment, forKey: .equipment)
+        try container.encode(facing, forKey: .facing)
         try container.encode(position, forKey: .position)
         try container.encode(currentMapID, forKey: .currentMapID)
         try container.encode(lastSavePosition, forKey: .lastSavePosition)

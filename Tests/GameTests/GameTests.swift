@@ -102,7 +102,8 @@ import Testing
 
 @Test func graphicsVisualThemeCyclesBetweenModes() async throws {
     #expect(GraphicsVisualTheme.gemstone.next() == .ultima)
-    #expect(GraphicsVisualTheme.ultima.next() == .gemstone)
+    #expect(GraphicsVisualTheme.ultima.next() == .depth3D)
+    #expect(GraphicsVisualTheme.depth3D.next() == .gemstone)
 }
 
 @Test func graphicsThemePreferenceRoundTrips() async throws {
@@ -114,8 +115,38 @@ import Testing
 
     let store = GraphicsPreferenceStore(defaults: defaults)
     #expect(store.loadTheme() == .gemstone)
-    store.saveTheme(.ultima)
-    #expect(store.loadTheme() == .ultima)
+    store.saveTheme(.depth3D)
+    #expect(store.loadTheme() == .depth3D)
+}
+
+@Test func movementUpdatesPlayerFacing() async throws {
+    let library = try ContentLoader().load()
+    let saveURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString).appendingPathExtension("json")
+    let engine = GameEngine(library: library, saveRepository: SaveRepository(fileURL: saveURL))
+
+    engine.handle(.newGame)
+    engine.handle(.confirm)
+    engine.handle(.move(.left))
+
+    #expect(engine.state.player.facing == .left)
+}
+
+@Test func turningAndBackstepPreserveDungeonCrawlerFacing() async throws {
+    let library = try ContentLoader().load()
+    let saveURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString).appendingPathExtension("json")
+    let engine = GameEngine(library: library, saveRepository: SaveRepository(fileURL: saveURL))
+
+    engine.handle(.newGame)
+    engine.handle(.confirm)
+
+    let start = engine.state.player.position
+    engine.handle(.turnRight)
+    #expect(engine.state.player.facing == .right)
+    #expect(engine.state.player.position == start)
+
+    engine.handle(.moveBackward)
+    #expect(engine.state.player.facing == .right)
+    #expect(engine.state.player.position == Position(x: start.x - 1, y: start.y))
 }
 
 @Test func contentLoaderLoadsAdventureLibrary() async throws {
@@ -338,6 +369,8 @@ import Testing
 @Test func automationCommandParserRecognizesMovementAndState() async throws {
     #expect(try AutomationCommandParser.parse("a") == .game(.move(.left)))
     #expect(try AutomationCommandParser.parse("state") == .snapshot)
+    #expect(try AutomationCommandParser.parse("turnleft") == .game(.turnLeft))
+    #expect(try AutomationCommandParser.parse("backstep") == .game(.moveBackward))
 }
 
 @Test func launchOptionsParseScriptMode() async throws {
