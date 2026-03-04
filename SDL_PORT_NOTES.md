@@ -38,6 +38,7 @@ The `--sdl` flag is now a working launch path:
 - it now uses a real built-in low-resolution bitmap text pass instead of SDL debug text
 - it now renders patterned top-down sprites and patterned depth billboards instead of only flat solid rectangles
 - it now lays itself out from the live SDL render size instead of assuming the initial window size forever
+- on macOS, it now exposes the built-in adventure editor from the SDL frontend as well, using the same `M` confirmation flow as the native frontend
 
 This is still an early renderer, not feature parity. It is enough to prove the cross-platform direction and to keep iterating on a real SDL path instead of a stub.
 

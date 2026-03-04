@@ -168,6 +168,31 @@ import Testing
     }
 }
 
+@Test func sharedGameSessionUsesSelectedOrCurrentAdventureForEditorTarget() async throws {
+    let library = try ContentLoader().load()
+    let saveURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString).appendingPathExtension("json")
+
+    let session = await MainActor.run {
+        SharedGameSession(
+            library: library,
+            saveRepository: SaveRepository(fileURL: saveURL),
+            soundEngine: SilentGameSoundEngine.shared
+        )
+    }
+
+    await MainActor.run {
+        session.send(.move(.right))
+        #expect(session.editorTargetAdventureID() == session.state.selectedAdventureID())
+        #expect(session.canOpenEditorFromCurrentMode())
+
+        session.send(.newGame)
+        session.send(.confirm)
+
+        #expect(session.editorTargetAdventureID() == session.state.currentAdventureID)
+        #expect(session.editorConfirmationLines().isEmpty == false)
+    }
+}
+
 @Test func depthRaycasterMeasuresCenterWallDistance() async throws {
     let map = [
         "#####",

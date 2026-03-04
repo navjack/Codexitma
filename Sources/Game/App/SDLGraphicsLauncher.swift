@@ -1,5 +1,8 @@
 import CSDL3
 import Foundation
+#if os(macOS)
+import AppKit
+#endif
 
 enum GraphicsBackendError: Error, CustomStringConvertible {
     case sdlInitializationFailed(String)
@@ -60,6 +63,7 @@ enum SDLGraphicsLauncher {
             soundEngine: defaultGraphicsSoundEngine()
         )
         var running = true
+        var showingEditorPrompt = false
 
         while running {
             var event = SDL_Event()
@@ -70,9 +74,21 @@ enum SDLGraphicsLauncher {
                     if event.key.repeat {
                         continue
                     }
+                    if showingEditorPrompt {
+                        if handleEditorPromptKey(
+                            key: event.key.key,
+                            showingEditorPrompt: &showingEditorPrompt,
+                            library: library,
+                            session: session
+                        ) {
+                            running = false
+                        }
+                        continue
+                    }
                     if handleKey(
                         key: event.key.key,
-                        session: session
+                        session: session,
+                        showingEditorPrompt: &showingEditorPrompt
                     ) {
                         running = false
                     }
@@ -84,7 +100,11 @@ enum SDLGraphicsLauncher {
             }
 
             let scene = session.sceneSnapshot
-            renderScene(scene, with: renderer)
+            renderScene(
+                scene,
+                editorPromptLines: showingEditorPrompt ? session.editorConfirmationLines() : nil,
+                with: renderer
+            )
             _ = SDL_RenderPresent(renderer)
             SDL_Delay(16)
         }
@@ -92,11 +112,17 @@ enum SDLGraphicsLauncher {
 
     private static func handleKey(
         key: SDL_Keycode,
-        session: SharedGameSession
+        session: SharedGameSession,
+        showingEditorPrompt: inout Bool
     ) -> Bool {
         switch key {
         case SDLK_T:
             session.cycleVisualTheme()
+            return false
+        case SDLK_M:
+            if session.canOpenEditorFromCurrentMode() {
+                showingEditorPrompt = true
+            }
             return false
         case SDLK_X:
             session.send(.quit)
@@ -110,6 +136,28 @@ enum SDLGraphicsLauncher {
         }
         session.send(command)
         return session.state.shouldQuit
+    }
+
+    private static func handleEditorPromptKey(
+        key: SDL_Keycode,
+        showingEditorPrompt: inout Bool,
+        library: GameContentLibrary,
+        session: SharedGameSession
+    ) -> Bool {
+        switch key {
+        case SDLK_E, SDLK_RETURN, SDLK_SPACE:
+            showingEditorPrompt = false
+            presentEditor(library: library, adventureID: session.editorTargetAdventureID())
+            return false
+        case SDLK_Q, SDLK_ESCAPE, SDLK_M:
+            showingEditorPrompt = false
+            return false
+        case SDLK_X:
+            showingEditorPrompt = false
+            return false
+        default:
+            return false
+        }
     }
 
     private static func actionCommand(for key: SDL_Keycode) -> ActionCommand? {
@@ -143,19 +191,32 @@ enum SDLGraphicsLauncher {
         }
     }
 
-    private static func renderScene(_ scene: GraphicsSceneSnapshot, with renderer: OpaquePointer) {
+    private static func renderScene(
+        _ scene: GraphicsSceneSnapshot,
+        editorPromptLines: [String]?,
+        with renderer: OpaquePointer
+    ) {
         let viewport = currentViewport(for: renderer)
         fill(renderer, x: 0, y: 0, width: viewport.width, height: viewport.height, color: .background)
 
         switch scene.mode {
         case .title:
             renderTitleScreen(scene, viewport: viewport, with: renderer)
+            if let editorPromptLines {
+                renderEditorPrompt(lines: editorPromptLines, viewport: viewport, with: renderer)
+            }
             return
         case .characterCreation:
             renderCharacterCreationScreen(scene, viewport: viewport, with: renderer)
+            if let editorPromptLines {
+                renderEditorPrompt(lines: editorPromptLines, viewport: viewport, with: renderer)
+            }
             return
         case .ending:
             renderEndingScreen(scene, viewport: viewport, with: renderer)
+            if let editorPromptLines {
+                renderEditorPrompt(lines: editorPromptLines, viewport: viewport, with: renderer)
+            }
             return
         default:
             break
@@ -167,7 +228,7 @@ enum SDLGraphicsLauncher {
         if scene.visualTheme == .depth3D, let depth = scene.depth, scene.mode == .exploration {
             renderDepth(depth, scene: scene, frame: boardFrame, with: renderer)
         } else {
-            renderBoard(scene.board, frame: boardFrame, with: renderer)
+            renderBoard(scene, frame: boardFrame, with: renderer)
         }
 
         fill(renderer, x: panelFrame.x, y: panelFrame.y, width: panelFrame.width, height: panelFrame.height, color: .panel)
@@ -175,6 +236,9 @@ enum SDLGraphicsLauncher {
 
         renderSidebar(scene, frame: panelFrame, with: renderer)
         renderHeader(scene, frame: viewport.headerFrame, with: renderer)
+        if let editorPromptLines {
+            renderEditorPrompt(lines: editorPromptLines, viewport: viewport, with: renderer)
+        }
     }
 
     private static func renderTitleScreen(_ scene: GraphicsSceneSnapshot, viewport: SDLViewport, with renderer: OpaquePointer) {
@@ -198,7 +262,7 @@ enum SDLGraphicsLauncher {
         }
 
         drawText("A/D SELECT  N CREATE  L LOAD", x: frame.x + 18, y: frame.y + frame.height - 42, color: .bright, renderer: renderer)
-        drawText("T STYLE  X QUIT", x: frame.x + 18, y: frame.y + frame.height - 26, color: .bright, renderer: renderer)
+        drawText("M EDIT  T STYLE  X QUIT", x: frame.x + 18, y: frame.y + frame.height - 26, color: .bright, renderer: renderer)
     }
 
     private static func renderCharacterCreationScreen(_ scene: GraphicsSceneSnapshot, viewport: SDLViewport, with renderer: OpaquePointer) {
@@ -228,7 +292,7 @@ enum SDLGraphicsLauncher {
         drawWrappedText(skills.uppercased(), x: frame.x + 18, y: frame.y + 324, width: 78, color: .bright, renderer: renderer)
 
         drawText("A/D CLASS  E BEGIN  Q BACK", x: frame.x + 18, y: frame.y + frame.height - 42, color: .bright, renderer: renderer)
-        drawText("T STYLE", x: frame.x + 18, y: frame.y + frame.height - 26, color: .bright, renderer: renderer)
+        drawText("M EDIT  T STYLE", x: frame.x + 18, y: frame.y + frame.height - 26, color: .bright, renderer: renderer)
     }
 
     private static func renderEndingScreen(_ scene: GraphicsSceneSnapshot, viewport: SDLViewport, with renderer: OpaquePointer) {
@@ -313,7 +377,9 @@ enum SDLGraphicsLauncher {
 
         drawText("WASD MOVE  E ACT  I BAG", x: frame.x + 10, y: y, color: .bright, renderer: renderer)
         y += lineHeight
-        drawText("Q BACK  X QUIT  T STYLE", x: frame.x + 10, y: y, color: .bright, renderer: renderer)
+        drawText("Q BACK  M EDIT  X QUIT", x: frame.x + 10, y: y, color: .bright, renderer: renderer)
+        y += lineHeight
+        drawText("T STYLE", x: frame.x + 10, y: y, color: .bright, renderer: renderer)
     }
 
     private static func renderDialogueSidebar(_ scene: GraphicsSceneSnapshot, frame: SDLRect, with renderer: OpaquePointer) {
@@ -330,6 +396,8 @@ enum SDLGraphicsLauncher {
         }
         y += 10
         drawText("E OR Q TO CLOSE", x: frame.x + 10, y: y, color: .bright, renderer: renderer)
+        y += 14
+        drawText("M EDIT", x: frame.x + 10, y: y, color: .bright, renderer: renderer)
     }
 
     private static func renderInventorySidebar(_ scene: GraphicsSceneSnapshot, frame: SDLRect, with renderer: OpaquePointer) {
@@ -355,7 +423,7 @@ enum SDLGraphicsLauncher {
         }
 
         drawText("W/S MOVE  E USE  R DROP", x: frame.x + 10, y: frame.y + frame.height - 42, color: .bright, renderer: renderer)
-        drawText("Q CLOSE", x: frame.x + 10, y: frame.y + frame.height - 26, color: .bright, renderer: renderer)
+        drawText("Q CLOSE  M EDIT", x: frame.x + 10, y: frame.y + frame.height - 26, color: .bright, renderer: renderer)
     }
 
     private static func renderShopSidebar(_ scene: GraphicsSceneSnapshot, frame: SDLRect, with renderer: OpaquePointer) {
@@ -384,26 +452,79 @@ enum SDLGraphicsLauncher {
             y = drawWrappedText(detail.uppercased(), x: frame.x + 10, y: y, width: 30, color: .bright, renderer: renderer)
         }
 
-        drawText("W/S MOVE  E BUY  Q LEAVE", x: frame.x + 10, y: frame.y + frame.height - 28, color: .bright, renderer: renderer)
+        drawText("W/S MOVE  E BUY  Q LEAVE", x: frame.x + 10, y: frame.y + frame.height - 42, color: .bright, renderer: renderer)
+        drawText("M EDIT", x: frame.x + 10, y: frame.y + frame.height - 26, color: .bright, renderer: renderer)
     }
 
-    private static func renderBoard(_ board: MapBoardSnapshot, frame: SDLRect, with renderer: OpaquePointer) {
-        fill(renderer, x: frame.x, y: frame.y, width: frame.width, height: frame.height, color: .void)
-        stroke(renderer, frame: frame, color: .gold)
+    private static func renderEditorPrompt(
+        lines: [String],
+        viewport: SDLViewport,
+        with renderer: OpaquePointer
+    ) {
+        fill(renderer, x: 0, y: 0, width: viewport.width, height: viewport.height, color: .overlay)
+        let panel = viewport.contentFrame.insetBy(
+            dx: max(24, min(160, viewport.contentFrame.width / 5)),
+            dy: max(26, min(120, viewport.contentFrame.height / 4))
+        )
+        fill(renderer, x: panel.x, y: panel.y, width: panel.width, height: panel.height, color: .panel)
+        stroke(renderer, frame: panel, color: .gold)
+
+        var y = panel.y + 20
+        drawText("OPEN EDITOR?", x: panel.x + 16, y: y, color: .gold, renderer: renderer)
+        y += 24
+        for line in lines {
+            y = drawWrappedText(
+                line.uppercased(),
+                x: panel.x + 16,
+                y: y,
+                width: max(28, (panel.width / 8) - 4),
+                color: .bright,
+                renderer: renderer
+            )
+            y += 6
+        }
+        y += 8
+        drawText("ARE YOU SURE?", x: panel.x + 16, y: y, color: .gold, renderer: renderer)
+        y += 24
+        drawText("E OPEN  Q STAY", x: panel.x + 16, y: y, color: .bright, renderer: renderer)
+    }
+
+    private static func renderBoard(_ scene: GraphicsSceneSnapshot, frame: SDLRect, with renderer: OpaquePointer) {
+        let board = scene.board
+        let theme = boardTheme(for: scene)
+
+        if scene.visualTheme == .gemstone {
+            fill(renderer, x: frame.x + 4, y: frame.y + 4, width: frame.width, height: frame.height, color: .shadow)
+        }
+        fill(renderer, x: frame.x, y: frame.y, width: frame.width, height: frame.height, color: theme.frameBackground)
+        stroke(renderer, frame: frame, color: theme.outerBorder)
+        let innerInset = theme.innerInset
+        if innerInset > 0 {
+            stroke(renderer, frame: frame.insetBy(dx: innerInset, dy: innerInset), color: theme.innerBorder)
+        }
+        let contentFrame = frame.insetBy(dx: theme.contentInset, dy: theme.contentInset)
+        fill(renderer, x: contentFrame.x, y: contentFrame.y, width: contentFrame.width, height: contentFrame.height, color: theme.boardBackground)
 
         guard board.width > 0, board.height > 0 else { return }
-        let cellWidth = max(6, min((frame.width - 12) / board.width, (frame.height - 12) / board.height))
+        let cellWidth = max(6, min(contentFrame.width / board.width, contentFrame.height / board.height))
         let drawWidth = board.width * cellWidth
         let drawHeight = board.height * cellWidth
-        let originX = frame.x + ((frame.width - drawWidth) / 2)
-        let originY = frame.y + ((frame.height - drawHeight) / 2)
+        let originX = contentFrame.x + ((contentFrame.width - drawWidth) / 2)
+        let originY = contentFrame.y + ((contentFrame.height - drawHeight) / 2)
 
         for row in board.rows {
             for cell in row {
                 let x = originX + (cell.position.x * cellWidth)
                 let y = originY + (cell.position.y * cellWidth)
-                fill(renderer, x: x, y: y, width: cellWidth, height: cellWidth, color: tileColor(for: cell.tile.type))
-                drawTileAccent(for: cell.tile.type, x: x, y: y, cellSize: cellWidth, renderer: renderer)
+                fill(renderer, x: x, y: y, width: cellWidth, height: cellWidth, color: tileColor(for: cell.tile.type, theme: theme))
+                drawTileAccent(
+                    for: cell.tile.type,
+                    scene: scene,
+                    x: x,
+                    y: y,
+                    cellSize: cellWidth,
+                    renderer: renderer
+                )
                 if cell.feature != .none {
                     let inset = max(1, cellWidth / 6)
                     drawPattern(
@@ -429,11 +550,11 @@ enum SDLGraphicsLauncher {
                         height: max(2, cellWidth - (inset * 2)),
                         color: occupantColor(for: cell.occupant),
                         renderer: renderer,
-                        shadowOffset: cellWidth >= 10 ? 1 : 0
+                        shadowOffset: cellWidth >= 10 ? max(1, cellWidth / 12) : 0
                     )
                 }
-                if cellWidth >= 10 {
-                    stroke(renderer, frame: SDLRect(x: x, y: y, width: cellWidth, height: cellWidth), color: .grid)
+                if cellWidth >= 9 {
+                    stroke(renderer, frame: SDLRect(x: x, y: y, width: cellWidth, height: cellWidth), color: theme.grid)
                 }
             }
         }
@@ -460,8 +581,9 @@ enum SDLGraphicsLauncher {
             let top = Int(Double(horizon) - (wallHeight * 0.5))
             let height = max(1, Int(wallHeight))
             let x = frame.x + (sample.column * columnWidth)
+            let depthTheme = boardTheme(for: scene)
             let color = shaded(
-                tileColor(for: sample.hitTile.type),
+                tileColor(for: sample.hitTile.type, theme: depthTheme),
                 intensity: max(0.22, 1.0 - ((sample.correctedDistance / depth.maxDistance) * 0.72))
             )
             fill(renderer, x: x, y: top, width: max(1, columnWidth + 1), height: height, color: color)
@@ -510,17 +632,17 @@ enum SDLGraphicsLauncher {
         drawText("VIEW \(scene.player.facing.shortLabel)", x: frame.x + 10, y: frame.y + 10, color: .gold, renderer: renderer)
     }
 
-    private static func tileColor(for type: TileType) -> SDLColor {
+    private static func tileColor(for type: TileType, theme: SDLBoardTheme) -> SDLColor {
         switch type {
-        case .floor: return .ground
-        case .wall: return .wall
-        case .water: return .water
-        case .brush: return .brush
-        case .doorLocked: return .doorLocked
-        case .doorOpen: return .doorOpen
-        case .shrine: return .shrine
-        case .stairs: return .stairs
-        case .beacon: return .beacon
+        case .floor: return theme.floor
+        case .wall: return theme.wall
+        case .water: return theme.water
+        case .brush: return theme.brush
+        case .doorLocked: return theme.doorLocked
+        case .doorOpen: return theme.doorOpen
+        case .shrine: return theme.shrine
+        case .stairs: return theme.stairs
+        case .beacon: return theme.beacon
         }
     }
 
@@ -564,6 +686,7 @@ enum SDLGraphicsLauncher {
 
     private static func drawTileAccent(
         for type: TileType,
+        scene: GraphicsSceneSnapshot,
         x: Int,
         y: Int,
         cellSize: Int,
@@ -571,12 +694,13 @@ enum SDLGraphicsLauncher {
     ) {
         switch type {
         case .floor:
-            if cellSize >= 8 {
-                fill(renderer, x: x + (cellSize / 3), y: y + (cellSize / 3), width: max(1, cellSize / 6), height: max(1, cellSize / 6), color: .wallShade)
-            }
+            drawFloorAccent(scene: scene, x: x, y: y, cellSize: cellSize, renderer: renderer)
         case .wall:
-            fill(renderer, x: x, y: y, width: cellSize, height: max(1, cellSize / 5), color: .wallShade)
-            fill(renderer, x: x, y: y + (cellSize / 2), width: cellSize, height: max(1, cellSize / 6), color: .wallShade)
+            let topBand = max(1, cellSize / 5)
+            fill(renderer, x: x, y: y, width: cellSize, height: topBand, color: .wallShade)
+            if scene.visualTheme == .gemstone {
+                fill(renderer, x: x, y: y + (cellSize / 2), width: cellSize, height: max(1, cellSize / 6), color: .bright.withAlpha(55))
+            }
         case .water:
             let stripeHeight = max(1, cellSize / 7)
             fill(renderer, x: x + 1, y: y + stripeHeight, width: max(1, cellSize - 2), height: stripeHeight, color: .bright.withAlpha(110))
@@ -596,6 +720,52 @@ enum SDLGraphicsLauncher {
             let stepHeight = max(1, cellSize / 8)
             fill(renderer, x: x + (cellSize / 4), y: y + (cellSize / 3), width: max(2, cellSize / 3), height: stepHeight, color: .wallShade)
             fill(renderer, x: x + (cellSize / 3), y: y + (cellSize / 2), width: max(2, cellSize / 2), height: stepHeight, color: .wallShade)
+        }
+    }
+
+    private static func drawFloorAccent(
+        scene: GraphicsSceneSnapshot,
+        x: Int,
+        y: Int,
+        cellSize: Int,
+        renderer: OpaquePointer
+    ) {
+        let pattern = floorPattern(for: scene.currentMapID)
+        let accent: SDLColor = scene.visualTheme == .gemstone
+            ? SDLColor.bright.withAlpha(55)
+            : SDLColor.wallShade.withAlpha(95)
+        let dark = SDLColor.wallShade
+
+        switch scene.visualTheme {
+        case .ultima:
+            if cellSize >= 8 {
+                fill(renderer, x: x + (cellSize / 3), y: y + (cellSize / 3), width: max(1, cellSize / 5), height: max(1, cellSize / 5), color: accent)
+            }
+        case .gemstone, .depth3D:
+            switch pattern {
+            case .brick:
+                let band = max(1, cellSize / 7)
+                fill(renderer, x: x, y: y + band, width: cellSize, height: band, color: accent)
+                fill(renderer, x: x + (cellSize / 3), y: y + (band * 3), width: max(1, cellSize / 3), height: band, color: accent)
+            case .speckle:
+                fill(renderer, x: x + (cellSize / 4), y: y + (cellSize / 4), width: max(1, cellSize / 7), height: max(1, cellSize / 7), color: accent)
+                fill(renderer, x: x + (cellSize / 2), y: y + (cellSize / 2), width: max(1, cellSize / 7), height: max(1, cellSize / 7), color: dark)
+            case .weave:
+                fill(renderer, x: x + (cellSize / 3), y: y, width: max(1, cellSize / 8), height: cellSize, color: accent)
+                fill(renderer, x: x, y: y + (cellSize / 2), width: cellSize, height: max(1, cellSize / 8), color: accent)
+            case .hash:
+                let step = max(1, cellSize / 4)
+                fill(renderer, x: x + step, y: y + step, width: max(1, cellSize / 8), height: max(1, cellSize / 2), color: accent)
+                fill(renderer, x: x + (step * 2), y: y + max(1, step / 2), width: max(1, cellSize / 8), height: max(1, cellSize / 2), color: dark)
+            case .mire:
+                let band = max(1, cellSize / 8)
+                fill(renderer, x: x + 1, y: y + (cellSize / 3), width: max(1, cellSize - 2), height: band, color: dark.withAlpha(120))
+                fill(renderer, x: x + (cellSize / 4), y: y + (cellSize / 2), width: max(1, cellSize / 2), height: band, color: accent)
+            case .circuit:
+                let line = max(1, cellSize / 8)
+                fill(renderer, x: x + (cellSize / 2), y: y + line, width: line, height: max(1, cellSize - (line * 2)), color: accent)
+                fill(renderer, x: x + line, y: y + (cellSize / 2), width: max(1, cellSize - (line * 2)), height: line, color: accent)
+            }
         }
     }
 
@@ -922,6 +1092,117 @@ enum SDLGraphicsLauncher {
         return scene.shopOffers[start..<end]
     }
 
+    private static func floorPattern(for mapID: String) -> SDLFloorPattern {
+        switch mapID {
+        case "merrow_village":
+            return .brick
+        case "south_fields":
+            return .speckle
+        case "sunken_orchard":
+            return .weave
+        case "hollow_barrows":
+            return .hash
+        case "black_fen":
+            return .mire
+        case "beacon_spire":
+            return .circuit
+        default:
+            return .brick
+        }
+    }
+
+    private static func boardTheme(for scene: GraphicsSceneSnapshot) -> SDLBoardTheme {
+        let pattern = floorPattern(for: scene.currentMapID)
+        switch scene.visualTheme {
+        case .gemstone:
+            return SDLBoardTheme(
+                frameBackground: .void,
+                boardBackground: .void,
+                outerBorder: .gold,
+                innerBorder: .bright.withAlpha(130),
+                grid: .grid,
+                innerInset: 4,
+                contentInset: 8,
+                floor: floorBaseColor(for: pattern, variant: .gemstone),
+                wall: .wall,
+                water: .water,
+                brush: .brush,
+                doorLocked: .doorLocked,
+                doorOpen: .doorOpen,
+                shrine: .shrine,
+                stairs: .stairs,
+                beacon: .beacon
+            )
+        case .ultima:
+            return SDLBoardTheme(
+                frameBackground: .ground,
+                boardBackground: .ground.withAlpha(255),
+                outerBorder: .bright.withAlpha(180),
+                innerBorder: .wallShade,
+                grid: .wallShade.withAlpha(110),
+                innerInset: 2,
+                contentInset: 4,
+                floor: floorBaseColor(for: pattern, variant: .ultima),
+                wall: .wall,
+                water: .water,
+                brush: .brush,
+                doorLocked: .doorLocked,
+                doorOpen: .doorOpen,
+                shrine: .shrine,
+                stairs: .stairs,
+                beacon: .beacon
+            )
+        case .depth3D:
+            return SDLBoardTheme(
+                frameBackground: .void,
+                boardBackground: .void,
+                outerBorder: .gold,
+                innerBorder: .bright.withAlpha(120),
+                grid: .grid,
+                innerInset: 4,
+                contentInset: 8,
+                floor: floorBaseColor(for: pattern, variant: .gemstone),
+                wall: .wall,
+                water: .water,
+                brush: .brush,
+                doorLocked: .doorLocked,
+                doorOpen: .doorOpen,
+                shrine: .shrine,
+                stairs: .stairs,
+                beacon: .beacon
+            )
+        }
+    }
+
+    private static func floorBaseColor(for pattern: SDLFloorPattern, variant: SDLBoardVariant) -> SDLColor {
+        switch (pattern, variant) {
+        case (.brick, .gemstone):
+            return SDLColor(r: 54, g: 30, b: 20, a: 255)
+        case (.speckle, .gemstone):
+            return SDLColor(r: 70, g: 46, b: 18, a: 255)
+        case (.weave, .gemstone):
+            return SDLColor(r: 44, g: 36, b: 18, a: 255)
+        case (.hash, .gemstone):
+            return SDLColor(r: 32, g: 24, b: 26, a: 255)
+        case (.mire, .gemstone):
+            return SDLColor(r: 22, g: 34, b: 20, a: 255)
+        case (.circuit, .gemstone):
+            return SDLColor(r: 20, g: 20, b: 36, a: 255)
+        case (.brick, .ultima):
+            return SDLColor(r: 64, g: 48, b: 24, a: 255)
+        case (.speckle, .ultima):
+            return SDLColor(r: 78, g: 58, b: 24, a: 255)
+        case (.weave, .ultima):
+            return SDLColor(r: 56, g: 46, b: 22, a: 255)
+        case (.hash, .ultima):
+            return SDLColor(r: 42, g: 34, b: 28, a: 255)
+        case (.mire, .ultima):
+            return SDLColor(r: 28, g: 40, b: 24, a: 255)
+        case (.circuit, .ultima):
+            return SDLColor(r: 28, g: 28, b: 40, a: 255)
+        }
+    }
+
     private static func currentViewport(for renderer: OpaquePointer) -> SDLViewport {
         var width = Int32(windowWidth)
         var height = Int32(windowHeight)
@@ -972,6 +1253,18 @@ enum SDLGraphicsLauncher {
         )
     }
 
+    private static func presentEditor(library: GameContentLibrary, adventureID: AdventureID) {
+#if os(macOS)
+        let app = NSApplication.shared
+        app.setActivationPolicy(.regular)
+        AdventureEditorLauncher.present(library: library, initialAdventureID: adventureID)
+        app.activate(ignoringOtherApps: true)
+#else
+        _ = library
+        _ = adventureID
+#endif
+    }
+
     private static func sdlError() -> String {
         if let pointer = SDL_GetError() {
             return String(cString: pointer)
@@ -1006,6 +1299,39 @@ private struct SDLViewport {
     let stacked: Bool
 }
 
+private enum SDLFloorPattern {
+    case brick
+    case speckle
+    case weave
+    case hash
+    case mire
+    case circuit
+}
+
+private enum SDLBoardVariant {
+    case gemstone
+    case ultima
+}
+
+private struct SDLBoardTheme {
+    let frameBackground: SDLColor
+    let boardBackground: SDLColor
+    let outerBorder: SDLColor
+    let innerBorder: SDLColor
+    let grid: SDLColor
+    let innerInset: Int
+    let contentInset: Int
+    let floor: SDLColor
+    let wall: SDLColor
+    let water: SDLColor
+    let brush: SDLColor
+    let doorLocked: SDLColor
+    let doorOpen: SDLColor
+    let shrine: SDLColor
+    let stairs: SDLColor
+    let beacon: SDLColor
+}
+
 private struct SDLColor {
     let r: UInt8
     let g: UInt8
@@ -1036,6 +1362,7 @@ private struct SDLColor {
     static let floor = SDLColor(r: 24, g: 20, b: 16, a: 255)
     static let grid = SDLColor(r: 12, g: 12, b: 12, a: 255)
     static let shadow = SDLColor(r: 0, g: 0, b: 0, a: 120)
+    static let overlay = SDLColor(r: 0, g: 0, b: 0, a: 188)
 
     func withAlpha(_ alpha: UInt8) -> SDLColor {
         SDLColor(r: r, g: g, b: b, a: alpha)

@@ -58,6 +58,8 @@
 - Replaced the SDL frontend's temporary debug-text pass with a built-in low-resolution bitmap font so the renderer has a controlled retro text style instead of relying on SDL debug helpers.
 - Made the SDL renderer respond to the live render output size: board/panel framing and single-column fallback now adapt to the current window dimensions instead of the startup size.
 - Upgraded the SDL visuals again so top-down occupants/features and `Depth 3D` billboards now use patterned pixel sprites with shadows instead of only solid color rectangles.
+- Added the adventure editor flow to the SDL frontend on macOS: pressing `M` now raises the same confirmation prompt concept, and confirming launches the existing editor window from the SDL build too.
+- Added a shared-session regression test for editor targeting so the SDL/editor integration keeps using the selected adventure on title screens and the active adventure during a live run.
 
 ## Current Notes
 
@@ -79,6 +81,7 @@
 - The shared scene snapshot is now the correct seam for future renderer work; continue moving rendering decisions out of SwiftUI views and into snapshot-to-pixels adapters.
 - The intended product split is now explicit: native AppKit stays the preferred macOS frontend, while SDL is the parity/cross-platform path that should eventually become the real Windows/Linux graphics frontend.
 - SDL still needs more fidelity work, but it is now much closer to a true second frontend and less of a diagnostic shell: text, layout, and sprite reads are no longer the most glaring parity gaps.
+- The SDL editor path currently reuses the native macOS editor window, which is the correct parity move for now even though the eventual Windows/Linux story will need its own non-AppKit editor path.
 
 ## Next Build Targets
 
