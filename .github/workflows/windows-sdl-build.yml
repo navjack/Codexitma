@@ -85,8 +85,12 @@ jobs:
               Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $dist $_.Name) -Recurse -Force
             }
 
-          $sdlDll = Join-Path $env:SDL3_ROOT "bin\x64\SDL3.dll"
-          if (Test-Path $sdlDll) {
+          $sdlDllCandidates = @(
+            (Join-Path $env:SDL3_ROOT "lib\x64\SDL3.dll"),
+            (Join-Path $env:SDL3_ROOT "bin\x64\SDL3.dll")
+          )
+          $sdlDll = $sdlDllCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if ($sdlDll) {
             Copy-Item -LiteralPath $sdlDll -Destination (Join-Path $dist "SDL3.dll")
           } else {
             throw "SDL3.dll was not found in the downloaded SDK."
