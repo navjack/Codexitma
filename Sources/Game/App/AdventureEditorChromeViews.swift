@@ -2,6 +2,7 @@
 import Foundation
 import SwiftUI
 
+@MainActor
 struct AdventureEditorHeaderView: View {
     @ObservedObject var store: AdventureEditorStore
     let palette: AdventureEditorPalette
@@ -29,6 +30,7 @@ struct AdventureEditorHeaderView: View {
     }
 }
 
+@MainActor
 struct AdventureEditorHeaderButtons: View {
     @ObservedObject var store: AdventureEditorStore
     let palette: AdventureEditorPalette
@@ -53,6 +55,7 @@ struct AdventureEditorHeaderButtons: View {
     }
 }
 
+@MainActor
 struct AdventureEditorSourcePanelView: View {
     @ObservedObject var store: AdventureEditorStore
     let palette: AdventureEditorPalette
@@ -100,6 +103,7 @@ struct AdventureEditorSourcePanelView: View {
     }
 }
 
+@MainActor
 struct AdventureEditorValidationPanelView: View {
     @ObservedObject var store: AdventureEditorStore
     let palette: AdventureEditorPalette
@@ -134,6 +138,7 @@ struct AdventureEditorValidationPanelView: View {
     }
 }
 
+@MainActor
 struct AdventureEditorMetadataPanelView: View {
     @ObservedObject var store: AdventureEditorStore
     let palette: AdventureEditorPalette
@@ -211,6 +216,7 @@ struct AdventureEditorMetadataPanelView: View {
     }
 }
 
+@MainActor
 struct AdventureEditorContentTabBarView: View {
     @ObservedObject var store: AdventureEditorStore
     let palette: AdventureEditorPalette
@@ -248,6 +254,7 @@ struct AdventureEditorContentTabBarView: View {
     }
 }
 
+@MainActor
 struct AdventureEditorFooterView: View {
     @ObservedObject var store: AdventureEditorStore
     let palette: AdventureEditorPalette
@@ -280,6 +287,7 @@ struct AdventureEditorFooterView: View {
     }
 }
 
+@MainActor
 private struct EditorLabeledField: View {
     let label: String
     @Binding var text: String

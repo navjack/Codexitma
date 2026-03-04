@@ -114,3 +114,4 @@
 - The SDL cross-platform branch is ready to merge: `windows-builds/` is now ignored locally, and the Windows SDL workflow is set to run from `main` pushes (plus manual dispatch) rather than PR branch updates.
 - `main` now also has a dedicated macOS packaging workflow so GitHub can produce fresh app/CLI zips on each `main` push; future public releases can pull both Win64 and macOS artifacts directly from Actions.
 - The first macOS Actions run failed because `macos-14` defaulted to Swift 5.10; the workflow now bootstraps the same Swift 6.3 snapshot family used by the Windows lane before packaging.
+- The second macOS Actions run exposed stricter Swift 6.3 actor-isolation checks in the native SwiftUI layer; the affected editor/game root views are now explicitly `@MainActor`, matching the `@MainActor` stores/controllers they observe.

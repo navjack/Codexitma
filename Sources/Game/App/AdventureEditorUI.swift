@@ -3,6 +3,7 @@ import AppKit
 import Foundation
 import SwiftUI
 
+@MainActor
 struct AdventureEditorRootView: View {
     @ObservedObject var store: AdventureEditorStore
 

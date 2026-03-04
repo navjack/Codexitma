@@ -3,6 +3,7 @@ import AppKit
 import Foundation
 import SwiftUI
 
+@MainActor
 struct GameRootView: View {
     @ObservedObject var session: GameSessionController
     @State private var showingEditorConfirm = false
