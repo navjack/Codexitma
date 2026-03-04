@@ -50,6 +50,7 @@ enum SDLGraphicsLauncher {
             throw GraphicsBackendError.sdlRendererCreationFailed(sdlError())
         }
         defer { SDL_DestroyRenderer(renderer) }
+        _ = SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND)
 
         let session = SharedGameSession(
             library: library,
@@ -143,24 +144,25 @@ enum SDLGraphicsLauncher {
     }
 
     private static func renderScene(_ scene: GraphicsSceneSnapshot, with renderer: OpaquePointer) {
-        fill(renderer, x: 0, y: 0, width: windowWidth, height: windowHeight, color: .background)
+        let viewport = currentViewport(for: renderer)
+        fill(renderer, x: 0, y: 0, width: viewport.width, height: viewport.height, color: .background)
 
         switch scene.mode {
         case .title:
-            renderTitleScreen(scene, with: renderer)
+            renderTitleScreen(scene, viewport: viewport, with: renderer)
             return
         case .characterCreation:
-            renderCharacterCreationScreen(scene, with: renderer)
+            renderCharacterCreationScreen(scene, viewport: viewport, with: renderer)
             return
         case .ending:
-            renderEndingScreen(scene, with: renderer)
+            renderEndingScreen(scene, viewport: viewport, with: renderer)
             return
         default:
             break
         }
 
-        let boardFrame = SDLRect(x: 28, y: 28, width: 760, height: 704)
-        let panelFrame = SDLRect(x: 812, y: 28, width: 440, height: 704)
+        let boardFrame = viewport.boardFrame
+        let panelFrame = viewport.panelFrame
 
         if scene.visualTheme == .depth3D, let depth = scene.depth, scene.mode == .exploration {
             renderDepth(depth, scene: scene, frame: boardFrame, with: renderer)
@@ -172,11 +174,11 @@ enum SDLGraphicsLauncher {
         stroke(renderer, frame: panelFrame, color: .gold)
 
         renderSidebar(scene, frame: panelFrame, with: renderer)
-        renderHeader(scene, boardFrame: boardFrame, with: renderer)
+        renderHeader(scene, frame: viewport.headerFrame, with: renderer)
     }
 
-    private static func renderTitleScreen(_ scene: GraphicsSceneSnapshot, with renderer: OpaquePointer) {
-        let frame = SDLRect(x: 56, y: 54, width: windowWidth - 112, height: windowHeight - 108)
+    private static func renderTitleScreen(_ scene: GraphicsSceneSnapshot, viewport: SDLViewport, with renderer: OpaquePointer) {
+        let frame = viewport.contentFrame
         fill(renderer, x: frame.x, y: frame.y, width: frame.width, height: frame.height, color: .panel)
         stroke(renderer, frame: frame, color: .gold)
 
@@ -199,8 +201,8 @@ enum SDLGraphicsLauncher {
         drawText("T STYLE  X QUIT", x: frame.x + 18, y: frame.y + frame.height - 26, color: .bright, renderer: renderer)
     }
 
-    private static func renderCharacterCreationScreen(_ scene: GraphicsSceneSnapshot, with renderer: OpaquePointer) {
-        let frame = SDLRect(x: 56, y: 54, width: windowWidth - 112, height: windowHeight - 108)
+    private static func renderCharacterCreationScreen(_ scene: GraphicsSceneSnapshot, viewport: SDLViewport, with renderer: OpaquePointer) {
+        let frame = viewport.contentFrame
         fill(renderer, x: frame.x, y: frame.y, width: frame.width, height: frame.height, color: .panel)
         stroke(renderer, frame: frame, color: .gold)
 
@@ -229,8 +231,8 @@ enum SDLGraphicsLauncher {
         drawText("T STYLE", x: frame.x + 18, y: frame.y + frame.height - 26, color: .bright, renderer: renderer)
     }
 
-    private static func renderEndingScreen(_ scene: GraphicsSceneSnapshot, with renderer: OpaquePointer) {
-        let frame = SDLRect(x: 72, y: 88, width: windowWidth - 144, height: windowHeight - 176)
+    private static func renderEndingScreen(_ scene: GraphicsSceneSnapshot, viewport: SDLViewport, with renderer: OpaquePointer) {
+        let frame = viewport.contentFrame.insetBy(dx: 16, dy: 24)
         fill(renderer, x: frame.x, y: frame.y, width: frame.width, height: frame.height, color: .panel)
         stroke(renderer, frame: frame, color: .gold)
 
@@ -243,11 +245,10 @@ enum SDLGraphicsLauncher {
         drawText("X OR Q TO EXIT", x: frame.x + 18, y: frame.y + frame.height - 28, color: .bright, renderer: renderer)
     }
 
-    private static func renderHeader(_ scene: GraphicsSceneSnapshot, boardFrame: SDLRect, with renderer: OpaquePointer) {
-        let titleRect = SDLRect(x: boardFrame.x, y: 10, width: boardFrame.width, height: 14)
-        drawText(scene.adventureTitle.uppercased(), x: titleRect.x + 4, y: titleRect.y, color: .gold, renderer: renderer)
-        drawText(scene.visualTheme.displayName.uppercased(), x: titleRect.x + 220, y: titleRect.y, color: .bright, renderer: renderer)
-        drawText(scene.modeLabel, x: titleRect.x + 360, y: titleRect.y, color: .dim, renderer: renderer)
+    private static func renderHeader(_ scene: GraphicsSceneSnapshot, frame: SDLRect, with renderer: OpaquePointer) {
+        drawText(scene.adventureTitle.uppercased(), x: frame.x + 4, y: frame.y, color: .gold, renderer: renderer)
+        drawText(scene.visualTheme.displayName.uppercased(), x: frame.x + min(220, max(120, frame.width / 4)), y: frame.y, color: .bright, renderer: renderer)
+        drawText(scene.modeLabel, x: frame.x + min(360, max(220, frame.width / 2)), y: frame.y, color: .dim, renderer: renderer)
     }
 
     private static func renderSidebar(_ scene: GraphicsSceneSnapshot, frame: SDLRect, with renderer: OpaquePointer) {
@@ -402,19 +403,34 @@ enum SDLGraphicsLauncher {
                 let x = originX + (cell.position.x * cellWidth)
                 let y = originY + (cell.position.y * cellWidth)
                 fill(renderer, x: x, y: y, width: cellWidth, height: cellWidth, color: tileColor(for: cell.tile.type))
-                if cell.tile.type == .wall {
-                    fill(renderer, x: x, y: y, width: cellWidth, height: max(1, cellWidth / 5), color: .wallShade)
-                }
+                drawTileAccent(for: cell.tile.type, x: x, y: y, cellSize: cellWidth, renderer: renderer)
                 if cell.feature != .none {
-                    let inset = max(1, cellWidth / 4)
-                    fill(renderer, x: x + inset, y: y + inset, width: cellWidth - (inset * 2), height: cellWidth - (inset * 2), color: featureColor(for: cell.feature))
+                    let inset = max(1, cellWidth / 6)
+                    drawPattern(
+                        featurePattern(for: cell.feature),
+                        x: x + inset,
+                        y: y + inset,
+                        width: max(2, cellWidth - (inset * 2)),
+                        height: max(2, cellWidth - (inset * 2)),
+                        color: featureColor(for: cell.feature),
+                        renderer: renderer
+                    )
                 }
                 switch cell.occupant {
                 case .none:
                     break
                 default:
-                    let inset = max(1, cellWidth / 5)
-                    fill(renderer, x: x + inset, y: y + inset, width: cellWidth - (inset * 2), height: cellWidth - (inset * 2), color: occupantColor(for: cell.occupant))
+                    let inset = max(1, cellWidth / 7)
+                    drawPattern(
+                        occupantPattern(for: cell.occupant),
+                        x: x + inset,
+                        y: y + inset,
+                        width: max(2, cellWidth - (inset * 2)),
+                        height: max(2, cellWidth - (inset * 2)),
+                        color: occupantColor(for: cell.occupant),
+                        renderer: renderer,
+                        shadowOffset: cellWidth >= 10 ? 1 : 0
+                    )
                 }
                 if cellWidth >= 10 {
                     stroke(renderer, frame: SDLRect(x: x, y: y, width: cellWidth, height: cellWidth), color: .grid)
@@ -475,7 +491,16 @@ enum SDLGraphicsLauncher {
                 }
             }
 
-            fill(renderer, x: left, y: top, width: width, height: height, color: billboardColor(for: billboard.kind))
+            drawPattern(
+                billboardPattern(for: billboard.kind),
+                x: left,
+                y: top,
+                width: width,
+                height: height,
+                color: billboardColor(for: billboard.kind),
+                renderer: renderer,
+                shadowOffset: width >= 14 ? 2 : 1
+            )
         }
 
         let cx = frame.x + (frame.width / 2)
@@ -537,6 +562,193 @@ enum SDLGraphicsLauncher {
         }
     }
 
+    private static func drawTileAccent(
+        for type: TileType,
+        x: Int,
+        y: Int,
+        cellSize: Int,
+        renderer: OpaquePointer
+    ) {
+        switch type {
+        case .floor:
+            if cellSize >= 8 {
+                fill(renderer, x: x + (cellSize / 3), y: y + (cellSize / 3), width: max(1, cellSize / 6), height: max(1, cellSize / 6), color: .wallShade)
+            }
+        case .wall:
+            fill(renderer, x: x, y: y, width: cellSize, height: max(1, cellSize / 5), color: .wallShade)
+            fill(renderer, x: x, y: y + (cellSize / 2), width: cellSize, height: max(1, cellSize / 6), color: .wallShade)
+        case .water:
+            let stripeHeight = max(1, cellSize / 7)
+            fill(renderer, x: x + 1, y: y + stripeHeight, width: max(1, cellSize - 2), height: stripeHeight, color: .bright.withAlpha(110))
+            fill(renderer, x: x + 2, y: y + (stripeHeight * 3), width: max(1, cellSize - 4), height: stripeHeight, color: .bright.withAlpha(80))
+        case .brush:
+            let bladeWidth = max(1, cellSize / 6)
+            fill(renderer, x: x + bladeWidth, y: y + (cellSize / 3), width: bladeWidth, height: max(1, cellSize / 2), color: .wallShade)
+            fill(renderer, x: x + (bladeWidth * 3), y: y + (cellSize / 5), width: bladeWidth, height: max(1, (cellSize * 3) / 5), color: .bright.withAlpha(80))
+        case .doorLocked, .doorOpen:
+            let width = max(2, cellSize / 3)
+            fill(renderer, x: x + ((cellSize - width) / 2), y: y + max(1, cellSize / 8), width: width, height: max(2, (cellSize * 3) / 4), color: .wallShade)
+        case .shrine, .beacon:
+            let width = max(2, cellSize / 3)
+            let height = max(2, cellSize / 2)
+            fill(renderer, x: x + ((cellSize - width) / 2), y: y + ((cellSize - height) / 2), width: width, height: height, color: .bright.withAlpha(70))
+        case .stairs:
+            let stepHeight = max(1, cellSize / 8)
+            fill(renderer, x: x + (cellSize / 4), y: y + (cellSize / 3), width: max(2, cellSize / 3), height: stepHeight, color: .wallShade)
+            fill(renderer, x: x + (cellSize / 3), y: y + (cellSize / 2), width: max(2, cellSize / 2), height: stepHeight, color: .wallShade)
+        }
+    }
+
+    private static func featurePattern(for feature: MapFeature) -> [[Int]] {
+        switch feature {
+        case .none:
+            return [[1]]
+        case .chest:
+            return [
+                [0, 1, 1, 0],
+                [1, 1, 1, 1],
+                [1, 0, 0, 1]
+            ]
+        case .bed:
+            return [
+                [1, 1, 1, 1],
+                [1, 0, 0, 0]
+            ]
+        case .plateUp:
+            return [
+                [1, 1, 1],
+                [1, 1, 1]
+            ]
+        case .plateDown:
+            return [
+                [1, 1, 1]
+            ]
+        case .switchIdle, .switchLit:
+            return [
+                [0, 1, 0],
+                [1, 1, 1],
+                [0, 1, 0]
+            ]
+        case .shrine:
+            return [
+                [0, 1, 0],
+                [1, 1, 1],
+                [1, 0, 1],
+                [0, 1, 0]
+            ]
+        case .beacon:
+            return [
+                [0, 1, 0],
+                [1, 1, 1],
+                [1, 1, 1]
+            ]
+        case .gate:
+            return [
+                [1, 0, 1],
+                [1, 0, 1],
+                [1, 1, 1]
+            ]
+        }
+    }
+
+    private static func occupantPattern(for occupant: MapOccupant) -> [[Int]] {
+        switch occupant {
+        case .none:
+            return [[1]]
+        case .player:
+            return [
+                [0, 1, 0],
+                [1, 1, 1],
+                [1, 0, 1]
+            ]
+        case .npc(let id):
+            return npcPattern(for: id)
+        case .enemy(let id):
+            return enemyPattern(for: id)
+        case .boss:
+            return [
+                [1, 0, 1],
+                [1, 1, 1],
+                [1, 1, 1]
+            ]
+        }
+    }
+
+    private static func billboardPattern(for kind: DepthBillboardKind) -> [[Int]] {
+        switch kind {
+        case .npc(let id):
+            return npcPattern(for: id)
+        case .enemy(let id):
+            return enemyPattern(for: id)
+        case .boss:
+            return [
+                [1, 0, 1],
+                [1, 1, 1],
+                [1, 1, 1]
+            ]
+        case .feature(let feature):
+            return featurePattern(for: feature)
+        }
+    }
+
+    private static func npcPattern(for id: String) -> [[Int]] {
+        switch id {
+        case "elder":
+            return [
+                [0, 1, 0],
+                [1, 1, 1],
+                [1, 0, 1]
+            ]
+        case "field_scout":
+            return [
+                [1, 0, 1],
+                [0, 1, 0],
+                [0, 1, 0]
+            ]
+        case "orchard_guide":
+            return [
+                [0, 1, 0],
+                [1, 1, 0],
+                [0, 1, 1]
+            ]
+        default:
+            return [
+                [0, 1, 0],
+                [1, 1, 1],
+                [0, 1, 0]
+            ]
+        }
+    }
+
+    private static func enemyPattern(for id: String) -> [[Int]] {
+        if id.hasPrefix("crow") {
+            return [
+                [1, 0, 1],
+                [1, 1, 1],
+                [0, 1, 0]
+            ]
+        }
+        if id.hasPrefix("hound") {
+            return [
+                [1, 1, 0],
+                [1, 1, 1],
+                [0, 1, 1]
+            ]
+        }
+        if id.hasPrefix("wraith") {
+            return [
+                [0, 1, 0],
+                [1, 1, 1],
+                [1, 1, 1]
+            ]
+        }
+        return [
+            [1, 1, 1],
+            [1, 0, 1],
+            [1, 1, 1]
+        ]
+    }
+
     private static func shaded(_ color: SDLColor, intensity: Double) -> SDLColor {
         SDLColor(
             r: UInt8(max(0, min(255, Int(Double(color.r) * intensity)))),
@@ -546,10 +758,90 @@ enum SDLGraphicsLauncher {
         )
     }
 
+    private static func drawPattern(
+        _ pattern: [[Int]],
+        x: Int,
+        y: Int,
+        width: Int,
+        height: Int,
+        color: SDLColor,
+        renderer: OpaquePointer,
+        shadowOffset: Int = 0
+    ) {
+        guard width > 0, height > 0 else { return }
+        let rows = max(1, pattern.count)
+        let columns = max(1, pattern.first?.count ?? 1)
+        let pixelWidth = max(1, width / columns)
+        let pixelHeight = max(1, height / rows)
+        let drawWidth = pixelWidth * columns
+        let drawHeight = pixelHeight * rows
+        let originX = x + max(0, (width - drawWidth) / 2)
+        let originY = y + max(0, (height - drawHeight) / 2)
+
+        if shadowOffset > 0 {
+            for (rowIndex, row) in pattern.enumerated() {
+                for (columnIndex, value) in row.enumerated() where value == 1 {
+                    fill(
+                        renderer,
+                        x: originX + (columnIndex * pixelWidth) + shadowOffset,
+                        y: originY + (rowIndex * pixelHeight) + shadowOffset,
+                        width: pixelWidth,
+                        height: pixelHeight,
+                        color: .shadow
+                    )
+                }
+            }
+        }
+
+        for (rowIndex, row) in pattern.enumerated() {
+            for (columnIndex, value) in row.enumerated() where value == 1 {
+                fill(
+                    renderer,
+                    x: originX + (columnIndex * pixelWidth),
+                    y: originY + (rowIndex * pixelHeight),
+                    width: pixelWidth,
+                    height: pixelHeight,
+                    color: color
+                )
+            }
+        }
+    }
+
+    private static func drawGlyph(
+        _ character: Character,
+        x: Int,
+        y: Int,
+        color: SDLColor,
+        scale: Int,
+        renderer: OpaquePointer
+    ) {
+        let rows = sdlBitmapFont[character] ?? sdlBitmapFont["?"]!
+        for (rowIndex, rowMask) in rows.enumerated() {
+            for columnIndex in 0..<3 {
+                let bit = UInt8(1 << (2 - columnIndex))
+                if rowMask & bit == 0 {
+                    continue
+                }
+                fill(
+                    renderer,
+                    x: x + (columnIndex * scale),
+                    y: y + (rowIndex * scale),
+                    width: scale,
+                    height: scale,
+                    color: color
+                )
+            }
+        }
+    }
+
     private static func drawText(_ text: String, x: Int, y: Int, color: SDLColor, renderer: OpaquePointer) {
-        _ = SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a)
-        text.withCString { pointer in
-            _ = SDL_RenderDebugText(renderer, Float(x), Float(y), pointer)
+        let scale = 2
+        let advance = (3 * scale) + scale + 1
+        var cursorX = x
+
+        for character in text.uppercased() {
+            drawGlyph(character, x: cursorX, y: y, color: color, scale: scale, renderer: renderer)
+            cursorX += advance
         }
     }
 
@@ -630,6 +922,56 @@ enum SDLGraphicsLauncher {
         return scene.shopOffers[start..<end]
     }
 
+    private static func currentViewport(for renderer: OpaquePointer) -> SDLViewport {
+        var width = Int32(windowWidth)
+        var height = Int32(windowHeight)
+        if !SDL_GetCurrentRenderOutputSize(renderer, &width, &height) {
+            width = Int32(windowWidth)
+            height = Int32(windowHeight)
+        }
+
+        let safeWidth = max(640, Int(width))
+        let safeHeight = max(480, Int(height))
+        let margin = max(16, min(28, safeWidth / 48))
+        let gap = max(10, min(18, safeWidth / 96))
+        let headerHeight = 20
+        let contentY = margin + headerHeight
+        let contentHeight = max(220, safeHeight - contentY - margin)
+        let contentWidth = safeWidth - (margin * 2)
+        let wideLayout = safeWidth >= 980 && contentHeight >= 360
+
+        let headerFrame = SDLRect(x: margin, y: margin - 2, width: contentWidth, height: headerHeight)
+        let contentFrame = SDLRect(x: margin, y: contentY, width: contentWidth, height: contentHeight)
+
+        if wideLayout {
+            let panelWidth = min(440, max(300, contentWidth / 3))
+            let boardWidth = max(220, contentWidth - gap - panelWidth)
+            return SDLViewport(
+                width: safeWidth,
+                height: safeHeight,
+                headerFrame: headerFrame,
+                contentFrame: contentFrame,
+                boardFrame: SDLRect(x: margin, y: contentY, width: boardWidth, height: contentHeight),
+                panelFrame: SDLRect(x: margin + boardWidth + gap, y: contentY, width: panelWidth, height: contentHeight),
+                stacked: false
+            )
+        }
+
+        let boardHeight = max(200, min(contentHeight - 140, Int(Double(contentHeight) * 0.56)))
+        let panelY = contentY + boardHeight + gap
+        let panelHeight = max(120, safeHeight - panelY - margin)
+
+        return SDLViewport(
+            width: safeWidth,
+            height: safeHeight,
+            headerFrame: headerFrame,
+            contentFrame: contentFrame,
+            boardFrame: SDLRect(x: margin, y: contentY, width: contentWidth, height: boardHeight),
+            panelFrame: SDLRect(x: margin, y: panelY, width: contentWidth, height: panelHeight),
+            stacked: true
+        )
+    }
+
     private static func sdlError() -> String {
         if let pointer = SDL_GetError() {
             return String(cString: pointer)
@@ -643,6 +985,25 @@ private struct SDLRect {
     let y: Int
     let width: Int
     let height: Int
+
+    func insetBy(dx: Int, dy: Int) -> SDLRect {
+        SDLRect(
+            x: x + dx,
+            y: y + dy,
+            width: max(0, width - (dx * 2)),
+            height: max(0, height - (dy * 2))
+        )
+    }
+}
+
+private struct SDLViewport {
+    let width: Int
+    let height: Int
+    let headerFrame: SDLRect
+    let contentFrame: SDLRect
+    let boardFrame: SDLRect
+    let panelFrame: SDLRect
+    let stacked: Bool
 }
 
 private struct SDLColor {
@@ -674,7 +1035,67 @@ private struct SDLColor {
     static let ceiling = SDLColor(r: 10, g: 10, b: 16, a: 255)
     static let floor = SDLColor(r: 24, g: 20, b: 16, a: 255)
     static let grid = SDLColor(r: 12, g: 12, b: 12, a: 255)
+    static let shadow = SDLColor(r: 0, g: 0, b: 0, a: 120)
+
+    func withAlpha(_ alpha: UInt8) -> SDLColor {
+        SDLColor(r: r, g: g, b: b, a: alpha)
+    }
 }
+
+private let sdlBitmapFont: [Character: [UInt8]] = [
+    " ": [0, 0, 0, 0, 0],
+    "!": [2, 2, 2, 0, 2],
+    "\"": [5, 5, 0, 0, 0],
+    "'": [2, 2, 0, 0, 0],
+    "+": [0, 2, 7, 2, 0],
+    ",": [0, 0, 0, 2, 4],
+    "-": [0, 0, 7, 0, 0],
+    ".": [0, 0, 0, 0, 2],
+    "/": [1, 1, 2, 4, 4],
+    ":": [0, 2, 0, 2, 0],
+    "=": [0, 7, 0, 7, 0],
+    ">": [4, 2, 1, 2, 4],
+    "?": [6, 1, 2, 0, 2],
+    "[": [6, 4, 4, 4, 6],
+    "]": [3, 1, 1, 1, 3],
+    "_": [0, 0, 0, 0, 7],
+    "0": [7, 5, 5, 5, 7],
+    "1": [2, 6, 2, 2, 7],
+    "2": [6, 1, 7, 4, 7],
+    "3": [6, 1, 6, 1, 6],
+    "4": [5, 5, 7, 1, 1],
+    "5": [7, 4, 6, 1, 6],
+    "6": [3, 4, 6, 5, 2],
+    "7": [7, 1, 1, 2, 2],
+    "8": [2, 5, 2, 5, 2],
+    "9": [2, 5, 3, 1, 6],
+    "A": [2, 5, 7, 5, 5],
+    "B": [6, 5, 6, 5, 6],
+    "C": [3, 4, 4, 4, 3],
+    "D": [6, 5, 5, 5, 6],
+    "E": [7, 4, 6, 4, 7],
+    "F": [7, 4, 6, 4, 4],
+    "G": [3, 4, 5, 5, 3],
+    "H": [5, 5, 7, 5, 5],
+    "I": [7, 2, 2, 2, 7],
+    "J": [1, 1, 1, 5, 2],
+    "K": [5, 5, 6, 5, 5],
+    "L": [4, 4, 4, 4, 7],
+    "M": [5, 7, 7, 5, 5],
+    "N": [5, 7, 7, 7, 5],
+    "O": [2, 5, 5, 5, 2],
+    "P": [6, 5, 6, 4, 4],
+    "Q": [2, 5, 5, 3, 1],
+    "R": [6, 5, 6, 5, 5],
+    "S": [3, 4, 2, 1, 6],
+    "T": [7, 2, 2, 2, 2],
+    "U": [5, 5, 5, 5, 7],
+    "V": [5, 5, 5, 5, 2],
+    "W": [5, 5, 7, 7, 5],
+    "X": [5, 5, 2, 5, 5],
+    "Y": [5, 5, 2, 2, 2],
+    "Z": [7, 1, 2, 4, 7]
+]
 
 private extension GraphicsSceneSnapshot {
     var modeLabel: String {

@@ -35,15 +35,18 @@ The `--sdl` flag is now a working launch path:
 - it renders a minimal `Depth 3D` raycast view when that visual theme is active
 - it uses the same backend-neutral `GraphicsSceneSnapshot` data that now also feeds the native map renderer
 - it now has mode-aware coverage for title, character creation, dialogue, inventory, shop, and ending states instead of only exploration
+- it now uses a real built-in low-resolution bitmap text pass instead of SDL debug text
+- it now renders patterned top-down sprites and patterned depth billboards instead of only flat solid rectangles
+- it now lays itself out from the live SDL render size instead of assuming the initial window size forever
 
 This is still an early renderer, not feature parity. It is enough to prove the cross-platform direction and to keep iterating on a real SDL path instead of a stub.
 
 ## Immediate Next Steps
 
 1. Keep closing feature gaps between the native and SDL frontends until SDL reaches gameplay/UI parity on macOS.
-2. Replace the current SDL debug-text HUD with a proper low-res bitmap text pass so the SDL frontend has a fully controlled visual style.
-3. Make the SDL frontend responsive to live window size instead of using the current fixed-layout frame math.
-4. Add proper sprite-pattern rendering for SDL billboards instead of the current solid-color rectangle approximation.
+2. Add richer SDL layout logic for very small windows so the mode-specific screens can compress more gracefully when vertical space is tight.
+3. Push tile-surface fidelity higher in SDL so board cells better match the native Gemstone/Ultima visual language, not just the current low-res approximation.
+4. Replace the remaining hardcoded SDL spacing constants with scale-aware metrics driven by the live viewport.
 5. Once parity is acceptable, start splitting platform selection so macOS prefers native while Windows/Linux use SDL as the real graphics path.
 
 ## Constraints

@@ -55,6 +55,9 @@
 - Extracted a shared `SharedGameSession` runtime so the native AppKit frontend and the SDL frontend now use the same command handling, theme persistence, sound cue rules, and depth-control remapping.
 - Expanded the scene snapshot to include mode-specific UI data (adventure selection, hero selection, dialogue, inventory, and shop state) so parity work does not require SDL to peek back into SwiftUI-only state.
 - Upgraded the SDL frontend from an exploration-only viewer into a mode-aware frontend that now renders title, character creation, dialogue, inventory, shop, and ending states using the same shared session/snapshot pipeline.
+- Replaced the SDL frontend's temporary debug-text pass with a built-in low-resolution bitmap font so the renderer has a controlled retro text style instead of relying on SDL debug helpers.
+- Made the SDL renderer respond to the live render output size: board/panel framing and single-column fallback now adapt to the current window dimensions instead of the startup size.
+- Upgraded the SDL visuals again so top-down occupants/features and `Depth 3D` billboards now use patterned pixel sprites with shadows instead of only solid color rectangles.
 
 ## Current Notes
 
@@ -75,6 +78,7 @@
 - The SDL frontend currently links against the locally installed `sdl3` Homebrew package and emits a linker warning because the Homebrew bottle was built for a newer host SDK than the package's declared macOS target.
 - The shared scene snapshot is now the correct seam for future renderer work; continue moving rendering decisions out of SwiftUI views and into snapshot-to-pixels adapters.
 - The intended product split is now explicit: native AppKit stays the preferred macOS frontend, while SDL is the parity/cross-platform path that should eventually become the real Windows/Linux graphics frontend.
+- SDL still needs more fidelity work, but it is now much closer to a true second frontend and less of a diagnostic shell: text, layout, and sprite reads are no longer the most glaring parity gaps.
 
 ## Next Build Targets
 
@@ -86,3 +90,4 @@
 - Expand the external pack format so third-party adventures can define custom quest flags and bespoke item tables, not just reuse the built-in systems.
 - Continue the SDL branch by adding real low-res bitmap font rendering, proper sprite-pattern drawing, and layout scaling based on live window size instead of the current fixed frame.
 - Keep pushing SDL toward native feature parity on macOS before attempting the first real Linux/Win64 build path.
+- The next SDL parity pass should focus on denser tile-surface art, fewer hardcoded spacing constants, and then the first real platform split for Windows/Linux builds.
