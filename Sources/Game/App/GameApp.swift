@@ -37,11 +37,15 @@ struct GameApp {
         renderer.render(renderer.makeShutdownFrame(message: "The embers dim. Farewell, wanderer."))
     }
 
-    func runGraphics() {
+    func runGraphics(playtestAdventureID: AdventureID? = nil) {
         let library = self.library
         let saves = self.saves
         MainActor.assumeIsolated {
-            GraphicsGameLauncher.run(library: library, saveRepository: saves)
+            GraphicsGameLauncher.run(
+                library: library,
+                saveRepository: saves,
+                playtestAdventureID: playtestAdventureID
+            )
         }
     }
 

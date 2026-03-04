@@ -35,6 +35,22 @@ Run the graphical adventure editor instead:
 swift run Game --editor
 ```
 
+The editor now supports:
+
+- terrain painting
+- layered NPC / enemy / interactable / portal / spawn placement
+- dialogue, quest flow, encounter, and shop editing tabs
+- roster views for NPCs and enemies
+- `VALIDATE`, which checks references and layout before export
+- `SAVE + PLAYTEST`, which exports the current pack and launches directly into that adventure in graphics mode
+
+The editor is also now a first-class graphics-mode tool:
+
+- `M` at the title screen opens the selected adventure in the editor
+- `M` while playing opens the currently loaded adventure in the editor after a confirmation prompt
+- bundled adventures open as safe external overrides
+- external packs and existing user mods reopen and save back into their current external pack folder
+
 After successful local builds, a runnable copy is also kept at the project root:
 
 ```sh
@@ -52,6 +68,7 @@ After successful local builds, a runnable copy is also kept at the project root:
 - `Q`: cancel / back
 - `X`: quit
 - `T` in graphics mode: cycle the visual theme (`Gemstone` / `Ultima` / `Depth 3D`)
+- `M` in graphics mode: open the editor (with confirmation)
 
 When `Depth 3D` is active:
 

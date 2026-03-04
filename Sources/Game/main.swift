@@ -7,7 +7,7 @@ do {
     case .interactive(let mode):
         switch mode {
         case .graphics:
-            app.runGraphics()
+            app.runGraphics(playtestAdventureID: options.playtestAdventureID)
         case .terminal:
             try app.runTerminal()
         }

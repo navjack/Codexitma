@@ -34,6 +34,13 @@
 - Added real dungeon-crawler controls for `Depth 3D`: turn in place left/right and move forward/back without forcing the camera to rotate.
 - Replaced the old hallway-only `Depth 3D` presentation with a tile-accurate raycast view, including draw distance plus floor and sky/ceiling depth cues for better spatial reading.
 - Added wall-occluded billboard projection for visible enemies, NPCs, and interactables in `Depth 3D`, and introduced a dedicated `--editor` graphical adventure editor that exports full external packs or override mods.
+- Started `codex/editor-suite` to focus the editor buildout and documented the current editor scope, data model, gaps, and implementation milestones in `EDITOR_ROADMAP.md`.
+- Completed the first editor interaction pass: added explicit editor tools (`Terrain`, `NPC`, `Enemy`, `Interactable`, `Portal`, `Spawn`, `Erase`, `Select`), layered object placement on the map canvas, selection summaries, and map-id rename cascading for layered references.
+- Began the first real inspector pass in the editor: selected NPCs, enemies, interactables, and portals can now be edited from the right-side panel instead of only being summarized.
+- Completed the editor-suite milestone push: added content tabs for dialogues, quest flow, encounters, shops, NPCs, and enemies; seeded blank packs with playable starter data; and added `SAVE + PLAYTEST` so the editor can export and launch directly into the current adventure.
+- Filled in more inspector coverage so enemies expose AI, interactables expose reward/flag fields, and portals expose destination coordinates.
+- Finished the merge-blocking editor polish pass: added pre-export validation with surfaced issues, interactable `rewardMarks`, portal gate text/flag authoring, and promoted the editor into a first-class graphics-mode feature via `M` from the title screen or a live run with a confirmation prompt.
+- Bundled adventures now open in the editor as safe external overrides, while external packs and existing user mods reopen and save back into their existing pack folder.
 
 ## Current Notes
 
