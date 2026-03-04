@@ -53,32 +53,6 @@ import Testing
     #expect(engine.state.world.purchasedShopOffers.isEmpty)
 }
 
-@Test func terminalInventoryPanelScrollsPastFiveItems() async throws {
-    let library = try ContentLoader().load()
-    let saveURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString).appendingPathExtension("json")
-    let engine = GameEngine(library: library, saveRepository: SaveRepository(fileURL: saveURL))
-
-    engine.handle(.newGame)
-    engine.handle(.confirm)
-    engine.state.mode = .inventory
-    engine.state.messages = []
-    engine.state.player.inventory = [
-        itemTable[.healingTonic]!,
-        itemTable[.ironKey]!,
-        itemTable[.lanternOil]!,
-        itemTable[.charmFragment]!,
-        itemTable[.shrineKey]!,
-        itemTable[.fenLance]!
-    ]
-    engine.state.inventorySelectionIndex = 5
-
-    let frame = TerminalRenderer().makeFrame(for: engine.state)
-
-    #expect(frame.line(16).contains(itemTable[.ironKey]!.name))
-    #expect(!frame.line(16).contains(itemTable[.healingTonic]!.name))
-    #expect(frame.line(20).contains(">\(itemTable[.fenLance]!.name)"))
-}
-
 @Test func droppingInventoryItemsRemovesConsumablesAndProtectsQuestItems() async throws {
     let library = try ContentLoader().load()
     let saveURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString).appendingPathExtension("json")
@@ -356,7 +330,6 @@ import Testing
 
 @Test func launchOptionsParsePlaytestAdventure() async throws {
     let options = try LaunchOptions.parse(arguments: ["Game", "--graphics", "--playtest", "starfallRequiem"])
-    #expect(options.target == .interactive(.graphics))
+    #expect(options.target == .interactive)
     #expect(options.playtestAdventureID == .starfallRequiem)
 }
-

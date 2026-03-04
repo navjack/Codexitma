@@ -2,43 +2,11 @@ import Foundation
 
 struct GameApp {
     private let library: GameContentLibrary
-    private let renderer: TerminalRenderer
-    private let input: InputReader
     private let saves: SaveRepository
 
     init() throws {
         library = try ContentLoader().load()
-        renderer = TerminalRenderer()
-        input = InputReader()
         saves = SaveRepository()
-    }
-
-    func runTerminal() throws {
-#if os(Windows)
-        PlatformRuntimeSupport.writeError("Codexitma terminal mode is not currently supported on Windows. Use the SDL graphics path instead.\n")
-#else
-        let engine = GameEngine(library: library, saveRepository: saves)
-        renderer.prepare()
-        defer { renderer.restore() }
-
-        if renderer.isInteractive {
-            try input.beginCapture()
-        }
-        defer { input.endCapture() }
-
-        while !engine.shouldQuit {
-            let frame = renderer.makeFrame(for: engine.state)
-            renderer.render(frame)
-
-            guard let command = input.readCommand(mode: engine.state.mode) else {
-                engine.state.log("Input ended. Leaving Merrow to its silence.")
-                break
-            }
-            engine.handle(command)
-        }
-
-        renderer.render(renderer.makeShutdownFrame(message: "The embers dim. Farewell, wanderer."))
-#endif
     }
 
     func runGraphics(playtestAdventureID: AdventureID? = nil, backend: GraphicsBackend = .native) throws {

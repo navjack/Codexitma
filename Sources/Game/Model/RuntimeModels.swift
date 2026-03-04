@@ -38,57 +38,6 @@ struct GameContentLibrary: @unchecked Sendable {
     }
 }
 
-struct ScreenCell: Equatable {
-    var character: Character
-    var color: ANSIColor
-}
-
-struct ScreenBuffer {
-    let width: Int
-    let height: Int
-    private(set) var cells: [ScreenCell]
-
-    init(width: Int = 80, height: Int = 24, fill: Character = " ") {
-        self.width = width
-        self.height = height
-        self.cells = Array(
-            repeating: ScreenCell(character: fill, color: .reset),
-            count: width * height
-        )
-    }
-
-    mutating func put(_ char: Character, color: ANSIColor = .reset, x: Int, y: Int) {
-        guard x >= 0, y >= 0, x < width, y < height else { return }
-        cells[(y * width) + x] = ScreenCell(character: char, color: color)
-    }
-
-    mutating func write(_ text: String, color: ANSIColor = .reset, x: Int, y: Int, maxWidth: Int? = nil) {
-        let limit = maxWidth ?? width - x
-        guard limit > 0 else { return }
-        for (index, char) in text.prefix(limit).enumerated() {
-            put(char, color: color, x: x + index, y: y)
-        }
-    }
-
-    func line(_ y: Int) -> String {
-        guard y >= 0, y < height else { return "" }
-        let start = y * width
-        let end = start + width
-        return String(cells[start..<end].map(\.character))
-    }
-}
-
-protocol RenderableEntity {
-    var position: Position { get }
-    var glyph: Character { get }
-    var color: ANSIColor { get }
-}
-
-protocol Scene {
-    func render(into: inout ScreenBuffer, state: GameState)
-    mutating func handle(_ command: ActionCommand, engine: inout GameEngine)
-}
-
 struct GameState {
     var mode: GameMode = .title
     var player: PlayerState
@@ -166,13 +115,6 @@ struct GameState {
     func selectedAdventureSummary() -> String {
         selectedAdventureEntry()?.summary ?? "A dying valley, two shrines, and a final beacon against the dark."
     }
-}
-
-extension EnemyState: RenderableEntity {}
-
-extension NPCState: RenderableEntity {
-    var glyph: Character { glyphSymbol }
-    var color: ANSIColor { glyphColor }
 }
 
 let adventureCatalogEntries: [AdventureCatalogEntry] = {

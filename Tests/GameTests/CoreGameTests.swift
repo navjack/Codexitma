@@ -79,30 +79,22 @@ import Testing
     #expect(QuestSystem.objective(for: quests) == "Recover the Lens Core in the Barrows.")
 }
 
-@Test func inputParserUnderstandsArrowEscape() async throws {
-    let parsed = InputParser.parse(bytes: [27, 91, 67])
-    #expect(parsed == .move(.right))
-}
-
-@Test func inputParserRecognizesDropCommands() async throws {
-    #expect(InputParser.parse(character: "r") == .dropInventoryItem)
+@Test func automationParsersRecognizeDropCommands() async throws {
     #expect(try AutomationCommandParser.parse("drop") == .game(.dropInventoryItem))
 }
 
-@Test func screenBufferRendersExpectedLine() async throws {
-    var buffer = ScreenBuffer(width: 8, height: 2)
-    buffer.write("MERROW", x: 1, y: 0)
-    #expect(buffer.line(0) == " MERROW ")
-}
+@Test func launchOptionsRemainGraphicsOnlyEvenWithLegacyTerminalFlag() async throws {
+    let defaultOptions = try LaunchOptions.parse(arguments: ["Game"])
+    #expect(defaultOptions.target == .interactive)
 
-@Test func launchModeDefaultsToGraphicsButAllowsTerminalOverride() async throws {
-    #expect(LaunchMode.parse(arguments: ["Game"]) == .graphics)
-    #expect(LaunchMode.parse(arguments: ["Game", "--terminal"]) == .terminal)
+    let legacyOptions = try LaunchOptions.parse(arguments: ["Game", "--terminal"])
+    #expect(legacyOptions.target == .interactive)
+    #expect(legacyOptions.graphicsBackend == .native)
 }
 
 @Test func launchOptionsSelectSDLGraphicsBackend() async throws {
     let options = try LaunchOptions.parse(arguments: ["Game", "--sdl"])
-    #expect(options.target == .interactive(.graphics))
+    #expect(options.target == .interactive)
     #expect(options.graphicsBackend == .sdl)
 }
 

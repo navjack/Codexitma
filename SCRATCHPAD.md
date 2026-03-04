@@ -119,3 +119,4 @@
 - After publishing `v0.2.0`, both CI packaging lanes were narrowed to `workflow_dispatch` plus `v*` tag pushes only; normal `main` commits should no longer trigger full macOS/Windows rebuilds.
 - README was refreshed to reflect the SDL/Win64 release path, the macOS-plus-Windows packaging assets, and the new tag/manual-only release workflow.
 - SDL editor exit now fully consumes its close key; leaving the in-game SDL editor no longer forwards `Q` or `Esc` into the live session and accidentally traps the run in pause mode.
+- The old ANSI terminal frontend was removed; the project is now graphics-only, with `--terminal` retained only as a legacy alias that falls back to the native graphics path.

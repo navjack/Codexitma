@@ -1,17 +1,5 @@
 import Foundation
 
-enum LaunchMode: Equatable {
-    case graphics
-    case terminal
-
-    static func parse(arguments: [String]) -> LaunchMode {
-        if arguments.contains("--terminal") {
-            return .terminal
-        }
-        return .graphics
-    }
-}
-
 enum GraphicsVisualTheme: String, CaseIterable, Equatable {
     case gemstone
     case ultima

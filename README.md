@@ -2,14 +2,13 @@
 
 Codexitma is a Swift 6 retro RPG engine with a native macOS frontend, a shipping SDL-based Win64 build, a built-in adventure editor, and a data-driven content pipeline.
 
-It is deliberately styled after early Apple II and Ultima-era computer RPGs, with a modern codebase underneath: native graphics mode, an SDL cross-platform renderer, terminal mode, JSON content packs, deterministic automation hooks, and an in-game editor workflow.
+It is deliberately styled after early Apple II and Ultima-era computer RPGs, with a modern codebase underneath: native graphics mode, an SDL cross-platform renderer, JSON content packs, deterministic automation hooks, and an in-game editor workflow.
 
 ## What It Is
 
 - Graphics-first macOS RPG with low-resolution retro presentation
 - Native AppKit/SwiftUI windowed mode on macOS
 - SDL3 graphics frontend used for cross-platform rendering and the Win64 release build
-- ANSI terminal mode for the original text-mode presentation
 - Three graphics styles on the same game state:
   - `Gemstone`
   - `Ultima`
@@ -66,12 +65,6 @@ Build and run the default graphics mode:
 
 ```sh
 swift run Game
-```
-
-Run the ANSI terminal mode:
-
-```sh
-swift run Game --terminal
 ```
 
 Launch directly into the graphical editor:

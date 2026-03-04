@@ -1,7 +1,7 @@
 import Foundation
 
 enum LaunchTarget: Equatable {
-    case interactive(LaunchMode)
+    case interactive
     case editor
     case script
     case bridge
@@ -29,7 +29,7 @@ struct LaunchOptions: Equatable {
     let playtestAdventureID: AdventureID?
 
     static func parse(arguments: [String]) throws -> LaunchOptions {
-        var target: LaunchTarget = .interactive(LaunchMode.parse(arguments: arguments))
+        var target: LaunchTarget = .interactive
         var graphicsBackend: GraphicsBackend = .native
         var commands: [String] = []
         var emitStepSnapshots = false
@@ -40,12 +40,13 @@ struct LaunchOptions: Equatable {
             let arg = arguments[index]
             switch arg {
             case "--terminal":
-                target = .interactive(.terminal)
+                target = .interactive
+                graphicsBackend = .native
             case "--graphics":
-                target = .interactive(.graphics)
+                target = .interactive
                 graphicsBackend = .native
             case "--sdl":
-                target = .interactive(.graphics)
+                target = .interactive
                 graphicsBackend = .sdl
             case "--editor":
                 target = .editor
