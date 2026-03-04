@@ -6,7 +6,7 @@ It should be treated as the editor-specific companion to `PLAN.md`, not a replac
 
 ## Current State
 
-The editor exists today as a usable foundation, not a finished content pipeline.
+The editor is now a full current-model authoring tool for the data structures Codexitma already supports.
 
 Entry point:
 
@@ -38,11 +38,20 @@ What it can do right now:
   - `Select`
 - Place layered NPC, enemy, interactable, portal, and spawn data directly on the map canvas
 - Select placed objects on the canvas and inspect them in a right-side panel
-- Perform a first pass of inspector editing for:
+- Perform rich inspector editing for:
   - NPC ids, names, and dialogue ids
-  - Enemy ids, names, and core combat stats
-  - Interactable ids, titles, and kinds
-  - Portal destination map retargeting
+  - shop creation for selected NPCs
+  - Enemy ids, names, AI, and core combat stats
+  - Interactable ids, titles, kinds, reward items, and quest flags
+  - Portal destination map, plus destination coordinates
+- Edit non-spatial records through dedicated tabs:
+  - `Dialogues`
+  - `Quest Flow`
+  - `Encounters`
+  - `Shops`
+  - `NPC Roster`
+  - `Enemy Roster`
+- Save and immediately launch a live playtest session with `SAVE + PLAYTEST`
 - Export a full external content pack into `~/Library/Application Support/Codexitma/Adventures`
 
 ## Current Export Behavior
@@ -65,7 +74,12 @@ Current blank-template defaults:
 
 - One starter map
 - One sample quest stage
-- Empty arrays for dialogues, encounters, NPCs, enemies, and shops unless the editor started from an existing adventure
+- One starter dialogue
+- One starter NPC
+- One starter enemy
+- One starter encounter
+- One starter shop linked to the starter NPC
+- One starter interactable
 
 ## What Is Already Correct
 
@@ -81,27 +95,17 @@ This means the editor already has the correct high-level shape for future expans
 
 ## What Is Not Yet Implemented
 
-The current UI does not yet expose most of the authored content model.
+The editor now covers the full currently-shipped content model at a practical level, but a few advanced authoring fields are still missing.
 
-Missing GUI authoring features:
+Remaining gaps:
 
-- Dialogue editing
-- Quest-stage editing
-- Encounter-table editing
-- Shop editing
-- Assigning a shop to an NPC
-- Assigning flags, rewards, or quest hooks through an inspector
-- Editing portal coordinates directly beyond map-retargeting
-- Rich inspector editing for:
-  - quest flag requirements
-  - quest flag grants
-  - reward items
-  - reward marks
-  - merchant bindings
-  - AI settings
-- Visual list management for non-map records such as dialogues, encounters, and shops
+- Reward `marks` on interactables
+- Portal `requiredFlag` and `blockedMessage`
+- Enemy respawn / one-shot authoring beyond the current `active` default
+- Richer encounter-to-map placement workflows beyond the current record editor
+- Deep validation with inline error surfacing before export
 
-Right now, those structures exist in the editor document and exporter, but most of them are not editable through the GUI.
+These are refinements on top of a working authoring suite, not foundational editor gaps.
 
 ## Data Model Truth
 
@@ -255,7 +259,7 @@ Status:
 
 Status:
 
-- In progress
+- Implemented
 
 - Add a right-side inspector panel
 - Allow editing of the selected object's fields
@@ -263,16 +267,28 @@ Status:
 
 ### Milestone 3: Data Tabs
 
+Status:
+
+- Implemented
+
 - Add editable list/table views for dialogues, quest flow, encounters, and shops
 - Support creating, deleting, and renaming content ids safely
 - Add reference pickers instead of free-form id typing where practical
 
 ### Milestone 4: Template Quality
 
+Status:
+
+- Implemented
+
 - Upgrade blank-pack generation so new adventures ship with meaningful example records across all supported files
 - Make starter templates self-consistent and immediately playable
 
 ### Milestone 5: Live Playtest
+
+Status:
+
+- Implemented
 
 - Add an editor-side "Playtest" button
 - Export to a temp or staging pack
@@ -290,20 +306,16 @@ These would be useful later, but they should not block the current editor expans
 
 ## Summary
 
-The editor is already a real starting point, but it is still primarily a terrain and metadata tool.
+The editor has crossed the line from "map painter" into a full graphical authoring suite for the adventure data Codexitma currently knows how to load.
 
-To become the full adventure-authoring system Codexitma needs, it must evolve from:
+It now supports:
 
-- "map painter that exports packs"
+- terrain authoring
+- layered entity placement
+- map graph editing
+- inspector-driven object edits
+- non-spatial content record editing
+- coherent starter-pack generation
+- one-click save and live playtest
 
-into:
-
-- "complete graphical authoring suite for all supported adventure data"
-
-The next build targets are straightforward:
-
-1. Add object placement tools.
-2. Add an inspector.
-3. Add non-spatial data tabs.
-4. Improve starter templates.
-5. Add live playtesting.
+The next build targets are no longer about core completeness. They are about deeper validation, more advanced rule fields, and convenience workflows on top of the now-complete foundation.

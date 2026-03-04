@@ -107,6 +107,42 @@ enum EditorTool: String, CaseIterable, Identifiable {
     }
 }
 
+enum EditorContentTab: String, CaseIterable, Identifiable {
+    case maps
+    case dialogues
+    case questFlow
+    case encounters
+    case shops
+    case npcs
+    case enemies
+
+    var id: String { rawValue }
+
+    var shortLabel: String {
+        switch self {
+        case .maps: return "MAPS"
+        case .dialogues: return "DIALOG"
+        case .questFlow: return "QUEST"
+        case .encounters: return "ENCOUN"
+        case .shops: return "SHOPS"
+        case .npcs: return "NPCS"
+        case .enemies: return "ENEMIES"
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .maps: return "Maps"
+        case .dialogues: return "Dialogues"
+        case .questFlow: return "Quest Flow"
+        case .encounters: return "Encounters"
+        case .shops: return "Shops"
+        case .npcs: return "NPC Roster"
+        case .enemies: return "Enemy Roster"
+        }
+    }
+}
+
 enum EditorSelectionKind: Equatable {
     case tile
     case spawn
@@ -131,24 +167,33 @@ fileprivate struct EditorCanvasOverlay {
 final class AdventureEditorStore: ObservableObject {
     @Published var selectedCatalogID: AdventureID?
     @Published var document: EditableAdventureDocument
+    @Published var selectedContentTab: EditorContentTab = .maps
     @Published var selectedTool: EditorTool = .terrain
     @Published var selectedGlyph: Character = "#"
     @Published var selectedInteractableKind: InteractableKind = .chest
     @Published var selectedCanvasSelection: EditorCanvasSelection?
+    @Published var selectedDialogueIndex = 0
+    @Published var selectedQuestStageIndex = 0
+    @Published var selectedEncounterIndex = 0
+    @Published var selectedShopIndex = 0
+    @Published var selectedShopOfferIndex = 0
     @Published var statusLine = "READY. FORK AN ADVENTURE OR CREATE A NEW TEMPLATE."
 
     let catalog: [AdventureCatalogEntry]
 
     private let library: GameContentLibrary
     private let exporter: AdventurePackExporter
+    private let playtestLauncher: @MainActor (AdventureID) throws -> Void
 
     init(
         library: GameContentLibrary,
-        exporter: AdventurePackExporter = AdventurePackExporter()
+        exporter: AdventurePackExporter = AdventurePackExporter(),
+        playtestLauncher: @MainActor @escaping (AdventureID) throws -> Void = AdventureEditorStore.defaultPlaytestLauncher
     ) {
         self.library = library
         self.catalog = library.catalog
         self.exporter = exporter
+        self.playtestLauncher = playtestLauncher
 
         if let first = library.catalog.first {
             self.selectedCatalogID = first.id
@@ -275,6 +320,41 @@ final class AdventureEditorStore: ObservableObject {
         return map.portals[index]
     }
 
+    var selectedDialogue: DialogueNode? {
+        guard !document.dialogues.isEmpty else { return nil }
+        let index = max(0, min(selectedDialogueIndex, document.dialogues.count - 1))
+        return document.dialogues[index]
+    }
+
+    var selectedQuestStage: QuestStageDefinition? {
+        guard !document.questFlow.stages.isEmpty else { return nil }
+        let index = max(0, min(selectedQuestStageIndex, document.questFlow.stages.count - 1))
+        return document.questFlow.stages[index]
+    }
+
+    var selectedEncounter: EncounterDefinition? {
+        guard !document.encounters.isEmpty else { return nil }
+        let index = max(0, min(selectedEncounterIndex, document.encounters.count - 1))
+        return document.encounters[index]
+    }
+
+    var selectedShop: ShopDefinition? {
+        guard !document.shops.isEmpty else { return nil }
+        let index = max(0, min(selectedShopIndex, document.shops.count - 1))
+        return document.shops[index]
+    }
+
+    var selectedShopOffer: ShopOffer? {
+        guard let shop = selectedShop, !shop.offers.isEmpty else { return nil }
+        let index = max(0, min(selectedShopOfferIndex, shop.offers.count - 1))
+        return shop.offers[index]
+    }
+
+    var selectedNPCShop: ShopDefinition? {
+        guard let npc = selectedNPC else { return nil }
+        return document.shops.first(where: { $0.merchantID == npc.id })
+    }
+
     func selectCatalogAdventure(_ adventureID: AdventureID) {
         selectedCatalogID = adventureID
         let entry = library.entry(for: adventureID) ?? AdventureCatalogEntry(
@@ -286,6 +366,8 @@ final class AdventureEditorStore: ObservableObject {
             introLine: ""
         )
         document = Self.makeDocument(entry: entry, content: library.content(for: adventureID))
+        resetSecondarySelections()
+        selectedContentTab = .maps
         selectedCanvasSelection = nil
         statusLine = "LOADED \(entry.title.uppercased()) FOR EDITING."
     }
@@ -293,6 +375,8 @@ final class AdventureEditorStore: ObservableObject {
     func createBlankAdventure() {
         selectedCatalogID = nil
         document = Self.makeBlankDocument()
+        resetSecondarySelections()
+        selectedContentTab = .maps
         selectedCanvasSelection = nil
         statusLine = "BLANK TEMPLATE CREATED. SAVE IT TO EXPORT A NEW ADVENTURE PACK."
     }
@@ -306,9 +390,25 @@ final class AdventureEditorStore: ObservableObject {
         }
     }
 
+    func saveAndPlaytestCurrentPack() {
+        do {
+            _ = try exporter.save(document: document)
+            try playtestLauncher(AdventureID(rawValue: document.adventureID))
+            statusLine = "PLAYTEST LAUNCHED FOR \(document.title.uppercased())."
+        } catch {
+            statusLine = "PLAYTEST FAILED: \(String(describing: error).uppercased())"
+        }
+    }
+
+    func selectContentTab(_ tab: EditorContentTab) {
+        selectedContentTab = tab
+        statusLine = "\(tab.title.uppercased()) TAB READY."
+    }
+
     func selectMap(index: Int) {
         guard !document.maps.isEmpty else { return }
         document.selectedMapIndex = max(0, min(index, document.maps.count - 1))
+        selectedContentTab = .maps
         selectedCanvasSelection = nil
         statusLine = "EDITING \(document.maps[document.selectedMapIndex].name.uppercased())."
     }
@@ -506,6 +606,15 @@ final class AdventureEditorStore: ObservableObject {
     func updateSelectedNPCName(_ value: String) {
         guard let index = selectedNPCIndex else { return }
         document.npcs[index].name = value
+        for shopIndex in document.shops.indices where document.shops[shopIndex].merchantID == document.npcs[index].id {
+            document.shops[shopIndex] = ShopDefinition(
+                id: document.shops[shopIndex].id,
+                merchantID: document.shops[shopIndex].merchantID,
+                merchantName: value,
+                introLine: document.shops[shopIndex].introLine,
+                offers: document.shops[shopIndex].offers
+            )
+        }
     }
 
     func updateSelectedNPCDialogueID(_ value: String) {
@@ -571,6 +680,11 @@ final class AdventureEditorStore: ObservableObject {
         document.enemies[index].defense = max(0, value)
     }
 
+    func updateSelectedEnemyAI(_ ai: AIKind) {
+        guard let index = selectedEnemyIndex else { return }
+        document.enemies[index].ai = ai
+    }
+
     func updateSelectedInteractableID(_ value: String) {
         guard case .interactable(let oldID) = selectedCanvasSelection?.kind,
               let index = selectedInteractableIndex else {
@@ -627,6 +741,51 @@ final class AdventureEditorStore: ObservableObject {
         selectedInteractableKind = kind
     }
 
+    func updateSelectedInteractableRewardItem(_ itemID: ItemID?) {
+        guard let index = selectedInteractableIndex else { return }
+        let interactable = document.maps[document.selectedMapIndex].interactables[index]
+        document.maps[document.selectedMapIndex].interactables[index] = InteractableDefinition(
+            id: interactable.id,
+            kind: interactable.kind,
+            position: interactable.position,
+            title: interactable.title,
+            lines: interactable.lines,
+            rewardItem: itemID,
+            requiredFlag: interactable.requiredFlag,
+            grantsFlag: interactable.grantsFlag
+        )
+    }
+
+    func updateSelectedInteractableRequiredFlag(_ flag: QuestFlag?) {
+        guard let index = selectedInteractableIndex else { return }
+        let interactable = document.maps[document.selectedMapIndex].interactables[index]
+        document.maps[document.selectedMapIndex].interactables[index] = InteractableDefinition(
+            id: interactable.id,
+            kind: interactable.kind,
+            position: interactable.position,
+            title: interactable.title,
+            lines: interactable.lines,
+            rewardItem: interactable.rewardItem,
+            requiredFlag: flag,
+            grantsFlag: interactable.grantsFlag
+        )
+    }
+
+    func updateSelectedInteractableGrantsFlag(_ flag: QuestFlag?) {
+        guard let index = selectedInteractableIndex else { return }
+        let interactable = document.maps[document.selectedMapIndex].interactables[index]
+        document.maps[document.selectedMapIndex].interactables[index] = InteractableDefinition(
+            id: interactable.id,
+            kind: interactable.kind,
+            position: interactable.position,
+            title: interactable.title,
+            lines: interactable.lines,
+            rewardItem: interactable.rewardItem,
+            requiredFlag: interactable.requiredFlag,
+            grantsFlag: flag
+        )
+    }
+
     func updateSelectedPortalDestinationMap(_ mapID: String) {
         guard let index = selectedPortalIndex,
               let destinationMap = document.maps.first(where: { $0.id == mapID }) else {
@@ -655,6 +814,488 @@ final class AdventureEditorStore: ObservableObject {
         )
     }
 
+    func updateSelectedPortalDestinationX(_ value: Int) {
+        guard let index = selectedPortalIndex else { return }
+        let portal = document.maps[document.selectedMapIndex].portals[index]
+        document.maps[document.selectedMapIndex].portals[index] = Portal(
+            from: portal.from,
+            toMap: portal.toMap,
+            toPosition: Position(x: max(0, value), y: portal.toPosition.y),
+            requiredFlag: portal.requiredFlag,
+            blockedMessage: portal.blockedMessage
+        )
+    }
+
+    func updateSelectedPortalDestinationY(_ value: Int) {
+        guard let index = selectedPortalIndex else { return }
+        let portal = document.maps[document.selectedMapIndex].portals[index]
+        document.maps[document.selectedMapIndex].portals[index] = Portal(
+            from: portal.from,
+            toMap: portal.toMap,
+            toPosition: Position(x: portal.toPosition.x, y: max(0, value)),
+            requiredFlag: portal.requiredFlag,
+            blockedMessage: portal.blockedMessage
+        )
+    }
+
+    func ensureShopForSelectedNPC() {
+        guard let npc = selectedNPC else { return }
+        if let existingIndex = document.shops.firstIndex(where: { $0.merchantID == npc.id }) {
+            selectedShopIndex = existingIndex
+            selectedShopOfferIndex = 0
+            selectedContentTab = .shops
+            statusLine = "OPENED \(document.shops[existingIndex].id.uppercased()) FOR \(npc.name.uppercased())."
+            return
+        }
+
+        let newID = nextIdentifier(prefix: "\(npc.id)_shop", existing: document.shops.map(\.id))
+        let shop = ShopDefinition(
+            id: newID,
+            merchantID: npc.id,
+            merchantName: npc.name,
+            introLine: "The merchant spreads a small cloth of goods.",
+            offers: [
+                ShopOffer(
+                    id: "\(newID)_offer",
+                    itemID: .healingTonic,
+                    price: 2,
+                    blurb: "A humble tonic for field work.",
+                    repeatable: true
+                )
+            ]
+        )
+        document.shops.append(shop)
+        selectedShopIndex = document.shops.count - 1
+        selectedShopOfferIndex = 0
+        selectedContentTab = .shops
+        statusLine = "CREATED SHOP \(newID.uppercased()) FOR \(npc.name.uppercased())."
+    }
+
+    func focusNPC(id: String) {
+        guard let npc = document.npcs.first(where: { $0.id == id }) else { return }
+        if let mapIndex = document.maps.firstIndex(where: { $0.id == npc.mapID }) {
+            document.selectedMapIndex = mapIndex
+        }
+        selectedCanvasSelection = EditorCanvasSelection(kind: .npc(id: id), position: npc.position)
+        selectedContentTab = .npcs
+        statusLine = "FOCUSED NPC \(npc.name.uppercased())."
+    }
+
+    func focusEnemy(id: String) {
+        guard let enemy = document.enemies.first(where: { $0.id == id }) else { return }
+        if let mapIndex = document.maps.firstIndex(where: { $0.id == enemy.mapID }) {
+            document.selectedMapIndex = mapIndex
+        }
+        selectedCanvasSelection = EditorCanvasSelection(kind: .enemy(id: id), position: enemy.position)
+        selectedContentTab = .enemies
+        statusLine = "FOCUSED ENEMY \(enemy.name.uppercased())."
+    }
+
+    func selectDialogue(index: Int) {
+        guard !document.dialogues.isEmpty else { return }
+        selectedDialogueIndex = max(0, min(index, document.dialogues.count - 1))
+    }
+
+    func addDialogue() {
+        let newID = nextIdentifier(prefix: "dialogue", existing: document.dialogues.map(\.id))
+        document.dialogues.append(
+            DialogueNode(
+                id: newID,
+                speaker: "New Speaker",
+                lines: ["A fresh line waits to be written."]
+            )
+        )
+        selectedDialogueIndex = document.dialogues.count - 1
+        selectedContentTab = .dialogues
+        statusLine = "ADDED DIALOGUE \(newID.uppercased())."
+    }
+
+    func removeSelectedDialogue() {
+        guard !document.dialogues.isEmpty else { return }
+        let removed = document.dialogues.remove(at: max(0, min(selectedDialogueIndex, document.dialogues.count - 1)))
+        if document.dialogues.isEmpty {
+            addDialogue()
+        }
+        selectedDialogueIndex = max(0, min(selectedDialogueIndex, max(0, document.dialogues.count - 1)))
+        let replacementID = document.dialogues.first?.id ?? "dialogue_stub"
+        for index in document.npcs.indices where document.npcs[index].dialogueID == removed.id {
+            document.npcs[index].dialogueID = replacementID
+        }
+        statusLine = "REMOVED DIALOGUE \(removed.id.uppercased())."
+    }
+
+    func updateSelectedDialogueID(_ value: String) {
+        guard let index = selectedDialogueArrayIndex else { return }
+        let oldID = document.dialogues[index].id
+        let newID = nextIdentifier(
+            prefix: value,
+            existing: document.dialogues.enumerated().compactMap { offset, node in
+                offset == index ? nil : node.id
+            }
+        )
+        let dialogue = document.dialogues[index]
+        document.dialogues[index] = DialogueNode(id: newID, speaker: dialogue.speaker, lines: dialogue.lines)
+        for npcIndex in document.npcs.indices where document.npcs[npcIndex].dialogueID == oldID {
+            document.npcs[npcIndex].dialogueID = newID
+        }
+    }
+
+    func updateSelectedDialogueSpeaker(_ value: String) {
+        guard let index = selectedDialogueArrayIndex else { return }
+        let dialogue = document.dialogues[index]
+        document.dialogues[index] = DialogueNode(id: dialogue.id, speaker: value, lines: dialogue.lines)
+    }
+
+    func updateSelectedDialogueLinesText(_ value: String) {
+        guard let index = selectedDialogueArrayIndex else { return }
+        let dialogue = document.dialogues[index]
+        let lines = normalizeLines(from: value)
+        document.dialogues[index] = DialogueNode(id: dialogue.id, speaker: dialogue.speaker, lines: lines)
+    }
+
+    func selectQuestStage(index: Int) {
+        guard !document.questFlow.stages.isEmpty else { return }
+        selectedQuestStageIndex = max(0, min(index, document.questFlow.stages.count - 1))
+    }
+
+    func addQuestStage() {
+        let usedFlags = Set(document.questFlow.stages.map(\.completeWhenFlag))
+        let nextFlag = QuestFlag.allCases.first(where: { !usedFlags.contains($0) }) ?? .metElder
+        let stages = document.questFlow.stages + [
+            QuestStageDefinition(
+                objective: "Define the next milestone.",
+                completeWhenFlag: nextFlag
+            )
+        ]
+        document.questFlow = QuestFlowDefinition(stages: stages, completionText: document.questFlow.completionText)
+        selectedQuestStageIndex = stages.count - 1
+        selectedContentTab = .questFlow
+        statusLine = "ADDED QUEST STAGE \(stages.count)."
+    }
+
+    func removeSelectedQuestStage() {
+        guard document.questFlow.stages.count > 1 else {
+            statusLine = "KEEP AT LEAST ONE QUEST STAGE."
+            return
+        }
+        var stages = document.questFlow.stages
+        stages.remove(at: max(0, min(selectedQuestStageIndex, stages.count - 1)))
+        document.questFlow = QuestFlowDefinition(stages: stages, completionText: document.questFlow.completionText)
+        selectedQuestStageIndex = max(0, min(selectedQuestStageIndex, stages.count - 1))
+    }
+
+    func updateSelectedQuestObjective(_ value: String) {
+        guard let index = selectedQuestStageArrayIndex else { return }
+        var stages = document.questFlow.stages
+        let stage = stages[index]
+        stages[index] = QuestStageDefinition(
+            objective: value,
+            completeWhenFlag: stage.completeWhenFlag
+        )
+        document.questFlow = QuestFlowDefinition(stages: stages, completionText: document.questFlow.completionText)
+    }
+
+    func updateSelectedQuestFlag(_ flag: QuestFlag) {
+        guard let index = selectedQuestStageArrayIndex else { return }
+        var stages = document.questFlow.stages
+        let stage = stages[index]
+        stages[index] = QuestStageDefinition(
+            objective: stage.objective,
+            completeWhenFlag: flag
+        )
+        document.questFlow = QuestFlowDefinition(stages: stages, completionText: document.questFlow.completionText)
+    }
+
+    func updateQuestCompletionText(_ value: String) {
+        document.questFlow = QuestFlowDefinition(
+            stages: document.questFlow.stages,
+            completionText: value
+        )
+    }
+
+    func selectEncounter(index: Int) {
+        guard !document.encounters.isEmpty else { return }
+        selectedEncounterIndex = max(0, min(index, document.encounters.count - 1))
+    }
+
+    func addEncounter() {
+        let enemyID = document.enemies.first?.id ?? "enemy"
+        let newID = nextIdentifier(prefix: "encounter", existing: document.encounters.map(\.id))
+        document.encounters.append(
+            EncounterDefinition(
+                id: newID,
+                enemyID: enemyID,
+                introLine: "A fresh threat enters the path."
+            )
+        )
+        selectedEncounterIndex = document.encounters.count - 1
+        selectedContentTab = .encounters
+        statusLine = "ADDED ENCOUNTER \(newID.uppercased())."
+    }
+
+    func removeSelectedEncounter() {
+        guard !document.encounters.isEmpty else { return }
+        document.encounters.remove(at: max(0, min(selectedEncounterIndex, document.encounters.count - 1)))
+        if document.encounters.isEmpty {
+            addEncounter()
+        } else {
+            selectedEncounterIndex = max(0, min(selectedEncounterIndex, document.encounters.count - 1))
+        }
+    }
+
+    func updateSelectedEncounterID(_ value: String) {
+        guard let index = selectedEncounterArrayIndex else { return }
+        let newID = nextIdentifier(
+            prefix: value,
+            existing: document.encounters.enumerated().compactMap { offset, encounter in
+                offset == index ? nil : encounter.id
+            }
+        )
+        let encounter = document.encounters[index]
+        document.encounters[index] = EncounterDefinition(id: newID, enemyID: encounter.enemyID, introLine: encounter.introLine)
+    }
+
+    func updateSelectedEncounterEnemyID(_ value: String) {
+        guard let index = selectedEncounterArrayIndex else { return }
+        let encounter = document.encounters[index]
+        document.encounters[index] = EncounterDefinition(
+            id: encounter.id,
+            enemyID: sanitizeIdentifier(value),
+            introLine: encounter.introLine
+        )
+    }
+
+    func updateSelectedEncounterIntro(_ value: String) {
+        guard let index = selectedEncounterArrayIndex else { return }
+        let encounter = document.encounters[index]
+        document.encounters[index] = EncounterDefinition(
+            id: encounter.id,
+            enemyID: encounter.enemyID,
+            introLine: value
+        )
+    }
+
+    func selectShop(index: Int) {
+        guard !document.shops.isEmpty else { return }
+        selectedShopIndex = max(0, min(index, document.shops.count - 1))
+        selectedShopOfferIndex = 0
+    }
+
+    func addShop() {
+        let merchant = document.npcs.first
+        let merchantID = merchant?.id ?? "merchant"
+        let merchantName = merchant?.name ?? "New Merchant"
+        let newID = nextIdentifier(prefix: "shop", existing: document.shops.map(\.id))
+        document.shops.append(
+            ShopDefinition(
+                id: newID,
+                merchantID: merchantID,
+                merchantName: merchantName,
+                introLine: "A fresh ledger waits to be stocked.",
+                offers: [
+                    ShopOffer(
+                        id: "\(newID)_offer",
+                        itemID: .healingTonic,
+                        price: 2,
+                        blurb: "A dependable staple.",
+                        repeatable: true
+                    )
+                ]
+            )
+        )
+        selectedShopIndex = document.shops.count - 1
+        selectedShopOfferIndex = 0
+        selectedContentTab = .shops
+        statusLine = "ADDED SHOP \(newID.uppercased())."
+    }
+
+    func removeSelectedShop() {
+        guard !document.shops.isEmpty else { return }
+        document.shops.remove(at: max(0, min(selectedShopIndex, document.shops.count - 1)))
+        if document.shops.isEmpty {
+            addShop()
+        } else {
+            selectedShopIndex = max(0, min(selectedShopIndex, document.shops.count - 1))
+            selectedShopOfferIndex = 0
+        }
+    }
+
+    func updateSelectedShopID(_ value: String) {
+        guard let index = selectedShopArrayIndex else { return }
+        let newID = nextIdentifier(
+            prefix: value,
+            existing: document.shops.enumerated().compactMap { offset, shop in
+                offset == index ? nil : shop.id
+            }
+        )
+        let shop = document.shops[index]
+        document.shops[index] = ShopDefinition(
+            id: newID,
+            merchantID: shop.merchantID,
+            merchantName: shop.merchantName,
+            introLine: shop.introLine,
+            offers: shop.offers.enumerated().map { offerIndex, offer in
+                ShopOffer(
+                    id: offerIndex == 0 ? "\(newID)_offer" : offer.id.replacingOccurrences(of: shop.id, with: newID),
+                    itemID: offer.itemID,
+                    price: offer.price,
+                    blurb: offer.blurb,
+                    repeatable: offer.repeatable
+                )
+            }
+        )
+    }
+
+    func updateSelectedShopIntro(_ value: String) {
+        guard let index = selectedShopArrayIndex else { return }
+        let shop = document.shops[index]
+        document.shops[index] = ShopDefinition(
+            id: shop.id,
+            merchantID: shop.merchantID,
+            merchantName: shop.merchantName,
+            introLine: value,
+            offers: shop.offers
+        )
+    }
+
+    func updateSelectedShopMerchantID(_ merchantID: String) {
+        guard let index = selectedShopArrayIndex else { return }
+        let npc = document.npcs.first(where: { $0.id == merchantID })
+        let shop = document.shops[index]
+        document.shops[index] = ShopDefinition(
+            id: shop.id,
+            merchantID: merchantID,
+            merchantName: npc?.name ?? shop.merchantName,
+            introLine: shop.introLine,
+            offers: shop.offers
+        )
+    }
+
+    func addShopOffer() {
+        guard let index = selectedShopArrayIndex else { return }
+        let shop = document.shops[index]
+        let offerID = nextIdentifier(prefix: "\(shop.id)_offer", existing: shop.offers.map(\.id))
+        let offers = shop.offers + [
+            ShopOffer(
+                id: offerID,
+                itemID: .healingTonic,
+                price: 2,
+                blurb: "A new item waits for a description.",
+                repeatable: true
+            )
+        ]
+        document.shops[index] = ShopDefinition(
+            id: shop.id,
+            merchantID: shop.merchantID,
+            merchantName: shop.merchantName,
+            introLine: shop.introLine,
+            offers: offers
+        )
+        selectedShopOfferIndex = offers.count - 1
+    }
+
+    func removeSelectedShopOffer() {
+        guard let shopIndex = selectedShopArrayIndex,
+              let offerIndex = selectedShopOfferArrayIndex else { return }
+        var offers = document.shops[shopIndex].offers
+        guard offers.count > 1 else {
+            statusLine = "KEEP AT LEAST ONE SHOP OFFER."
+            return
+        }
+        offers.remove(at: offerIndex)
+        let shop = document.shops[shopIndex]
+        document.shops[shopIndex] = ShopDefinition(
+            id: shop.id,
+            merchantID: shop.merchantID,
+            merchantName: shop.merchantName,
+            introLine: shop.introLine,
+            offers: offers
+        )
+        selectedShopOfferIndex = max(0, min(selectedShopOfferIndex, offers.count - 1))
+    }
+
+    func selectShopOffer(index: Int) {
+        guard let shop = selectedShop, !shop.offers.isEmpty else { return }
+        selectedShopOfferIndex = max(0, min(index, shop.offers.count - 1))
+    }
+
+    func updateSelectedShopOfferID(_ value: String) {
+        guard let shopIndex = selectedShopArrayIndex,
+              let offerIndex = selectedShopOfferArrayIndex else { return }
+        let shop = document.shops[shopIndex]
+        let newID = nextIdentifier(
+            prefix: value,
+            existing: shop.offers.enumerated().compactMap { offset, offer in
+                offset == offerIndex ? nil : offer.id
+            }
+        )
+        replaceShopOffer(at: offerIndex, inShop: shopIndex) { offer in
+            ShopOffer(
+                id: newID,
+                itemID: offer.itemID,
+                price: offer.price,
+                blurb: offer.blurb,
+                repeatable: offer.repeatable
+            )
+        }
+    }
+
+    func updateSelectedShopOfferItemID(_ value: ItemID) {
+        guard let shopIndex = selectedShopArrayIndex,
+              let offerIndex = selectedShopOfferArrayIndex else { return }
+        replaceShopOffer(at: offerIndex, inShop: shopIndex) { offer in
+            ShopOffer(
+                id: offer.id,
+                itemID: value,
+                price: offer.price,
+                blurb: offer.blurb,
+                repeatable: offer.repeatable
+            )
+        }
+    }
+
+    func updateSelectedShopOfferPrice(_ value: Int) {
+        guard let shopIndex = selectedShopArrayIndex,
+              let offerIndex = selectedShopOfferArrayIndex else { return }
+        replaceShopOffer(at: offerIndex, inShop: shopIndex) { offer in
+            ShopOffer(
+                id: offer.id,
+                itemID: offer.itemID,
+                price: max(0, value),
+                blurb: offer.blurb,
+                repeatable: offer.repeatable
+            )
+        }
+    }
+
+    func updateSelectedShopOfferBlurb(_ value: String) {
+        guard let shopIndex = selectedShopArrayIndex,
+              let offerIndex = selectedShopOfferArrayIndex else { return }
+        replaceShopOffer(at: offerIndex, inShop: shopIndex) { offer in
+            ShopOffer(
+                id: offer.id,
+                itemID: offer.itemID,
+                price: offer.price,
+                blurb: value,
+                repeatable: offer.repeatable
+            )
+        }
+    }
+
+    func updateSelectedShopOfferRepeatable(_ value: Bool) {
+        guard let shopIndex = selectedShopArrayIndex,
+              let offerIndex = selectedShopOfferArrayIndex else { return }
+        replaceShopOffer(at: offerIndex, inShop: shopIndex) { offer in
+            ShopOffer(
+                id: offer.id,
+                itemID: offer.itemID,
+                price: offer.price,
+                blurb: offer.blurb,
+                repeatable: value
+            )
+        }
+    }
+
     private func sanitizeIdentifier(_ value: String) -> String {
         let filtered = value
             .lowercased()
@@ -673,6 +1314,14 @@ final class AdventureEditorStore: ObservableObject {
     private func sanitizeFolderName(_ value: String) -> String {
         let safe = sanitizeIdentifier(value)
         return safe.isEmpty ? "new_adventure" : safe
+    }
+
+    private func resetSecondarySelections() {
+        selectedDialogueIndex = 0
+        selectedQuestStageIndex = 0
+        selectedEncounterIndex = 0
+        selectedShopIndex = 0
+        selectedShopOfferIndex = 0
     }
 
     private var selectedNPCIndex: Int? {
@@ -694,6 +1343,31 @@ final class AdventureEditorStore: ObservableObject {
         guard case .portal(let index) = selectedCanvasSelection?.kind else { return nil }
         guard index >= 0, index < document.maps[document.selectedMapIndex].portals.count else { return nil }
         return index
+    }
+
+    private var selectedDialogueArrayIndex: Int? {
+        guard !document.dialogues.isEmpty else { return nil }
+        return max(0, min(selectedDialogueIndex, document.dialogues.count - 1))
+    }
+
+    private var selectedQuestStageArrayIndex: Int? {
+        guard !document.questFlow.stages.isEmpty else { return nil }
+        return max(0, min(selectedQuestStageIndex, document.questFlow.stages.count - 1))
+    }
+
+    private var selectedEncounterArrayIndex: Int? {
+        guard !document.encounters.isEmpty else { return nil }
+        return max(0, min(selectedEncounterIndex, document.encounters.count - 1))
+    }
+
+    private var selectedShopArrayIndex: Int? {
+        guard !document.shops.isEmpty else { return nil }
+        return max(0, min(selectedShopIndex, document.shops.count - 1))
+    }
+
+    private var selectedShopOfferArrayIndex: Int? {
+        guard let shop = selectedShop, !shop.offers.isEmpty else { return nil }
+        return max(0, min(selectedShopOfferIndex, shop.offers.count - 1))
     }
 
     private func placeNPC(at position: Position) {
@@ -924,6 +1598,36 @@ final class AdventureEditorStore: ObservableObject {
         return component ?? (document.npcs.count + document.enemies.count + 1)
     }
 
+    private func replaceShopOffer(at offerIndex: Int, inShop shopIndex: Int, transform: (ShopOffer) -> ShopOffer) {
+        let shop = document.shops[shopIndex]
+        var offers = shop.offers
+        offers[offerIndex] = transform(offers[offerIndex])
+        document.shops[shopIndex] = ShopDefinition(
+            id: shop.id,
+            merchantID: shop.merchantID,
+            merchantName: shop.merchantName,
+            introLine: shop.introLine,
+            offers: offers
+        )
+    }
+
+    private func normalizeLines(from value: String) -> [String] {
+        let lines = value
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        return lines.isEmpty ? ["..."] : lines
+    }
+
+    private static func defaultPlaytestLauncher(adventureID: AdventureID) throws {
+        let executableURL = Bundle.main.executableURL
+            ?? URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL
+        let process = Process()
+        process.executableURL = executableURL
+        process.arguments = ["--graphics", "--playtest", adventureID.rawValue]
+        try process.run()
+    }
+
     private func glyphAt(_ position: Position, in map: EditableMap) -> Character {
         guard position.y >= 0, position.y < map.lines.count else { return "." }
         let row = Array(map.lines[position.y])
@@ -1031,7 +1735,54 @@ final class AdventureEditorStore: ObservableObject {
     }
 
     private static func makeBlankDocument() -> EditableAdventureDocument {
-        EditableAdventureDocument(
+        let starterDialogue = DialogueNode(
+            id: "guide_intro",
+            speaker: "Guide",
+            lines: [
+                "This pack is yours to reshape.",
+                "Paint the land, move the people, and write a better fate."
+            ]
+        )
+        let starterNPC = NPCState(
+            id: "guide_keeper",
+            name: "Guide Keeper",
+            position: Position(x: 3, y: 2),
+            mapID: "merrow_village",
+            dialogueID: starterDialogue.id,
+            glyphSymbol: "&",
+            glyphColor: .yellow,
+            dialogueState: 0
+        )
+        let starterEnemy = EnemyState(
+            id: "field_shade",
+            name: "Field Shade",
+            position: Position(x: 12, y: 6),
+            hp: 8,
+            maxHP: 8,
+            attack: 3,
+            defense: 1,
+            ai: .stalk,
+            glyph: "g",
+            color: .red,
+            mapID: "merrow_village",
+            active: true
+        )
+        let starterShop = ShopDefinition(
+            id: "guide_goods",
+            merchantID: starterNPC.id,
+            merchantName: starterNPC.name,
+            introLine: "A simple bench of wares proves the shop system is alive.",
+            offers: [
+                ShopOffer(
+                    id: "guide_goods_tonic",
+                    itemID: .healingTonic,
+                    price: 2,
+                    blurb: "A starter tonic for quick testing.",
+                    repeatable: true
+                )
+            ]
+        )
+        return EditableAdventureDocument(
             folderName: "new_adventure",
             adventureID: "new_adventure",
             title: "New Adventure",
@@ -1044,7 +1795,18 @@ final class AdventureEditorStore: ObservableObject {
                     lines: makeStarterMapLines(),
                     spawn: Position(x: 2, y: 2),
                     portals: [],
-                    interactables: []
+                    interactables: [
+                        InteractableDefinition(
+                            id: "starter_chest",
+                            kind: .chest,
+                            position: Position(x: 6, y: 4),
+                            title: "Starter Cache",
+                            lines: ["A small cache sits here for testing rewards."],
+                            rewardItem: .healingTonic,
+                            requiredFlag: nil,
+                            grantsFlag: nil
+                        )
+                    ]
                 )
             ],
             selectedMapIndex: 0,
@@ -1057,11 +1819,17 @@ final class AdventureEditorStore: ObservableObject {
                 ],
                 completionText: "The first chapter closes."
             ),
-            dialogues: [],
-            encounters: [],
-            npcs: [],
-            enemies: [],
-            shops: []
+            dialogues: [starterDialogue],
+            encounters: [
+                EncounterDefinition(
+                    id: "starter_skirmish",
+                    enemyID: starterEnemy.id,
+                    introLine: "A starter skirmish proves the encounter table is wired."
+                )
+            ],
+            npcs: [starterNPC],
+            enemies: [starterEnemy],
+            shops: [starterShop]
         )
     }
 
@@ -1246,11 +2014,8 @@ struct AdventureEditorRootView: View {
 
                     VStack(spacing: 12) {
                         metadataPanel
-                        HStack(alignment: .top, spacing: 12) {
-                            mapListPanel
-                                .frame(width: 240)
-                            mapEditorPanel
-                        }
+                        contentTabBar
+                        contentPanel
                     }
                 }
 
@@ -1266,6 +2031,10 @@ struct AdventureEditorRootView: View {
                 .font(.system(size: 20, weight: .bold, design: .monospaced))
                 .foregroundStyle(palette.title)
             Spacer()
+            Button("SAVE + PLAYTEST") {
+                store.saveAndPlaytestCurrentPack()
+            }
+            .buttonStyle(EditorButtonStyle(background: palette.title))
             Button("SAVE PACK") {
                 store.saveCurrentPack()
             }
@@ -1401,6 +2170,50 @@ struct AdventureEditorRootView: View {
                     .buttonStyle(EditorButtonStyle(background: palette.panelAlt))
                 }
             }
+        }
+    }
+
+    private var contentTabBar: some View {
+        EditorPanel(title: "EDITOR DATA", palette: palette) {
+            HStack(spacing: 6) {
+                ForEach(EditorContentTab.allCases) { tab in
+                    Button {
+                        store.selectContentTab(tab)
+                    } label: {
+                        Text(tab.shortLabel)
+                            .frame(minWidth: 64)
+                    }
+                    .buttonStyle(
+                        EditorButtonStyle(
+                            background: store.selectedContentTab == tab ? palette.title : palette.panelAlt
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var contentPanel: some View {
+        switch store.selectedContentTab {
+        case .maps:
+            HStack(alignment: .top, spacing: 12) {
+                mapListPanel
+                    .frame(width: 240)
+                mapEditorPanel
+            }
+        case .dialogues:
+            dialoguesPanel
+        case .questFlow:
+            questFlowPanel
+        case .encounters:
+            encountersPanel
+        case .shops:
+            shopsPanel
+        case .npcs:
+            npcRosterPanel
+        case .enemies:
+            enemyRosterPanel
         }
     }
 
@@ -1636,6 +2449,516 @@ struct AdventureEditorRootView: View {
         }
     }
 
+    private var dialoguesPanel: some View {
+        HStack(alignment: .top, spacing: 12) {
+            EditorPanel(title: "DIALOGUES", palette: palette) {
+                VStack(alignment: .leading, spacing: 8) {
+                    ScrollView {
+                        VStack(spacing: 6) {
+                            ForEach(Array(store.document.dialogues.enumerated()), id: \.element.id) { index, dialogue in
+                                Button {
+                                    store.selectDialogue(index: index)
+                                } label: {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(dialogue.id.uppercased())
+                                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                        Text(dialogue.speaker)
+                                            .font(.system(size: 9, weight: .regular, design: .monospaced))
+                                            .opacity(0.78)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(8)
+                                    .background(store.selectedDialogueIndex == index ? palette.selection : palette.panelAlt)
+                                    .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    .frame(maxHeight: 360)
+
+                    HStack(spacing: 8) {
+                        Button("ADD") {
+                            store.addDialogue()
+                        }
+                        .buttonStyle(EditorButtonStyle(background: palette.panelAlt))
+
+                        Button("DROP") {
+                            store.removeSelectedDialogue()
+                        }
+                        .buttonStyle(EditorButtonStyle(background: palette.panelAlt))
+                    }
+                }
+            }
+            .frame(width: 260)
+
+            EditorPanel(title: "DIALOGUE EDITOR", palette: palette) {
+                if let dialogue = store.selectedDialogue {
+                    VStack(alignment: .leading, spacing: 8) {
+                        labeledField("DIALOGUE ID", text: Binding(
+                            get: { store.selectedDialogue?.id ?? dialogue.id },
+                            set: { store.updateSelectedDialogueID($0) }
+                        ))
+
+                        labeledField("SPEAKER", text: Binding(
+                            get: { store.selectedDialogue?.speaker ?? dialogue.speaker },
+                            set: { store.updateSelectedDialogueSpeaker($0) }
+                        ))
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("LINES")
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .foregroundStyle(palette.label)
+                            TextEditor(text: Binding(
+                                get: { (store.selectedDialogue?.lines ?? dialogue.lines).joined(separator: "\n") },
+                                set: { store.updateSelectedDialogueLinesText($0) }
+                            ))
+                            .font(.system(size: 11, weight: .regular, design: .monospaced))
+                            .scrollContentBackground(.hidden)
+                            .foregroundStyle(palette.text)
+                            .frame(minHeight: 220)
+                            .padding(6)
+                            .background(palette.panelAlt)
+                            .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
+                        }
+                    }
+                } else {
+                    emptyEditorLabel("NO DIALOGUE IS AVAILABLE.")
+                }
+            }
+        }
+    }
+
+    private var questFlowPanel: some View {
+        HStack(alignment: .top, spacing: 12) {
+            EditorPanel(title: "QUEST STAGES", palette: palette) {
+                VStack(alignment: .leading, spacing: 8) {
+                    ScrollView {
+                        VStack(spacing: 6) {
+                            ForEach(Array(store.document.questFlow.stages.enumerated()), id: \.offset) { index, stage in
+                                Button {
+                                    store.selectQuestStage(index: index)
+                                } label: {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("STAGE \(index + 1)")
+                                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                        Text(stage.objective)
+                                            .font(.system(size: 9, weight: .regular, design: .monospaced))
+                                            .lineLimit(2)
+                                            .opacity(0.78)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(8)
+                                    .background(store.selectedQuestStageIndex == index ? palette.selection : palette.panelAlt)
+                                    .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    .frame(maxHeight: 360)
+
+                    HStack(spacing: 8) {
+                        Button("ADD") {
+                            store.addQuestStage()
+                        }
+                        .buttonStyle(EditorButtonStyle(background: palette.panelAlt))
+
+                        Button("DROP") {
+                            store.removeSelectedQuestStage()
+                        }
+                        .buttonStyle(EditorButtonStyle(background: palette.panelAlt))
+                    }
+                }
+            }
+            .frame(width: 260)
+
+            EditorPanel(title: "QUEST FLOW", palette: palette) {
+                VStack(alignment: .leading, spacing: 8) {
+                    if let stage = store.selectedQuestStage {
+                        labeledField("OBJECTIVE", text: Binding(
+                            get: { store.selectedQuestStage?.objective ?? stage.objective },
+                            set: { store.updateSelectedQuestObjective($0) }
+                        ))
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("COMPLETE WHEN FLAG")
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .foregroundStyle(palette.label)
+
+                            Picker("Quest Flag", selection: Binding(
+                                get: { store.selectedQuestStage?.completeWhenFlag ?? stage.completeWhenFlag },
+                                set: { store.updateSelectedQuestFlag($0) }
+                            )) {
+                                ForEach(QuestFlag.allCases, id: \.self) { flag in
+                                    Text(flag.rawValue).tag(flag)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .labelsHidden()
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("COMPLETION TEXT")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .foregroundStyle(palette.label)
+                        TextEditor(text: Binding(
+                            get: { store.document.questFlow.completionText },
+                            set: { store.updateQuestCompletionText($0) }
+                        ))
+                        .font(.system(size: 11, weight: .regular, design: .monospaced))
+                        .scrollContentBackground(.hidden)
+                        .foregroundStyle(palette.text)
+                        .frame(minHeight: 180)
+                        .padding(6)
+                        .background(palette.panelAlt)
+                        .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
+                    }
+                }
+            }
+        }
+    }
+
+    private var encountersPanel: some View {
+        HStack(alignment: .top, spacing: 12) {
+            EditorPanel(title: "ENCOUNTERS", palette: palette) {
+                VStack(alignment: .leading, spacing: 8) {
+                    ScrollView {
+                        VStack(spacing: 6) {
+                            ForEach(Array(store.document.encounters.enumerated()), id: \.element.id) { index, encounter in
+                                Button {
+                                    store.selectEncounter(index: index)
+                                } label: {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(encounter.id.uppercased())
+                                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                        Text(encounter.enemyID)
+                                            .font(.system(size: 9, weight: .regular, design: .monospaced))
+                                            .opacity(0.78)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(8)
+                                    .background(store.selectedEncounterIndex == index ? palette.selection : palette.panelAlt)
+                                    .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    .frame(maxHeight: 360)
+
+                    HStack(spacing: 8) {
+                        Button("ADD") {
+                            store.addEncounter()
+                        }
+                        .buttonStyle(EditorButtonStyle(background: palette.panelAlt))
+
+                        Button("DROP") {
+                            store.removeSelectedEncounter()
+                        }
+                        .buttonStyle(EditorButtonStyle(background: palette.panelAlt))
+                    }
+                }
+            }
+            .frame(width: 260)
+
+            EditorPanel(title: "ENCOUNTER EDITOR", palette: palette) {
+                if let encounter = store.selectedEncounter {
+                    VStack(alignment: .leading, spacing: 8) {
+                        labeledField("ENCOUNTER ID", text: Binding(
+                            get: { store.selectedEncounter?.id ?? encounter.id },
+                            set: { store.updateSelectedEncounterID($0) }
+                        ))
+
+                        labeledField("ENEMY ID", text: Binding(
+                            get: { store.selectedEncounter?.enemyID ?? encounter.enemyID },
+                            set: { store.updateSelectedEncounterEnemyID($0) }
+                        ))
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("INTRO LINE")
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .foregroundStyle(palette.label)
+                            TextEditor(text: Binding(
+                                get: { store.selectedEncounter?.introLine ?? encounter.introLine },
+                                set: { store.updateSelectedEncounterIntro($0) }
+                            ))
+                            .font(.system(size: 11, weight: .regular, design: .monospaced))
+                            .scrollContentBackground(.hidden)
+                            .foregroundStyle(palette.text)
+                            .frame(minHeight: 180)
+                            .padding(6)
+                            .background(palette.panelAlt)
+                            .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
+                        }
+                    }
+                } else {
+                    emptyEditorLabel("NO ENCOUNTER IS AVAILABLE.")
+                }
+            }
+        }
+    }
+
+    private var shopsPanel: some View {
+        HStack(alignment: .top, spacing: 12) {
+            EditorPanel(title: "SHOPS", palette: palette) {
+                VStack(alignment: .leading, spacing: 8) {
+                    ScrollView {
+                        VStack(spacing: 6) {
+                            ForEach(Array(store.document.shops.enumerated()), id: \.element.id) { index, shop in
+                                Button {
+                                    store.selectShop(index: index)
+                                } label: {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(shop.id.uppercased())
+                                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                        Text(shop.merchantName)
+                                            .font(.system(size: 9, weight: .regular, design: .monospaced))
+                                            .opacity(0.78)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(8)
+                                    .background(store.selectedShopIndex == index ? palette.selection : palette.panelAlt)
+                                    .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    .frame(maxHeight: 300)
+
+                    HStack(spacing: 8) {
+                        Button("ADD") {
+                            store.addShop()
+                        }
+                        .buttonStyle(EditorButtonStyle(background: palette.panelAlt))
+
+                        Button("DROP") {
+                            store.removeSelectedShop()
+                        }
+                        .buttonStyle(EditorButtonStyle(background: palette.panelAlt))
+                    }
+                }
+            }
+            .frame(width: 260)
+
+            EditorPanel(title: "SHOP EDITOR", palette: palette) {
+                if let shop = store.selectedShop {
+                    VStack(alignment: .leading, spacing: 8) {
+                        labeledField("SHOP ID", text: Binding(
+                            get: { store.selectedShop?.id ?? shop.id },
+                            set: { store.updateSelectedShopID($0) }
+                        ))
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("MERCHANT")
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .foregroundStyle(palette.label)
+                            Picker("Merchant", selection: Binding(
+                                get: { store.selectedShop?.merchantID ?? shop.merchantID },
+                                set: { store.updateSelectedShopMerchantID($0) }
+                            )) {
+                                ForEach(store.document.npcs, id: \.id) { npc in
+                                    Text(npc.name.uppercased()).tag(npc.id)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .labelsHidden()
+                        }
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("INTRO LINE")
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .foregroundStyle(palette.label)
+                            TextEditor(text: Binding(
+                                get: { store.selectedShop?.introLine ?? shop.introLine },
+                                set: { store.updateSelectedShopIntro($0) }
+                            ))
+                            .font(.system(size: 11, weight: .regular, design: .monospaced))
+                            .scrollContentBackground(.hidden)
+                            .foregroundStyle(palette.text)
+                            .frame(height: 78)
+                            .padding(6)
+                            .background(palette.panelAlt)
+                            .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
+                        }
+
+                        Text("OFFERS")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .foregroundStyle(palette.label)
+
+                        HStack(alignment: .top, spacing: 8) {
+                            ScrollView {
+                                VStack(spacing: 6) {
+                                    ForEach(Array((store.selectedShop?.offers ?? []).enumerated()), id: \.element.id) { index, offer in
+                                        Button {
+                                            store.selectShopOffer(index: index)
+                                        } label: {
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text(offer.id.uppercased())
+                                                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                                Text("\(offer.itemID.rawValue)  \(offer.price)M")
+                                                    .font(.system(size: 8, weight: .regular, design: .monospaced))
+                                                    .opacity(0.78)
+                                            }
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .padding(6)
+                                            .background(store.selectedShopOfferIndex == index ? palette.selection : palette.panelAlt)
+                                            .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                            }
+                            .frame(width: 220)
+                            .frame(maxHeight: 220)
+
+                            VStack(alignment: .leading, spacing: 8) {
+                                if let offer = store.selectedShopOffer {
+                                    labeledField("OFFER ID", text: Binding(
+                                        get: { store.selectedShopOffer?.id ?? offer.id },
+                                        set: { store.updateSelectedShopOfferID($0) }
+                                    ))
+
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("ITEM")
+                                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                            .foregroundStyle(palette.label)
+                                        Picker("Item", selection: Binding(
+                                            get: { store.selectedShopOffer?.itemID ?? offer.itemID },
+                                            set: { store.updateSelectedShopOfferItemID($0) }
+                                        )) {
+                                            ForEach(ItemID.allCases, id: \.self) { itemID in
+                                                Text(itemID.rawValue).tag(itemID)
+                                            }
+                                        }
+                                        .pickerStyle(.menu)
+                                        .labelsHidden()
+                                    }
+
+                                    labeledStepper("PRICE", value: Binding(
+                                        get: { store.selectedShopOffer?.price ?? offer.price },
+                                        set: { store.updateSelectedShopOfferPrice($0) }
+                                    ), range: 0...99)
+
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("BLURB")
+                                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                            .foregroundStyle(palette.label)
+                                        TextEditor(text: Binding(
+                                            get: { store.selectedShopOffer?.blurb ?? offer.blurb },
+                                            set: { store.updateSelectedShopOfferBlurb($0) }
+                                        ))
+                                        .font(.system(size: 11, weight: .regular, design: .monospaced))
+                                        .scrollContentBackground(.hidden)
+                                        .foregroundStyle(palette.text)
+                                        .frame(height: 68)
+                                        .padding(6)
+                                        .background(palette.panelAlt)
+                                        .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
+                                    }
+
+                                    Toggle(isOn: Binding(
+                                        get: { store.selectedShopOffer?.repeatable ?? offer.repeatable },
+                                        set: { store.updateSelectedShopOfferRepeatable($0) }
+                                    )) {
+                                        Text("REPEATABLE")
+                                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                            .foregroundStyle(palette.label)
+                                    }
+                                    .toggleStyle(.checkbox)
+                                } else {
+                                    emptyEditorLabel("NO OFFER IS SELECTED.")
+                                }
+                            }
+                        }
+
+                        HStack(spacing: 8) {
+                            Button("ADD OFFER") {
+                                store.addShopOffer()
+                            }
+                            .buttonStyle(EditorButtonStyle(background: palette.panelAlt))
+
+                            Button("DROP OFFER") {
+                                store.removeSelectedShopOffer()
+                            }
+                            .buttonStyle(EditorButtonStyle(background: palette.panelAlt))
+                        }
+                    }
+                } else {
+                    emptyEditorLabel("NO SHOP IS AVAILABLE.")
+                }
+            }
+        }
+    }
+
+    private var npcRosterPanel: some View {
+        HStack(alignment: .top, spacing: 12) {
+            EditorPanel(title: "NPC ROSTER", palette: palette) {
+                ScrollView {
+                    VStack(spacing: 6) {
+                        ForEach(store.document.npcs, id: \.id) { npc in
+                            Button {
+                                store.focusNPC(id: npc.id)
+                            } label: {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(npc.name.uppercased())
+                                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                    Text("\(npc.id)  @ \(npc.mapID)")
+                                        .font(.system(size: 9, weight: .regular, design: .monospaced))
+                                        .opacity(0.78)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(8)
+                                .background(store.selectedNPC?.id == npc.id ? palette.selection : palette.panelAlt)
+                                .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+                .frame(maxHeight: 420)
+            }
+            .frame(width: 280)
+
+            selectionPanel
+        }
+    }
+
+    private var enemyRosterPanel: some View {
+        HStack(alignment: .top, spacing: 12) {
+            EditorPanel(title: "ENEMY ROSTER", palette: palette) {
+                ScrollView {
+                    VStack(spacing: 6) {
+                        ForEach(store.document.enemies, id: \.id) { enemy in
+                            Button {
+                                store.focusEnemy(id: enemy.id)
+                            } label: {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(enemy.name.uppercased())
+                                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                    Text("\(enemy.id)  @ \(enemy.mapID)")
+                                        .font(.system(size: 9, weight: .regular, design: .monospaced))
+                                        .opacity(0.78)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(8)
+                                .background(store.selectedEnemy?.id == enemy.id ? palette.selection : palette.panelAlt)
+                                .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+                .frame(maxHeight: 420)
+            }
+            .frame(width: 280)
+
+            selectionPanel
+        }
+    }
+
     @ViewBuilder
     private var inspectorFields: some View {
         if let npc = store.selectedNPC {
@@ -1657,6 +2980,15 @@ struct AdventureEditorRootView: View {
                 get: { store.selectedNPC?.dialogueID ?? npc.dialogueID },
                 set: { store.updateSelectedNPCDialogueID($0) }
             ))
+
+            Text("SHOP \(store.selectedNPCShop?.id.uppercased() ?? "NONE")")
+                .font(.system(size: 10, weight: .regular, design: .monospaced))
+                .foregroundStyle(palette.text.opacity(0.82))
+
+            Button(store.selectedNPCShop == nil ? "CREATE SHOP" : "OPEN SHOP") {
+                store.ensureShopForSelectedNPC()
+            }
+            .buttonStyle(EditorButtonStyle(background: palette.panelAlt))
         } else if let enemy = store.selectedEnemy {
             Text("ENEMY INSPECTOR")
                 .font(.system(size: 10, weight: .bold, design: .monospaced))
@@ -1687,6 +3019,23 @@ struct AdventureEditorRootView: View {
                     get: { store.selectedEnemy?.defense ?? enemy.defense },
                     set: { store.updateSelectedEnemyDefense($0) }
                 ), range: 0...25)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("AI")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundStyle(palette.label)
+
+                Picker("AI", selection: Binding(
+                    get: { store.selectedEnemy?.ai ?? enemy.ai },
+                    set: { store.updateSelectedEnemyAI($0) }
+                )) {
+                    ForEach([AIKind.idle, .stalk, .guardian, .boss], id: \.self) { ai in
+                        Text(ai.rawValue).tag(ai)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
             }
         } else if let interactable = store.selectedInteractable {
             Text("INTERACTABLE INSPECTOR")
@@ -1719,6 +3068,60 @@ struct AdventureEditorRootView: View {
                 .pickerStyle(.menu)
                 .labelsHidden()
             }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("REWARD ITEM")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundStyle(palette.label)
+
+                Picker("Reward Item", selection: Binding(
+                    get: { store.selectedInteractable?.rewardItem ?? interactable.rewardItem },
+                    set: { store.updateSelectedInteractableRewardItem($0) }
+                )) {
+                    Text("NONE").tag(Optional<ItemID>.none)
+                    ForEach(ItemID.allCases, id: \.self) { itemID in
+                        Text(itemID.rawValue).tag(Optional(itemID))
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("REQUIRED FLAG")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundStyle(palette.label)
+
+                Picker("Required Flag", selection: Binding(
+                    get: { store.selectedInteractable?.requiredFlag ?? interactable.requiredFlag },
+                    set: { store.updateSelectedInteractableRequiredFlag($0) }
+                )) {
+                    Text("NONE").tag(Optional<QuestFlag>.none)
+                    ForEach(QuestFlag.allCases, id: \.self) { flag in
+                        Text(flag.rawValue).tag(Optional(flag))
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("GRANTS FLAG")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundStyle(palette.label)
+
+                Picker("Grants Flag", selection: Binding(
+                    get: { store.selectedInteractable?.grantsFlag ?? interactable.grantsFlag },
+                    set: { store.updateSelectedInteractableGrantsFlag($0) }
+                )) {
+                    Text("NONE").tag(Optional<QuestFlag>.none)
+                    ForEach(QuestFlag.allCases, id: \.self) { flag in
+                        Text(flag.rawValue).tag(Optional(flag))
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+            }
         } else if let portal = store.selectedPortal {
             Text("PORTAL INSPECTOR")
                 .font(.system(size: 10, weight: .bold, design: .monospaced))
@@ -1745,6 +3148,18 @@ struct AdventureEditorRootView: View {
                 store.syncSelectedPortalToDestinationSpawn()
             }
             .buttonStyle(EditorButtonStyle(background: palette.panelAlt))
+
+            HStack(spacing: 8) {
+                labeledStepper("TO X", value: Binding(
+                    get: { store.selectedPortal?.toPosition.x ?? portal.toPosition.x },
+                    set: { store.updateSelectedPortalDestinationX($0) }
+                ), range: 0...99)
+
+                labeledStepper("TO Y", value: Binding(
+                    get: { store.selectedPortal?.toPosition.y ?? portal.toPosition.y },
+                    set: { store.updateSelectedPortalDestinationY($0) }
+                ), range: 0...99)
+            }
         } else {
             Text("NO EDITABLE OBJECT IS SELECTED.")
                 .font(.system(size: 10, weight: .regular, design: .monospaced))
@@ -1779,6 +3194,12 @@ struct AdventureEditorRootView: View {
                 .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func emptyEditorLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 10, weight: .regular, design: .monospaced))
+            .foregroundStyle(palette.text.opacity(0.80))
     }
 
     private func labeledStepper(_ label: String, value: Binding<Int>, range: ClosedRange<Int>) -> some View {

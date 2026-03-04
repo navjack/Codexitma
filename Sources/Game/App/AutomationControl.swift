@@ -25,11 +25,13 @@ struct LaunchOptions: Equatable {
     let target: LaunchTarget
     let commands: [String]
     let emitStepSnapshots: Bool
+    let playtestAdventureID: AdventureID?
 
     static func parse(arguments: [String]) throws -> LaunchOptions {
         var target: LaunchTarget = .interactive(LaunchMode.parse(arguments: arguments))
         var commands: [String] = []
         var emitStepSnapshots = false
+        var playtestAdventureID: AdventureID?
 
         var index = 1
         while index < arguments.count {
@@ -43,6 +45,12 @@ struct LaunchOptions: Equatable {
                 target = .editor
             case "--bridge":
                 target = .bridge
+            case "--playtest":
+                guard index + 1 < arguments.count else {
+                    throw AutomationError.missingFlagValue("--playtest")
+                }
+                playtestAdventureID = AdventureID(rawValue: arguments[index + 1])
+                index += 1
             case "--step-json":
                 emitStepSnapshots = true
             case "--script":
@@ -67,7 +75,12 @@ struct LaunchOptions: Equatable {
             index += 1
         }
 
-        return LaunchOptions(target: target, commands: commands, emitStepSnapshots: emitStepSnapshots)
+        return LaunchOptions(
+            target: target,
+            commands: commands,
+            emitStepSnapshots: emitStepSnapshots,
+            playtestAdventureID: playtestAdventureID
+        )
     }
 }
 

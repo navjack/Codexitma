@@ -68,6 +68,17 @@ final class GameEngine {
 
     var shouldQuit: Bool { state.shouldQuit }
 
+    func beginPlaytest(for adventureID: AdventureID, heroClass: HeroClass = .wayfarer) {
+        let resolvedAdventure = library.contains(adventureID)
+            ? adventureID
+            : (library.catalog.first?.id ?? .ashesOfMerrow)
+        content = library.content(for: resolvedAdventure)
+        state = GameEngine.makeInitialState(content: content, availableAdventures: library.catalog)
+        state.selectedAdventureIndex = library.catalog.firstIndex { $0.id == resolvedAdventure } ?? 0
+        startNewAdventure(with: heroClass)
+        state.log("Playtest bootstrapped for \(content.title).")
+    }
+
     func handle(_ command: ActionCommand) {
         switch state.mode {
         case .title:

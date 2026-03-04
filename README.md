@@ -35,6 +35,14 @@ Run the graphical adventure editor instead:
 swift run Game --editor
 ```
 
+The editor now supports:
+
+- terrain painting
+- layered NPC / enemy / interactable / portal / spawn placement
+- dialogue, quest flow, encounter, and shop editing tabs
+- roster views for NPCs and enemies
+- `SAVE + PLAYTEST`, which exports the current pack and launches directly into that adventure in graphics mode
+
 After successful local builds, a runnable copy is also kept at the project root:
 
 ```sh

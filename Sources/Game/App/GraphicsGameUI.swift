@@ -65,12 +65,16 @@ final class GameSessionController: ObservableObject {
     init(
         library: GameContentLibrary,
         saveRepository: SaveRepository,
+        playtestAdventureID: AdventureID? = nil,
         preferenceStore: GraphicsPreferenceStore = .shared,
         soundEngine: AppleIISoundEngine = .shared
     ) {
         self.preferenceStore = preferenceStore
         self.soundEngine = soundEngine
         let engine = GameEngine(library: library, saveRepository: saveRepository)
+        if let playtestAdventureID {
+            engine.beginPlaytest(for: playtestAdventureID)
+        }
         self.engine = engine
         self.state = engine.state
         self.visualTheme = preferenceStore.loadTheme()
@@ -205,10 +209,18 @@ final class GameSessionController: ObservableObject {
 enum GraphicsGameLauncher {
     private static var retainedDelegate: GraphicsAppDelegate?
 
-    static func run(library: GameContentLibrary, saveRepository: SaveRepository) {
+    static func run(
+        library: GameContentLibrary,
+        saveRepository: SaveRepository,
+        playtestAdventureID: AdventureID? = nil
+    ) {
         let app = NSApplication.shared
         app.setActivationPolicy(.regular)
-        let session = GameSessionController(library: library, saveRepository: saveRepository)
+        let session = GameSessionController(
+            library: library,
+            saveRepository: saveRepository,
+            playtestAdventureID: playtestAdventureID
+        )
         let delegate = GraphicsAppDelegate(session: session)
         retainedDelegate = delegate
         app.delegate = delegate
