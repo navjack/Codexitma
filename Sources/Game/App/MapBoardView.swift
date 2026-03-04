@@ -346,8 +346,8 @@ struct MapBoardView: View {
                     floorBands: floorBands,
                     bandIndex: band
                 )
-                context.fill(Path(rect), with: .color(theme.floor.opacity(shade * 0.22)))
-                context.fill(Path(rect.insetBy(dx: 0, dy: 0)), with: .color(stripe.opacity(0.30)))
+                context.fill(Path(rect), with: .color(Color.black.opacity(0.06 + (Double(t1) * 0.10))))
+                context.fill(Path(rect.insetBy(dx: 0, dy: 0)), with: .color(stripe.opacity(0.16)))
             } else {
                 context.fill(Path(rect), with: .color(theme.floor.opacity(shade)))
                 context.fill(Path(rect.insetBy(dx: 0, dy: 0)), with: .color(stripe))

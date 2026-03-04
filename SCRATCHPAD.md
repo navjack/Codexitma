@@ -160,3 +160,6 @@
 - Reduced masking overlays in textured native Depth3D (lighter tint/stripe overlays and no synthetic vertical wall stripe pass when textured walls are active) so texture detail remains visible.
 - Added explicit torch-style occlusion shadows in the depth light field: each light now has blocked transmission and shadow strength parameters, and blocked rays can actively darken samples behind walls instead of only dimming additive light.
 - Tuned light source profiles so torches cast the strongest occlusion shadows, while shrine/beacon/boss lights remain softer and mostly volumetric.
+- Reworked depth LOS checks to world-space stepping (instead of tile-center-only Bresenham) with edge-neighbor blocking checks, reducing light leakage around internal wall corners and making cast shadows read more consistently.
+- Switched wall lighting to sample at exact ray hit world coordinates (not just hit tile center), improving wall-face shadow transitions.
+- Disabled player lantern light in Depth3D by default (opt-in via `lantern_enabled` world flag) so torch/environment lighting remains the dominant source unless explicitly enabled.

@@ -407,6 +407,9 @@ enum GraphicsSceneSnapshotBuilder {
             fov: profile.fieldOfView,
             lightAt: { position in
                 lightField.level(at: position)
+            },
+            lightAtWorld: { worldX, worldY in
+                lightField.level(atWorldX: worldX, y: worldY)
             }
         ) { position in
             board.cell(at: position)?.tile ?? TileFactory.tile(for: "#")
@@ -665,7 +668,7 @@ enum GraphicsSceneSnapshotBuilder {
                 fieldOfView: .pi / 3.4,
                 maxDistance: 8.5,
                 columns: 96,
-                ambientLight: 0.14,
+                ambientLight: 0.11,
                 lightSubdivisions: 8,
                 floorLightBands: 20
             )
@@ -675,7 +678,7 @@ enum GraphicsSceneSnapshotBuilder {
                 fieldOfView: .pi / 2.95,
                 maxDistance: 12.0,
                 columns: 128,
-                ambientLight: 0.32,
+                ambientLight: 0.18,
                 lightSubdivisions: 8,
                 floorLightBands: 22
             )
@@ -684,7 +687,7 @@ enum GraphicsSceneSnapshotBuilder {
             fieldOfView: defaultDepthFieldOfView,
             maxDistance: 10.0,
             columns: 112,
-            ambientLight: 0.21,
+            ambientLight: 0.15,
             lightSubdivisions: 8,
             floorLightBands: 20
         )
@@ -730,6 +733,10 @@ enum GraphicsSceneSnapshotBuilder {
             cachedStaticLightField = (staticKey, staticField)
         }
 
+        guard isLanternDepthLightEnabled(for: state) else {
+            return staticField
+        }
+
         let lantern = playerLanternLightSource(for: state.player)
         let finalKey = DepthFinalLightCacheKey(
             staticKey: staticKey,
@@ -753,6 +760,11 @@ enum GraphicsSceneSnapshotBuilder {
         )
         cachedFinalLightField = (finalKey, finalField)
         return finalField
+    }
+
+    private static func isLanternDepthLightEnabled(for state: GameState) -> Bool {
+        // Lantern light in Depth3D is opt-in; default runs should rely on world lights.
+        state.world.openedInteractables.contains("lantern_enabled")
     }
 
     private static func staticLightCacheKey(
@@ -790,10 +802,10 @@ enum GraphicsSceneSnapshotBuilder {
         let lanternStrength = max(0.0, min(1.0, Double(player.effectiveLanternCapacity()) / 18.0))
         return DepthLightSource(
             position: player.position,
-            intensity: 0.46 + (lanternStrength * 0.40),
-            radius: 4.0 + (lanternStrength * 3.6),
-            blockedTransmission: 0.14 + (lanternStrength * 0.08),
-            shadowStrength: 0.10 + (lanternStrength * 0.08)
+            intensity: 0.22 + (lanternStrength * 0.22),
+            radius: 2.8 + (lanternStrength * 2.4),
+            blockedTransmission: 0.10 + (lanternStrength * 0.06),
+            shadowStrength: 0.14 + (lanternStrength * 0.12)
         )
     }
 
@@ -880,11 +892,13 @@ enum GraphicsSceneSnapshotBuilder {
 
                 let attenuation = pow(max(0.0, 1.0 - (distance / source.radius)), 1.25)
                 var contribution = source.intensity * attenuation
-                let targetTile = Position(
-                    x: Int(floor(worldX)),
-                    y: Int(floor(worldY))
+                let blocked = !hasLightLineOfSight(
+                    fromWorldX: sourceWorldX,
+                    y: sourceWorldY,
+                    toWorldX: worldX,
+                    y: worldY,
+                    board: board
                 )
-                let blocked = !hasLightLineOfSight(from: source.position, to: targetTile, board: board)
                 if blocked {
                     contribution *= source.blockedTransmission
                 }
@@ -959,16 +973,16 @@ enum GraphicsSceneSnapshotBuilder {
                 position: cell.position,
                 intensity: 0.72,
                 radius: 5.2,
-                blockedTransmission: 0.04,
-                shadowStrength: 0.34
+                blockedTransmission: 0.0,
+                shadowStrength: 0.52
             )
         case .torchWall:
             return DepthLightSource(
                 position: cell.position,
                 intensity: 0.64,
                 radius: 4.7,
-                blockedTransmission: 0.03,
-                shadowStrength: 0.38
+                blockedTransmission: 0.0,
+                shadowStrength: 0.58
             )
         case .gate:
             return DepthLightSource(
@@ -1017,43 +1031,64 @@ enum GraphicsSceneSnapshotBuilder {
         }
     }
 
-    private static func hasLightLineOfSight(from start: Position, to end: Position, board: MapBoardSnapshot) -> Bool {
-        if start == end {
+    private static func hasLightLineOfSight(
+        fromWorldX startX: Double,
+        y startY: Double,
+        toWorldX endX: Double,
+        y endY: Double,
+        board: MapBoardSnapshot
+    ) -> Bool {
+        let dx = endX - startX
+        let dy = endY - startY
+        let distance = hypot(dx, dy)
+        if distance < 0.05 {
             return true
         }
 
-        var x0 = start.x
-        var y0 = start.y
-        let x1 = end.x
-        let y1 = end.y
+        let startTile = Position(
+            x: Int(floor(startX)),
+            y: Int(floor(startY))
+        )
+        let endTile = Position(
+            x: Int(floor(endX)),
+            y: Int(floor(endY))
+        )
 
-        let dx = abs(x1 - x0)
-        let dy = abs(y1 - y0)
-        let sx = x0 < x1 ? 1 : -1
-        let sy = y0 < y1 ? 1 : -1
-        var error = dx - dy
+        let steps = max(2, Int(ceil(distance / 0.18)))
+        for index in 1..<steps {
+            let t = Double(index) / Double(steps)
+            let worldX = startX + (dx * t)
+            let worldY = startY + (dy * t)
+            let baseX = Int(floor(worldX))
+            let baseY = Int(floor(worldY))
+            let fracX = worldX - floor(worldX)
+            let fracY = worldY - floor(worldY)
 
-        while x0 != x1 || y0 != y1 {
-            let e2 = error * 2
-            if e2 > -dy {
-                error -= dy
-                x0 += sx
-            }
-            if e2 < dx {
-                error += dx
-                y0 += sy
-            }
+            var candidates: [Position] = [Position(x: baseX, y: baseY)]
 
-            if x0 == x1, y0 == y1 {
-                break
+            if fracX < 0.08 {
+                candidates.append(Position(x: baseX - 1, y: baseY))
+            } else if fracX > 0.92 {
+                candidates.append(Position(x: baseX + 1, y: baseY))
             }
 
-            let position = Position(x: x0, y: y0)
-            guard let cell = board.cell(at: position) else {
-                return false
+            if fracY < 0.08 {
+                candidates.append(Position(x: baseX, y: baseY - 1))
+            } else if fracY > 0.92 {
+                candidates.append(Position(x: baseX, y: baseY + 1))
             }
-            if !cell.tile.walkable {
-                return false
+
+            let deduped = Array(Set(candidates))
+            for tile in deduped {
+                if tile == startTile || tile == endTile {
+                    continue
+                }
+                guard let cell = board.cell(at: tile) else {
+                    return false
+                }
+                if !cell.tile.walkable {
+                    return false
+                }
             }
         }
 
