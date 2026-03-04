@@ -141,3 +141,9 @@
 - Switched Windows data storage to a portable EXE-relative root (`CodexitmaData`) for saves, adventures, screenshots, theme prefs, and graphics-asset overrides, with automatic fallback to `%APPDATA%\\Codexitma` when EXE-local storage is not writable.
 - Unignored the root `screenshots/` directory so capture assets can be committed and displayed in GitHub docs.
 - Added a README screenshots section with paired native vs SDL frames for title, creator, and matching Merrow Village exploration scenes.
+- Started `codex/depth3d-experiments` for a dedicated first-person rendering pass.
+- Added an adaptive depth render profile in the shared scene snapshot so `Depth 3D` can vary field-of-view, ray columns, draw distance, and ambient baseline by map context (tight indoor vs open sky maps).
+- Added runtime light probes for `Depth 3D`: emissive world features (beacons/shrines/switches/open doors), boss glow, and player lantern now feed a per-tile light field with simple line-of-sight attenuation.
+- Extended depth ray samples and billboards with calculated light levels and used those values in both native and SDL frontends for darker occluded spaces, brighter lit zones, and more grounded billboard shading.
+- Upgraded depth backdrops in both renderers with stronger floor/sky depth cues, fog blending, and vignette-style contrast to improve readability and depth perception.
+- Updated depth UI legends to show the active dynamic range value instead of a hardcoded distance.

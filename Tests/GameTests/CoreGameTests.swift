@@ -146,7 +146,9 @@ import Testing
 
     let depth = GraphicsSceneSnapshotBuilder.build(state: engine.state, visualTheme: .depth3D)
     #expect(depth.depth != nil)
-    #expect((depth.depth?.samples.count ?? 0) == 96)
+    #expect((depth.depth?.samples.count ?? 0) >= 96)
+    #expect((depth.depth?.maxDistance ?? 0) >= 8.5)
+    #expect((depth.depth?.samples.first?.lightLevel ?? 0) > 0)
 }
 
 @Test func sharedGameSessionUsesSameDepthControlRemapAsNativeGraphics() async throws {

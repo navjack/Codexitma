@@ -104,7 +104,7 @@ struct MapBoardView: View {
                     Text("RAYCAST MAP  A/D TURN")
                         .font(.system(size: 9, weight: .regular, design: .monospaced))
                         .foregroundStyle(palette.text.opacity(0.76))
-                    Text("W/S STEP  RANGE 9 TILES")
+                    Text("W/S STEP  RANGE \(Int((depthScene?.maxDistance ?? 9).rounded())) TILES")
                         .font(.system(size: 9, weight: .regular, design: .monospaced))
                         .foregroundStyle(palette.text.opacity(0.76))
                 }
@@ -148,6 +148,28 @@ struct MapBoardView: View {
         let horizon = size.height * 0.5
         let ceilingRect = CGRect(x: 0, y: 0, width: size.width, height: horizon)
         let floorRect = CGRect(x: 0, y: horizon, width: size.width, height: size.height - horizon)
+        let stripeStrength: Double
+        let floorBands: Int
+        switch theme.pattern {
+        case .brick:
+            stripeStrength = 0.08
+            floorBands = 15
+        case .speckle:
+            stripeStrength = 0.05
+            floorBands = 13
+        case .weave:
+            stripeStrength = 0.07
+            floorBands = 16
+        case .hash:
+            stripeStrength = 0.06
+            floorBands = 12
+        case .mire:
+            stripeStrength = 0.09
+            floorBands = 14
+        case .circuit:
+            stripeStrength = 0.08
+            floorBands = 18
+        }
 
         if scene.depth?.usesSkyBackdrop ?? true {
             context.fill(
@@ -192,7 +214,6 @@ struct MapBoardView: View {
 
         context.fill(Path(floorRect), with: .color(theme.floor.opacity(0.18)))
 
-        let floorBands = 14
         for band in 0..<floorBands {
             let t0 = CGFloat(band) / CGFloat(floorBands)
             let t1 = CGFloat(band + 1) / CGFloat(floorBands)
@@ -200,7 +221,9 @@ struct MapBoardView: View {
             let y1 = horizon + (size.height - horizon) * pow(t1, 1.6)
             let rect = CGRect(x: 0, y: y0, width: size.width, height: max(1, y1 - y0))
             let shade = 0.10 + (Double(t1) * 0.22)
-            let stripe = band.isMultiple(of: 2) ? theme.roomHighlight.opacity(0.05) : Color.black.opacity(0.04)
+            let stripe = band.isMultiple(of: 2)
+                ? theme.roomHighlight.opacity(stripeStrength)
+                : Color.black.opacity(max(0.03, stripeStrength - 0.02))
             context.fill(Path(rect), with: .color(theme.floor.opacity(shade)))
             context.fill(Path(rect.insetBy(dx: 0, dy: 0)), with: .color(stripe))
 
@@ -221,6 +244,20 @@ struct MapBoardView: View {
 
         let horizonLine = Path(CGRect(x: 0, y: horizon, width: size.width, height: 1))
         context.fill(horizonLine, with: .color(theme.roomHighlight.opacity(0.10)))
+
+        let sideVignetteWidth = size.width * 0.09
+        context.fill(
+            Path(CGRect(x: 0, y: 0, width: sideVignetteWidth, height: size.height)),
+            with: .color(Color.black.opacity(0.16))
+        )
+        context.fill(
+            Path(CGRect(x: size.width - sideVignetteWidth, y: 0, width: sideVignetteWidth, height: size.height)),
+            with: .color(Color.black.opacity(0.16))
+        )
+        context.fill(
+            Path(CGRect(x: 0, y: 0, width: size.width, height: size.height * 0.08)),
+            with: .color(Color.black.opacity(0.14))
+        )
     }
 
     private func drawDepthWalls(
@@ -247,8 +284,14 @@ struct MapBoardView: View {
 
             let axisShade = sample.hitAxis == .vertical ? 0.78 : 0.92
             let distanceShade = max(0.20, 1.0 - ((sample.correctedDistance / sample.maxDistance) * 0.76))
-            let wallColor = frontWallColor(for: sample.hitTile, theme: theme).opacity(distanceShade * axisShade)
+            let lightShade = max(0.18, min(1.0, sample.lightLevel))
+            let wallColor = frontWallColor(for: sample.hitTile, theme: theme).opacity(distanceShade * axisShade * lightShade)
             context.fill(Path(rect), with: .color(wallColor))
+
+            if lightShade < 0.65 {
+                let darkness = (0.65 - lightShade) * 0.55
+                context.fill(Path(rect), with: .color(Color.black.opacity(darkness)))
+            }
 
             if sample.column.isMultiple(of: 3) {
                 let stripe = CGRect(
@@ -262,6 +305,14 @@ struct MapBoardView: View {
 
             let topEdge = Path(CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: 1))
             context.fill(topEdge, with: .color(theme.roomHighlight.opacity(0.12)))
+
+            let fogAmount = max(0.0, min(0.72, ((sample.correctedDistance / sample.maxDistance) - 0.40) * 1.25))
+            if fogAmount > 0.01 {
+                let fog = scene.depth?.usesSkyBackdrop ?? true
+                    ? theme.roomShadow.opacity(0.24 + (fogAmount * 0.2))
+                    : Color.black.opacity(0.34 + (fogAmount * 0.26))
+                context.fill(Path(rect), with: .color(fog.opacity(fogAmount)))
+            }
         }
     }
 
@@ -278,8 +329,10 @@ struct MapBoardView: View {
         let horizon = size.height * 0.5
         let columnWidth = size.width / CGFloat(samples.count)
 
+        let sceneDepth = scene.depth
+        let fieldOfView = sceneDepth?.fieldOfView ?? depthFieldOfView
         for billboard in billboards {
-            let screenCenter = ((billboard.angleOffset / depthFieldOfView) + 0.5) * size.width
+            let screenCenter = ((billboard.angleOffset / fieldOfView) + 0.5) * size.width
             let projectedHeight = min(
                 size.height * 0.88,
                 CGFloat((size.height * billboard.scale) / max(0.16, billboard.distance))
@@ -291,8 +344,19 @@ struct MapBoardView: View {
             let top = horizon - (projectedHeight * 0.5)
             let cellWidth = projectedWidth / CGFloat(max(1, pattern.first?.count ?? 1))
             let cellHeight = projectedHeight / CGFloat(max(1, pattern.count))
-            let shade = max(0.28, 1.0 - ((billboard.distance / billboard.maxDistance) * 0.72))
+            let lightShade = max(0.18, min(1.0, billboard.lightLevel))
+            let shade = max(0.28, 1.0 - ((billboard.distance / billboard.maxDistance) * 0.72)) * lightShade
             let color = depthBillboardColor(for: billboard.kind).opacity(shade)
+            let shadowRect = CGRect(
+                x: left + (projectedWidth * 0.14),
+                y: min(size.height - 2, top + projectedHeight - max(2, projectedHeight * 0.08)),
+                width: projectedWidth * 0.72,
+                height: max(2, projectedHeight * 0.08)
+            )
+            context.fill(
+                Path(ellipseIn: shadowRect),
+                with: .color(Color.black.opacity(max(0.08, 0.32 - (lightShade * 0.24))))
+            )
 
             for patternColumn in 0..<max(1, pattern.first?.count ?? 1) {
                 let stripeMinX = left + (CGFloat(patternColumn) * cellWidth)
@@ -326,6 +390,20 @@ struct MapBoardView: View {
                         context.fill(Path(edge), with: .color(Color.black.opacity(0.18)))
                     }
                 }
+            }
+
+            let fogAmount = max(0.0, min(0.66, ((billboard.distance / billboard.maxDistance) - 0.46) * 1.45))
+            if fogAmount > 0.01 {
+                let fogRect = CGRect(
+                    x: left,
+                    y: top,
+                    width: projectedWidth,
+                    height: projectedHeight
+                )
+                let fogColor = scene.depth?.usesSkyBackdrop ?? true
+                    ? theme.roomShadow.opacity(0.36)
+                    : Color.black.opacity(0.44)
+                context.fill(Path(fogRect), with: .color(fogColor.opacity(fogAmount)))
             }
         }
     }

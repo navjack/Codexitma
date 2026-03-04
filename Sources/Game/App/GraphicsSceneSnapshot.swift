@@ -74,6 +74,7 @@ struct DepthBillboardSnapshot {
     let maxDistance: Double
     let scale: Double
     let widthScale: Double
+    let lightLevel: Double
 }
 
 struct DepthSceneSnapshot {
@@ -136,9 +137,37 @@ struct GraphicsSceneSnapshot {
 }
 
 enum GraphicsSceneSnapshotBuilder {
-    private static let depthFieldOfView = Double.pi / 3.1
-    private static let depthDrawDistance = 9.0
-    private static let depthColumns = 96
+    private static let defaultDepthFieldOfView = Double.pi / 3.1
+
+    private struct DepthRenderProfile {
+        let fieldOfView: Double
+        let maxDistance: Double
+        let columns: Int
+        let ambientLight: Double
+    }
+
+    private struct DepthLightSource {
+        let position: Position
+        let intensity: Double
+        let radius: Double
+    }
+
+    private struct DepthLightField {
+        let width: Int
+        let height: Int
+        let ambient: Double
+        let values: [[Double]]
+
+        func level(at position: Position) -> Double {
+            guard position.x >= 0,
+                  position.y >= 0,
+                  position.x < width,
+                  position.y < height else {
+                return ambient
+            }
+            return values[position.y][position.x]
+        }
+    }
 
     static func build(state: GameState, visualTheme: GraphicsVisualTheme) -> GraphicsSceneSnapshot {
         let board = makeBoard(from: state)
@@ -263,6 +292,15 @@ enum GraphicsSceneSnapshotBuilder {
     }
 
     private static func makeDepthScene(from state: GameState, board: MapBoardSnapshot) -> DepthSceneSnapshot {
+        let mapID = state.player.currentMapID
+        let skyBackdrop = usesSkyBackdrop(for: mapID)
+        let profile = depthRenderProfile(for: mapID, usesSkyBackdrop: skyBackdrop)
+        let lightField = makeDepthLightField(
+            from: state,
+            board: board,
+            ambient: profile.ambientLight
+        )
+
         let origin = DepthPoint(
             x: Double(state.player.position.x) + 0.5,
             y: Double(state.player.position.y) + 0.5
@@ -270,26 +308,41 @@ enum GraphicsSceneSnapshotBuilder {
         let caster = DepthRaycaster(
             origin: origin,
             facing: state.player.facing,
-            fov: depthFieldOfView
+            fov: profile.fieldOfView,
+            lightAt: { position in
+                lightField.level(at: position)
+            }
         ) { position in
             board.cell(at: position)?.tile ?? TileFactory.tile(for: "#")
         }
 
-        let samples = caster.castSamples(columns: depthColumns, maxDistance: depthDrawDistance)
-        let billboards = makeDepthBillboards(from: state, board: board)
+        let samples = caster.castSamples(columns: profile.columns, maxDistance: profile.maxDistance)
+        let billboards = makeDepthBillboards(
+            from: state,
+            board: board,
+            fieldOfView: profile.fieldOfView,
+            maxDistance: profile.maxDistance,
+            lightField: lightField
+        )
             .sorted { $0.distance > $1.distance }
 
         return DepthSceneSnapshot(
             facing: state.player.facing,
-            fieldOfView: depthFieldOfView,
-            maxDistance: depthDrawDistance,
-            usesSkyBackdrop: usesSkyBackdrop(for: state.player.currentMapID),
+            fieldOfView: profile.fieldOfView,
+            maxDistance: profile.maxDistance,
+            usesSkyBackdrop: skyBackdrop,
             samples: samples,
             billboards: billboards
         )
     }
 
-    private static func makeDepthBillboards(from state: GameState, board: MapBoardSnapshot) -> [DepthBillboardSnapshot] {
+    private static func makeDepthBillboards(
+        from state: GameState,
+        board: MapBoardSnapshot,
+        fieldOfView: Double,
+        maxDistance: Double,
+        lightField: DepthLightField
+    ) -> [DepthBillboardSnapshot] {
         let playerCenter = (
             x: Double(state.player.position.x) + 0.5,
             y: Double(state.player.position.y) + 0.5
@@ -311,16 +364,22 @@ enum GraphicsSceneSnapshotBuilder {
 
                 let sideDistance = (dx * right.x) + (dy * right.y)
                 let distance = hypot(dx, dy)
-                if distance > depthDrawDistance {
+                if distance > maxDistance {
                     continue
                 }
 
                 let angleOffset = atan2(sideDistance, forwardDistance)
-                if abs(angleOffset) > (depthFieldOfView * 0.65) {
+                if abs(angleOffset) > (fieldOfView * 0.65) {
                     continue
                 }
 
-                if let billboard = makeBillboard(for: cell, distance: distance, angleOffset: angleOffset) {
+                if let billboard = makeBillboard(
+                    for: cell,
+                    distance: distance,
+                    angleOffset: angleOffset,
+                    maxDistance: maxDistance,
+                    lightLevel: lightField.level(at: cell.position)
+                ) {
                     billboards.append(billboard)
                 }
             }
@@ -332,7 +391,9 @@ enum GraphicsSceneSnapshotBuilder {
     private static func makeBillboard(
         for cell: BoardCellSnapshot,
         distance: Double,
-        angleOffset: Double
+        angleOffset: Double,
+        maxDistance: Double,
+        lightLevel: Double
     ) -> DepthBillboardSnapshot? {
         switch cell.occupant {
         case .enemy(let id):
@@ -341,9 +402,10 @@ enum GraphicsSceneSnapshotBuilder {
                 kind: .enemy(id),
                 distance: distance,
                 angleOffset: angleOffset,
-                maxDistance: depthDrawDistance,
+                maxDistance: maxDistance,
                 scale: 0.78,
-                widthScale: 0.70
+                widthScale: 0.70,
+                lightLevel: lightLevel
             )
         case .npc(let id):
             return DepthBillboardSnapshot(
@@ -351,9 +413,10 @@ enum GraphicsSceneSnapshotBuilder {
                 kind: .npc(id),
                 distance: distance,
                 angleOffset: angleOffset,
-                maxDistance: depthDrawDistance,
+                maxDistance: maxDistance,
                 scale: 0.72,
-                widthScale: 0.68
+                widthScale: 0.68,
+                lightLevel: lightLevel
             )
         case .boss(let id):
             return DepthBillboardSnapshot(
@@ -361,9 +424,10 @@ enum GraphicsSceneSnapshotBuilder {
                 kind: .boss(id),
                 distance: distance,
                 angleOffset: angleOffset,
-                maxDistance: depthDrawDistance,
+                maxDistance: maxDistance,
                 scale: 0.84,
-                widthScale: 0.82
+                widthScale: 0.82,
+                lightLevel: lightLevel
             )
         case .none, .player:
             break
@@ -379,9 +443,10 @@ enum GraphicsSceneSnapshotBuilder {
             kind: .feature(cell.feature),
             distance: distance,
             angleOffset: angleOffset,
-            maxDistance: depthDrawDistance,
+            maxDistance: maxDistance,
             scale: appearance.scale,
-            widthScale: appearance.widthScale
+            widthScale: appearance.widthScale,
+            lightLevel: lightLevel
         )
     }
 
@@ -406,6 +471,198 @@ enum GraphicsSceneSnapshotBuilder {
         case .gate:
             return (0.62, 1.05)
         }
+    }
+
+    private static func depthRenderProfile(for mapID: String, usesSkyBackdrop: Bool) -> DepthRenderProfile {
+        let tightIndoorFragments = [
+            "barrow",
+            "catacomb",
+            "crypt",
+            "vault",
+            "sanctum",
+            "archive"
+        ]
+        let tightIndoor = tightIndoorFragments.contains { mapID.contains($0) }
+
+        if tightIndoor {
+            return DepthRenderProfile(
+                fieldOfView: .pi / 3.4,
+                maxDistance: 8.5,
+                columns: 96,
+                ambientLight: 0.16
+            )
+        }
+        if usesSkyBackdrop {
+            return DepthRenderProfile(
+                fieldOfView: .pi / 2.95,
+                maxDistance: 12.0,
+                columns: 128,
+                ambientLight: 0.36
+            )
+        }
+        return DepthRenderProfile(
+            fieldOfView: defaultDepthFieldOfView,
+            maxDistance: 10.0,
+            columns: 112,
+            ambientLight: 0.24
+        )
+    }
+
+    private static func makeDepthLightField(
+        from state: GameState,
+        board: MapBoardSnapshot,
+        ambient: Double
+    ) -> DepthLightField {
+        guard board.width > 0, board.height > 0 else {
+            return DepthLightField(width: board.width, height: board.height, ambient: ambient, values: [])
+        }
+
+        var sources = collectDepthLightSources(from: state, board: board)
+        let lanternStrength = max(0.0, min(1.0, Double(state.player.effectiveLanternCapacity()) / 18.0))
+        sources.append(
+            DepthLightSource(
+                position: state.player.position,
+                intensity: 0.34 + (lanternStrength * 0.34),
+                radius: 3.2 + (lanternStrength * 3.0)
+            )
+        )
+
+        var values = Array(
+            repeating: Array(repeating: ambient, count: board.width),
+            count: board.height
+        )
+        for y in 0..<board.height {
+            for x in 0..<board.width {
+                let target = Position(x: x, y: y)
+                var light = ambient
+
+                for source in sources {
+                    let dx = Double(source.position.x - target.x)
+                    let dy = Double(source.position.y - target.y)
+                    let distance = hypot(dx, dy)
+                    if distance > source.radius {
+                        continue
+                    }
+
+                    let attenuation = pow(max(0.0, 1.0 - (distance / source.radius)), 1.75)
+                    var contribution = source.intensity * attenuation
+                    if !hasLightLineOfSight(from: source.position, to: target, board: board) {
+                        contribution *= 0.24
+                    }
+                    light += contribution
+                }
+
+                values[y][x] = max(0.05, min(1.0, light))
+            }
+        }
+
+        return DepthLightField(
+            width: board.width,
+            height: board.height,
+            ambient: ambient,
+            values: values
+        )
+    }
+
+    private static func collectDepthLightSources(from state: GameState, board: MapBoardSnapshot) -> [DepthLightSource] {
+        var sources: [DepthLightSource] = []
+
+        for row in board.rows {
+            for cell in row {
+                if let source = depthLightSource(for: cell) {
+                    sources.append(source)
+                }
+            }
+        }
+
+        if state.world.openedInteractables.contains("spire_mirrors_aligned"),
+           let spireMap = state.world.maps["beacon_spire"] {
+            for interactable in spireMap.interactables where interactable.kind == .switchRune {
+                sources.append(
+                    DepthLightSource(
+                        position: interactable.position,
+                        intensity: 0.22,
+                        radius: 2.6
+                    )
+                )
+            }
+        }
+
+        return sources
+    }
+
+    private static func depthLightSource(for cell: BoardCellSnapshot) -> DepthLightSource? {
+        switch cell.feature {
+        case .beacon:
+            return DepthLightSource(position: cell.position, intensity: 0.90, radius: 8.2)
+        case .shrine:
+            return DepthLightSource(position: cell.position, intensity: 0.58, radius: 5.2)
+        case .switchLit:
+            return DepthLightSource(position: cell.position, intensity: 0.30, radius: 3.4)
+        case .gate:
+            return DepthLightSource(position: cell.position, intensity: 0.16, radius: 2.1)
+        case .none, .chest, .bed, .plateUp, .plateDown, .switchIdle:
+            break
+        }
+
+        switch cell.tile.type {
+        case .doorOpen:
+            return DepthLightSource(position: cell.position, intensity: 0.22, radius: 2.6)
+        case .beacon:
+            return DepthLightSource(position: cell.position, intensity: 0.74, radius: 6.8)
+        default:
+            break
+        }
+
+        switch cell.occupant {
+        case .boss:
+            return DepthLightSource(position: cell.position, intensity: 0.28, radius: 3.3)
+        case .none, .player, .npc, .enemy:
+            return nil
+        }
+    }
+
+    private static func hasLightLineOfSight(from start: Position, to end: Position, board: MapBoardSnapshot) -> Bool {
+        if start == end {
+            return true
+        }
+
+        var x0 = start.x
+        var y0 = start.y
+        let x1 = end.x
+        let y1 = end.y
+
+        let dx = abs(x1 - x0)
+        let dy = abs(y1 - y0)
+        let sx = x0 < x1 ? 1 : -1
+        let sy = y0 < y1 ? 1 : -1
+        var error = dx - dy
+
+        while x0 != x1 || y0 != y1 {
+            let e2 = error * 2
+            if e2 > -dy {
+                error -= dy
+                x0 += sx
+            }
+            if e2 < dx {
+                error += dx
+                y0 += sy
+            }
+
+            if x0 == x1, y0 == y1 {
+                break
+            }
+
+            let position = Position(x: x0, y: y0)
+            guard let cell = board.cell(at: position) else {
+                return false
+            }
+            if !cell.tile.walkable {
+                return false
+            }
+        }
+
+        return true
     }
 
     private static func resolved(_ raw: Character, state: GameState) -> Character {

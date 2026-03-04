@@ -959,14 +959,72 @@ enum SDLGraphicsLauncher {
         frame: SDLRect,
         with renderer: OpaquePointer
     ) {
+        let depthTheme = boardTheme(for: scene)
         let horizon = frame.y + (frame.height / 2)
-        fill(renderer, x: frame.x, y: frame.y, width: frame.width, height: frame.height / 2, color: depth.usesSkyBackdrop ? .sky : .ceiling)
-        fill(renderer, x: frame.x, y: horizon, width: frame.width, height: frame.height / 2, color: .floor)
+        let skyTop = depth.usesSkyBackdrop
+            ? blended(.sky, toward: depthTheme.innerBorder, amount: 0.20)
+            : blended(.ceiling, toward: .void, amount: 0.14)
+        let skyBottom = depth.usesSkyBackdrop
+            ? blended(.ceiling, toward: depthTheme.frameBackground, amount: 0.42)
+            : blended(.ceiling, toward: depthTheme.wall, amount: 0.22)
+        let skyBands = max(4, frame.height / 42)
+        for band in 0..<skyBands {
+            let y0 = frame.y + ((frame.height / 2) * band / skyBands)
+            let y1 = frame.y + ((frame.height / 2) * (band + 1) / skyBands)
+            let ratio = Double(band + 1) / Double(max(1, skyBands))
+            let color = blended(skyTop, toward: skyBottom, amount: ratio)
+            fill(renderer, x: frame.x, y: y0, width: frame.width, height: max(1, y1 - y0), color: color)
+            if band.isMultiple(of: 2) {
+                fill(
+                    renderer,
+                    x: frame.x,
+                    y: y0,
+                    width: frame.width,
+                    height: 1,
+                    color: depthTheme.innerBorder.withAlpha(24)
+                )
+            }
+        }
+
+        let floorNear = blended(depthTheme.floor, toward: .bright, amount: 0.09)
+        let floorFar = blended(depthTheme.floor, toward: .void, amount: 0.52)
+        let floorBands = max(12, frame.height / 20)
+        for band in 0..<floorBands {
+            let t0 = Double(band) / Double(floorBands)
+            let t1 = Double(band + 1) / Double(floorBands)
+            let y0 = horizon + Int(Double(frame.height - (horizon - frame.y)) * pow(t0, 1.58))
+            let y1 = horizon + Int(Double(frame.height - (horizon - frame.y)) * pow(t1, 1.58))
+            let ratio = pow(t1, 0.62)
+            let base = blended(floorFar, toward: floorNear, amount: ratio)
+            fill(renderer, x: frame.x, y: y0, width: frame.width, height: max(1, y1 - y0), color: base)
+            if band.isMultiple(of: 2) {
+                fill(renderer, x: frame.x, y: y0, width: frame.width, height: 1, color: depthTheme.innerBorder.withAlpha(18))
+            }
+        }
+
+        let centerX = frame.x + (frame.width / 2)
+        let bottomY = frame.y + frame.height - 1
+        for step in -4...4 {
+            let normalized = Double(step) / 4.0
+            let endX = centerX + Int(Double(frame.width) * normalized * 0.46)
+            drawLine(
+                renderer,
+                fromX: centerX,
+                fromY: horizon,
+                toX: endX,
+                toY: bottomY,
+                color: depthTheme.innerBorder.withAlpha(20)
+            )
+        }
+        fill(renderer, x: frame.x, y: horizon, width: frame.width, height: 1, color: depthTheme.innerBorder.withAlpha(36))
         stroke(renderer, frame: frame, color: .gold)
 
         guard !depth.samples.isEmpty else { return }
         let columnWidth = max(1, frame.width / depth.samples.count)
         let zBuffer = depth.samples.map(\.correctedDistance)
+        let fogColor = depth.usesSkyBackdrop
+            ? blended(depthTheme.frameBackground, toward: .sky, amount: 0.35)
+            : blended(.ceiling, toward: .void, amount: 0.40)
 
         for sample in depth.samples where sample.didHit {
             let distance = max(0.14, sample.correctedDistance)
@@ -974,12 +1032,39 @@ enum SDLGraphicsLauncher {
             let top = Int(Double(horizon) - (wallHeight * 0.5))
             let height = max(1, Int(wallHeight))
             let x = frame.x + (sample.column * columnWidth)
-            let depthTheme = boardTheme(for: scene)
-            let color = shaded(
+            let distanceRatio = sample.correctedDistance / depth.maxDistance
+            let axisShade = sample.hitAxis == .vertical ? 0.78 : 0.92
+            let lightShade = max(0.18, min(1.0, sample.lightLevel))
+            var color = shaded(
                 tileColor(for: sample.hitTile.type, theme: depthTheme),
-                intensity: max(0.22, 1.0 - ((sample.correctedDistance / depth.maxDistance) * 0.72))
+                intensity: max(0.22, 1.0 - (distanceRatio * 0.72)) * axisShade * lightShade
             )
+            let fogAmount = max(0.0, min(0.78, (distanceRatio - 0.34) * 1.35))
+            color = blended(color, toward: fogColor, amount: fogAmount)
             fill(renderer, x: x, y: top, width: max(1, columnWidth + 1), height: height, color: color)
+
+            if sample.column.isMultiple(of: 3) {
+                fill(
+                    renderer,
+                    x: x,
+                    y: top,
+                    width: max(1, (columnWidth + 1) / 3),
+                    height: height,
+                    color: .void.withAlpha(24)
+                )
+            }
+            if lightShade < 0.65 {
+                let darkness = UInt8(max(0, min(170, Int((0.65 - lightShade) * 255.0))))
+                fill(renderer, x: x, y: top, width: max(1, columnWidth + 1), height: height, color: .void.withAlpha(darkness))
+            }
+            fill(
+                renderer,
+                x: x,
+                y: top,
+                width: max(1, columnWidth + 1),
+                height: 1,
+                color: blended(color, toward: .bright, amount: 0.18).withAlpha(110)
+            )
         }
 
         for billboard in depth.billboards.sorted(by: { $0.distance > $1.distance }) {
@@ -1006,16 +1091,46 @@ enum SDLGraphicsLauncher {
                 }
             }
 
+            let distanceRatio = billboard.distance / depth.maxDistance
+            let lightShade = max(0.18, min(1.0, billboard.lightLevel))
+            let distanceShade = max(0.24, 1.0 - (distanceRatio * 0.72))
+            let fogAmount = max(0.0, min(0.70, (distanceRatio - 0.42) * 1.42))
+            let spriteBase = shaded(
+                billboardColor(for: billboard.kind),
+                intensity: distanceShade * lightShade
+            )
+            let spriteColor = blended(spriteBase, toward: fogColor, amount: fogAmount * 0.82)
+            let shadowAlpha = UInt8(max(24, min(136, Int((0.42 - (lightShade * 0.22)) * 255.0))))
+            let shadowY = min(frame.y + frame.height - 2, top + height - max(2, height / 12))
+            fill(
+                renderer,
+                x: left + max(1, width / 8),
+                y: shadowY,
+                width: max(2, (width * 3) / 4),
+                height: max(2, height / 10),
+                color: .shadow.withAlpha(shadowAlpha)
+            )
             drawPattern(
                 billboardPattern(for: billboard.kind),
                 x: left,
                 y: top,
                 width: width,
                 height: height,
-                color: billboardColor(for: billboard.kind),
+                color: spriteColor,
                 renderer: renderer,
                 shadowOffset: width >= 14 ? 2 : 1
             )
+            if fogAmount > 0.06 {
+                let fogAlpha = UInt8(max(8, min(132, Int(fogAmount * 168.0))))
+                fill(
+                    renderer,
+                    x: left,
+                    y: top,
+                    width: width,
+                    height: height,
+                    color: fogColor.withAlpha(fogAlpha)
+                )
+            }
         }
 
         let cx = frame.x + (frame.width / 2)
@@ -1023,6 +1138,7 @@ enum SDLGraphicsLauncher {
         fill(renderer, x: cx - 10, y: cy, width: 20, height: 2, color: .bright)
         fill(renderer, x: cx, y: cy - 10, width: 2, height: 20, color: .bright)
         drawText("VIEW \(scene.player.facing.shortLabel)", x: frame.x + 10, y: frame.y + 10, color: .gold, renderer: renderer)
+        drawText("RANGE \(Int(depth.maxDistance.rounded()))", x: frame.x + 10, y: frame.y + 24, color: .bright, renderer: renderer)
     }
 
     private static func tileColor(for type: TileType, theme: SDLBoardTheme) -> SDLColor {
@@ -1435,6 +1551,56 @@ enum SDLGraphicsLauncher {
             b: UInt8(max(0, min(255, Int(Double(color.b) * intensity)))),
             a: color.a
         )
+    }
+
+    private static func blended(_ from: SDLColor, toward to: SDLColor, amount: Double) -> SDLColor {
+        let t = max(0.0, min(1.0, amount))
+        let r = Int((Double(from.r) * (1.0 - t)) + (Double(to.r) * t))
+        let g = Int((Double(from.g) * (1.0 - t)) + (Double(to.g) * t))
+        let b = Int((Double(from.b) * (1.0 - t)) + (Double(to.b) * t))
+        let a = Int((Double(from.a) * (1.0 - t)) + (Double(to.a) * t))
+        return SDLColor(
+            r: UInt8(max(0, min(255, r))),
+            g: UInt8(max(0, min(255, g))),
+            b: UInt8(max(0, min(255, b))),
+            a: UInt8(max(0, min(255, a)))
+        )
+    }
+
+    private static func drawLine(
+        _ renderer: OpaquePointer,
+        fromX: Int,
+        fromY: Int,
+        toX: Int,
+        toY: Int,
+        color: SDLColor
+    ) {
+        var x0 = fromX
+        var y0 = fromY
+        let x1 = toX
+        let y1 = toY
+        let dx = abs(x1 - x0)
+        let dy = abs(y1 - y0)
+        let sx = x0 < x1 ? 1 : -1
+        let sy = y0 < y1 ? 1 : -1
+        var err = dx - dy
+
+        while true {
+            fill(renderer, x: x0, y: y0, width: 1, height: 1, color: color)
+            if x0 == x1, y0 == y1 {
+                break
+            }
+
+            let e2 = err * 2
+            if e2 > -dy {
+                err -= dy
+                x0 += sx
+            }
+            if e2 < dx {
+                err += dx
+                y0 += sy
+            }
+        }
     }
 
     private static func drawPattern(

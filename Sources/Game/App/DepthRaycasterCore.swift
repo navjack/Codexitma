@@ -17,24 +17,29 @@ struct DepthRaySample {
     let correctedDistance: Double
     let rawDistance: Double
     let maxDistance: Double
+    let hitPosition: Position?
     let hitTile: Tile
     let hitAxis: DepthHitAxis
+    let lightLevel: Double
 }
 
 struct DepthRaycaster {
     let origin: DepthPoint
     let facing: Direction
     let tileAt: (Position) -> Tile
+    let lightAt: (Position) -> Double
     let fov: Double
 
     init(
         origin: DepthPoint,
         facing: Direction,
         fov: Double = .pi / 3.1,
+        lightAt: @escaping (Position) -> Double = { _ in 1.0 },
         tileAt: @escaping (Position) -> Tile
     ) {
         self.origin = origin
         self.facing = facing
+        self.lightAt = lightAt
         self.tileAt = tileAt
         self.fov = fov
     }
@@ -116,11 +121,15 @@ struct DepthRaycaster {
                 correctedDistance: maxDistance,
                 rawDistance: maxDistance,
                 maxDistance: maxDistance,
+                hitPosition: nil,
                 hitTile: hitTile,
-                hitAxis: .none
+                hitAxis: .none,
+                lightLevel: 1.0
             )
         }
 
+        let hitPosition = Position(x: mapX, y: mapY)
+        let lightLevel = max(0.05, min(1.0, lightAt(hitPosition)))
         let corrected = max(0.05, rawDistance * cos(angle - baseAngle))
         return DepthRaySample(
             column: column,
@@ -128,8 +137,10 @@ struct DepthRaycaster {
             correctedDistance: corrected,
             rawDistance: rawDistance,
             maxDistance: maxDistance,
+            hitPosition: hitPosition,
             hitTile: hitTile,
-            hitAxis: hitAxis
+            hitAxis: hitAxis,
+            lightLevel: lightLevel
         )
     }
 
