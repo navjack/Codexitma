@@ -14,6 +14,15 @@ jobs:
       - name: Check Out Repository
         uses: actions/checkout@v4
 
+      - name: Install Swift
+        uses: compnerd/gha-setup-swift@main
+        with:
+          swift-version: swift-6.3-branch
+          swift-build: 6.3-DEVELOPMENT-SNAPSHOT-2026-02-27-a
+
+      - name: Verify Swift Toolchain
+        run: swift --version
+
       - name: Install SDL3
         run: brew install sdl3
 
