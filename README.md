@@ -1,164 +1,233 @@
 # Codexitma
 
-`Codexitma` is a Swift 6 macOS RPG in the spirit of early Ultima and Apple II fantasy games, with selectable low-res graphics themes, simple Apple II-style square-wave audio in graphics mode, and multiple adventures running on the same engine.
+Codexitma is a Swift 6 retro RPG engine for macOS with a playable low-resolution fantasy game, a built-in adventure editor, and a data-driven content pipeline.
+
+It is deliberately styled after early Apple II and Ultima-era computer RPGs, with a modern codebase underneath: native graphics mode, terminal mode, JSON content packs, deterministic automation hooks, and an in-game editor workflow.
+
+## What It Is
+
+- Graphics-first macOS RPG with low-resolution retro presentation
+- Native AppKit/SwiftUI windowed mode plus ANSI terminal mode
+- Three graphics styles on the same game state:
+  - `Gemstone`
+  - `Ultima`
+  - `Depth 3D`
+- Simple Apple II-style square-wave sounds in graphics mode
+- Two playable adventures on the same engine
+- Character creation with classes, traits, skills, starting gear, and inventory
+- Built-in graphical adventure editor
+- External JSON adventure packs and override mods
+- Headless automation bridge for scripted runs and regression testing
 
 ## Current State
 
-The project has working implementations of all six planned phases at a foundational level:
+The project is beyond prototype status. The engine, save/load flow, combat, quests, exploration, shops, class-based hero starts, graphics themes, editor, and external content loading are all working.
 
-- Foundation: package, launcher, save system, content loading
-- Engine: state machine, movement, interaction, combat, quests
-- Exploration: multi-region worlds with map transitions, side interiors, and optional areas
-- Systems: dialogue, inventory, enemies, puzzle gates
-- Content: two playable adventures with different identities and map graphs
-- Persistence and polish: save/load, graphics mode, terminal mode, headless automation, persistent graphics theme selection
+What is still evolving is depth and content scale:
 
-What is still expanding is depth, not the existence of those phases. The engine is real; the adventure is still growing.
+- more authored encounters
+- longer campaigns
+- more systems depth
+- more editor polish
+- more visual refinement
 
-## Run
+The core engine and tooling are already real and usable.
 
-Build and run the default low-resolution graphics mode:
+## Requirements
+
+- macOS 14 or newer
+- Swift 6 toolchain (the package is set to Swift tools `6.3`)
+
+## Quick Start
+
+Build and run the default graphics mode:
 
 ```sh
 swift run Game
 ```
 
-Run the retro ANSI terminal mode instead:
+Run the ANSI terminal mode:
 
 ```sh
 swift run Game --terminal
 ```
 
-Run the graphical adventure editor instead:
+Launch directly into the graphical editor:
 
 ```sh
 swift run Game --editor
 ```
 
-The editor now supports:
-
-- terrain painting
-- layered NPC / enemy / interactable / portal / spawn placement
-- dialogue, quest flow, encounter, and shop editing tabs
-- roster views for NPCs and enemies
-- `VALIDATE`, which checks references and layout before export
-- `SAVE + PLAYTEST`, which exports the current pack and launches directly into that adventure in graphics mode
-
-The editor is also now a first-class graphics-mode tool:
-
-- `M` at the title screen opens the selected adventure in the editor
-- `M` while playing opens the currently loaded adventure in the editor after a confirmation prompt
-- bundled adventures open as safe external overrides
-- external packs and existing user mods reopen and save back into their current external pack folder
-
-After successful local builds, a runnable copy is also kept at the project root:
+After successful builds, a convenience copy of the latest working binary is also kept at the repo root:
 
 ```sh
 ./Codexitma
 ```
 
+## Gameplay Features
+
+- Tile-based top-down exploration
+- Turn-based movement and combat
+- Dialogue and NPC interaction
+- Inventory, consumables, gear, and equippable slots
+- Shops and `marks` currency
+- Environmental puzzle gates
+- Adventure selection from the title screen
+- Save/load support
+- Persistent graphics theme preference between launches
+
+## Graphics Modes
+
+`Codexitma` supports three visual themes in graphics mode. They all run on the same underlying engine state.
+
+- `Gemstone`
+  - high-contrast chamber look inspired by early action-RPG screens
+- `Ultima`
+  - flatter overworld-style board with stricter classic field readability
+- `Depth 3D`
+  - first-person raycast dungeon view with turn-in-place controls and map-accurate depth
+
+In graphics mode, press `T` to cycle styles.
+
 ## Controls
 
+### General
+
 - `WASD` or arrow keys: move
-- `E` or `Space`: interact / talk / use nearby object
-- `I`: open the pack / inventory
-- `J` or `H`: show current objective
+- `E` or `Space`: interact / confirm
+- `I`: open inventory / leave inventory / leave shop
+- `J` or `H`: show objective / inspect selected entry
 - `K`: save
 - `L`: load
 - `Q`: cancel / back
 - `X`: quit
-- `T` in graphics mode: cycle the visual theme (`Gemstone` / `Ultima` / `Depth 3D`)
-- `M` in graphics mode: open the editor (with confirmation)
+- `T`: cycle graphics theme
+- `M`: open the editor (graphics mode)
 
-When `Depth 3D` is active:
+### Depth 3D
+
+When `Depth 3D` is active during exploration:
 
 - `W` / Up: move forward
 - `S` / Down: step backward
 - `A`: turn left
 - `D`: turn right
 
-When a merchant is open:
+### Shops
 
-- `WASD` or arrows: browse offers
-- `E`: buy the highlighted offer
-- `J`: inspect the highlighted offer
+- movement keys: change selected offer
+- `E`: buy selected offer
+- `J`: inspect selected offer
 - `Q` or `I`: leave the counter
 
-## Adventures
+## Included Adventures
 
-- `Ashes of Merrow`: the original beacon-restoration campaign through a dark valley.
-- `Starfall Requiem`: a larger salvage-coast campaign with a hub town, store buildings, side dungeons, more optional treasure, and a fallen sky-engine finale.
+- `Ashes of Merrow`
+  - the original dark-valley beacon restoration campaign
+- `Starfall Requiem`
+  - a larger salvage-coast adventure with a hub town, stores, dungeons, and a late-game sky-engine path
 
-Choose the adventure on the title screen with `A/D` or left/right before starting a new hero.
+Choose the active adventure on the title screen before starting a new character.
 
-## Content Packs
+## Built-In Editor
 
-Most authored game content now lives in bundled JSON data packs instead of Swift source:
+The graphical editor is a first-class part of the app, not just a dev-only tool.
 
-- global tables: [adventure_catalog.json](/Volumes/4terrybi/coding/Codexitma/Sources/Game/ContentData/adventure_catalog.json), [items.json](/Volumes/4terrybi/coding/Codexitma/Sources/Game/ContentData/items.json), [hero_templates.json](/Volumes/4terrybi/coding/Codexitma/Sources/Game/ContentData/hero_templates.json)
-- per-adventure packs: [ashes_of_merrow](/Volumes/4terrybi/coding/Codexitma/Sources/Game/ContentData/adventures/ashes_of_merrow), [starfall_requiem](/Volumes/4terrybi/coding/Codexitma/Sources/Game/ContentData/adventures/starfall_requiem)
-- shared map graphs and layouts: [ContentData](/Volumes/4terrybi/coding/Codexitma/Sources/Game/ContentData)
+You can open it in three ways:
 
-That includes adventure metadata, class templates, items, objectives, dialogue, encounters, NPCs, enemies, and shop inventories. Core engine rules and quest-flag control flow still live in Swift.
+- `swift run Game --editor`
+- `M` from the title screen
+- `M` during a live adventure, followed by confirmation
 
-Quest objectives are now stage-driven from JSON quest-flow files, so the stage order and objective text live in content data instead of hardcoded `if` chains.
+Current editor capabilities:
 
-## External Adventures
+- create a blank template adventure
+- load bundled adventures for safe override editing
+- reopen and edit external user packs
+- paint terrain on maps
+- place NPCs, enemies, interactables, portals, and spawn points
+- edit dialogue, quest flow, encounters, shops, NPCs, and enemies
+- validate content before export
+- export and immediately playtest the active pack
 
-`Codexitma` now scans for third-party adventure packs in:
+Bundled adventures are never edited in-place. Editing a bundled adventure writes an external override pack instead.
 
-`~/Library/Application Support/Codexitma/Adventures`
+See [EDITOR_ROADMAP.md](EDITOR_ROADMAP.md) for the editor-specific notes and remaining polish targets.
 
-Each adventure lives in its own folder, for example:
+## Content Packs And Mods
 
-`~/Library/Application Support/Codexitma/Adventures/stormkeep_trial`
+Most authored content is now externalized into JSON rather than hardcoded in Swift.
 
-Required minimum files:
+Bundled data lives under:
 
-- `adventure.json`
-- `quest_flow.json` (or any file named by `objectivesFile`)
-- `world.json`
-- `dialogues.json`
-- `encounters.json`
-- `npcs.json`
-- `enemies.json`
-- `shops.json`
-- one or more map `.txt` files referenced by `world.json`
+- `Sources/Game/ContentData`
+- `Sources/Game/ContentData/adventures/ashes_of_merrow`
+- `Sources/Game/ContentData/adventures/starfall_requiem`
 
-The external `adventure.json` manifest includes metadata (`id`, `title`, `summary`, `introLine`) plus filenames for the content files. External packs are added to the title-screen adventure list automatically on launch.
+This includes:
 
-If an external pack uses the same `id` as a bundled adventure, the external pack now overrides the bundled one. That makes full-pack overrides the supported mod path for changing the shipped adventures without patching the app bundle.
+- adventure metadata
+- hero templates
+- item definitions
+- objective flow
+- dialogue
+- encounters
+- NPCs
+- enemies
+- shops
+- map layouts
 
-The new graphical editor exports packs directly into this folder. Keep the same adventure `id` to build an override mod, or change the `id` to publish a separate new adventure.
+External adventure packs are loaded from:
 
-## Automation
+```text
+~/Library/Application Support/Codexitma/Adventures
+```
 
-There is a built-in headless control surface for deterministic testing and scripted play:
+Each pack lives in its own folder and provides the same JSON-driven content structure.
 
-- `--script "new,e,state"` for the default adventure
-- `--script "right,new,e,state"` to start `Starfall Requiem`
-- `--script-file path/to/commands.txt --step-json`
-- `--bridge`
+If an external pack uses the same adventure `id` as a bundled adventure, it overrides the bundled one. That is the supported mod path for changing shipped adventures without touching the app bundle.
 
-See [AUTOMATION.md](/Volumes/4terrybi/coding/Codexitma/AUTOMATION.md) for details.
+## Automation And Testing
 
-This is the preferred near-term way to automate playthroughs. If an MCP server is added later, it should wrap the bridge instead of reimplementing game logic.
+Codexitma includes a built-in headless control surface for scripted play and regression testing.
 
-## Content Direction
+Examples:
 
-The current adventure is `Ashes of Merrow`, but the codebase is being pushed toward a broader "Codexitma" engine style:
+```sh
+swift run Game --script "new,e,state"
+swift run Game --script "right,new,e,state"
+swift run Game --script-file path/to/commands.txt --step-json
+swift run Game --bridge
+```
 
-- more region-specific encounters
-- more optional treasure and side discoveries
-- Gemstone Warrior-style chamber rendering in graphics mode
-- switchable Gemstone / Ultima presentation themes in graphics mode
-- persistent graphics theme preference between launches
-- simple square-wave walking / attack / item / intro sounds in graphics mode
-- more readable low-resolution sprites and stronger room silhouettes
-- deeper data-driven progression once the next round of quest/state systems is expanded
+The bridge is the preferred automation surface. If an MCP server is added later, it should wrap this interface instead of duplicating game logic.
 
-## Repo Notes
+See [AUTOMATION.md](AUTOMATION.md) for details.
 
-- `PLAN.md` holds the original project plan and design direction.
-- `SCRATCHPAD.md` is the running in-repo development notebook.
-- Git is now the default workflow; stable milestones are committed frequently.
+## Repository Notes
+
+- [PLAN.md](PLAN.md) contains the original project plan and scope.
+- [SCRATCHPAD.md](SCRATCHPAD.md) is the running development notebook.
+- `main` is the canonical development branch.
+
+## Development
+
+Run the test suite:
+
+```sh
+swift test
+```
+
+The project is organized as a Swift Package with:
+
+- executable target: `Game`
+- test target: `GameTests`
+
+## Road Ahead
+
+The current priorities are straightforward:
+
+- expand adventure content
+- deepen systems for replayability
+- keep refining the editor
+- continue improving the retro visual presentation without breaking the low-resolution design goal
