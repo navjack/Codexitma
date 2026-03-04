@@ -172,3 +172,7 @@
 - Switched native floor shading to consume world-space lighting samples at each projected floor strip (`worldX/worldY`), which better anchors cast-shadow transitions to geometry.
 - Reworked SDL depth floor shading to use cached floor-projection geometry (band/strip ray factors) plus world-space light sampling per strip, reducing per-step math and improving visual shadow contact alignment.
 - Added a wall-contact shadow pass in SDL depth mode to keep wall/floor intersections visually grounded and reduce detached-looking shadow edges.
+- Increased shared depth light-field density from 8x to 12x sub-tiles per map tile to reduce visible lighting discontinuities at occlusion edges.
+- Added strip-level light smoothing in both native and SDL depth floor passes so shadow/light transitions are less stair-stepped across adjacent strips.
+- Increased floor-band density in both renderers to reduce horizontal banding and better preserve shadow continuity while moving/turning.
+- Added native wall-contact floor shading (matching the SDL grounding pass concept) so wall shadows visually attach to the wall base more reliably.

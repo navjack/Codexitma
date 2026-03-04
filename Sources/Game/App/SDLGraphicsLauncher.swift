@@ -1013,7 +1013,7 @@ enum SDLGraphicsLauncher {
 
         let floorNear = blended(depthTheme.floor, toward: .bright, amount: 0.09)
         let floorFar = blended(depthTheme.floor, toward: .void, amount: 0.52)
-        let floorBands = max(12, frame.height / 20)
+        let floorBands = max(20, frame.height / 14)
         let worldLighting = depth.worldLighting
         let floorLighting = depth.floorLighting
         let floorProjection = depthFloorProjection(
@@ -1034,10 +1034,24 @@ enum SDLGraphicsLauncher {
             let base = blended(floorFar, toward: floorNear, amount: ratio)
             fill(renderer, x: frame.x, y: y0, width: frame.width, height: max(1, y1 - y0), color: base)
 
-            for strip in projection.strips {
+            var stripLevels = projection.strips.map { strip in
                 let worldX = playerX + (projection.rowDistance * strip.rayX)
                 let worldY = playerY + (projection.rowDistance * strip.rayY)
-                let level = worldLighting.level(atWorldX: worldX, y: worldY)
+                return worldLighting.level(atWorldX: worldX, y: worldY)
+            }
+            if stripLevels.count >= 3 {
+                var smoothed = stripLevels
+                for index in stripLevels.indices {
+                    let left = stripLevels[max(0, index - 1)]
+                    let center = stripLevels[index]
+                    let right = stripLevels[min(stripLevels.count - 1, index + 1)]
+                    smoothed[index] = (left * 0.24) + (center * 0.52) + (right * 0.24)
+                }
+                stripLevels = smoothed
+            }
+
+            for (index, strip) in projection.strips.enumerated() {
+                let level = stripLevels[index]
                 let lift = max(0.0, level - floorLighting.ambient)
                 let dim = max(0.0, floorLighting.ambient - level)
                 if lift <= 0.01, dim <= 0.01 {
@@ -1056,7 +1070,7 @@ enum SDLGraphicsLauncher {
                 }
             }
             if band.isMultiple(of: 2) {
-                fill(renderer, x: frame.x, y: y0, width: frame.width, height: 1, color: depthTheme.innerBorder.withAlpha(18))
+                fill(renderer, x: frame.x, y: y0, width: frame.width, height: 1, color: depthTheme.innerBorder.withAlpha(10))
             }
         }
 

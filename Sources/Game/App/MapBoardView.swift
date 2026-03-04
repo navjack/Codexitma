@@ -423,6 +423,7 @@ struct MapBoardView: View {
             stripeStrength = 0.08
             floorBands = 18
         }
+        let effectiveFloorBands = max(floorBands, (floorLighting?.bands ?? 20) + 8)
 
         if scene.depth?.usesSkyBackdrop ?? true {
             context.fill(
@@ -467,9 +468,9 @@ struct MapBoardView: View {
 
         context.fill(Path(floorRect), with: .color(theme.floor.opacity(0.18)))
 
-        for band in 0..<floorBands {
-            let t0 = CGFloat(band) / CGFloat(floorBands)
-            let t1 = CGFloat(band + 1) / CGFloat(floorBands)
+        for band in 0..<effectiveFloorBands {
+            let t0 = CGFloat(band) / CGFloat(effectiveFloorBands)
+            let t1 = CGFloat(band + 1) / CGFloat(effectiveFloorBands)
             let y0 = horizon + (size.height - horizon) * pow(t0, 1.6)
             let y1 = horizon + (size.height - horizon) * pow(t1, 1.6)
             let rect = CGRect(x: 0, y: y0, width: size.width, height: max(1, y1 - y0))
@@ -489,7 +490,7 @@ struct MapBoardView: View {
                     canvasSize: size,
                     fieldOfView: fieldOfView,
                     facing: facing,
-                    floorBands: floorBands,
+                    floorBands: effectiveFloorBands,
                     bandIndex: band
                 )
                 context.fill(Path(rect), with: .color(Color.black.opacity(0.06 + (Double(t1) * 0.10))))
@@ -501,7 +502,7 @@ struct MapBoardView: View {
 
             if band > 0 {
                 let line = Path(CGRect(x: 0, y: y0, width: size.width, height: 1))
-                context.fill(line, with: .color(theme.roomHighlight.opacity(0.06)))
+                context.fill(line, with: .color(theme.roomHighlight.opacity(0.03)))
             }
         }
 
@@ -601,6 +602,17 @@ struct MapBoardView: View {
             }
         }
 
+        if stripLightLevels.count >= 3 {
+            var smoothed = stripLightLevels
+            for index in stripLightLevels.indices {
+                let left = stripLightLevels[max(0, index - 1)]
+                let center = stripLightLevels[index]
+                let right = stripLightLevels[min(stripLightLevels.count - 1, index + 1)]
+                smoothed[index] = (left * 0.24) + (center * 0.52) + (right * 0.24)
+            }
+            stripLightLevels = smoothed
+        }
+
         let ambient = floorLighting?.ambient ?? worldLighting?.ambient
         if let ambient {
             for strip in 0..<stripCount {
@@ -692,6 +704,23 @@ struct MapBoardView: View {
 
             let topEdge = Path(CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: 1))
             context.fill(topEdge, with: .color(theme.roomHighlight.opacity(0.12)))
+
+            let distanceRatio = max(0.0, min(1.0, sample.correctedDistance / sample.maxDistance))
+            let contactOpacity = max(
+                0.06,
+                min(
+                    0.34,
+                    0.08 + ((1.0 - distanceRatio) * 0.14) + ((1.0 - lightShade) * 0.16)
+                )
+            )
+            let contactHeight = max(1, min(8, Int(2.0 + ((1.0 - distanceRatio) * 4.0))))
+            let contactRect = CGRect(
+                x: rect.minX,
+                y: min(size.height - 1, rect.maxY),
+                width: rect.width,
+                height: CGFloat(contactHeight)
+            )
+            context.fill(Path(contactRect), with: .color(Color.black.opacity(contactOpacity)))
 
             let fogAmount = max(0.0, min(0.72, ((sample.correctedDistance / sample.maxDistance) - 0.40) * 1.25))
             if fogAmount > 0.01 {

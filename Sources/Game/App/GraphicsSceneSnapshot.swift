@@ -778,7 +778,7 @@ enum GraphicsSceneSnapshotBuilder {
                 maxDistance: 8.5,
                 columns: 96,
                 ambientLight: 0.11,
-                lightSubdivisions: 8,
+                lightSubdivisions: 12,
                 floorLightBands: 20
             )
         }
@@ -788,7 +788,7 @@ enum GraphicsSceneSnapshotBuilder {
                 maxDistance: 12.0,
                 columns: 128,
                 ambientLight: 0.18,
-                lightSubdivisions: 8,
+                lightSubdivisions: 12,
                 floorLightBands: 22
             )
         }
@@ -797,7 +797,7 @@ enum GraphicsSceneSnapshotBuilder {
             maxDistance: 10.0,
             columns: 112,
             ambientLight: 0.15,
-            lightSubdivisions: 8,
+            lightSubdivisions: 12,
             floorLightBands: 20
         )
     }
