@@ -82,6 +82,24 @@ struct DepthBillboardSnapshot {
     let lightLevel: Double
 }
 
+struct DepthFloorLightingSnapshot {
+    let columns: Int
+    let bands: Int
+    let ambient: Double
+    let values: [[Double]]
+
+    func level(column: Int, band: Int) -> Double {
+        guard band >= 0,
+              band < values.count,
+              column >= 0,
+              !values.isEmpty,
+              column < values[band].count else {
+            return ambient
+        }
+        return values[band][column]
+    }
+}
+
 struct DepthSceneSnapshot {
     let facing: Direction
     let fieldOfView: Double
@@ -89,6 +107,7 @@ struct DepthSceneSnapshot {
     let usesSkyBackdrop: Bool
     let samples: [DepthRaySample]
     let billboards: [DepthBillboardSnapshot]
+    let floorLighting: DepthFloorLightingSnapshot
 }
 
 struct InventoryEntrySnapshot {
@@ -149,6 +168,8 @@ enum GraphicsSceneSnapshotBuilder {
         let maxDistance: Double
         let columns: Int
         let ambientLight: Double
+        let lightSubdivisions: Int
+        let floorLightBands: Int
     }
 
     private struct DepthLightSource {
@@ -161,16 +182,45 @@ enum GraphicsSceneSnapshotBuilder {
         let width: Int
         let height: Int
         let ambient: Double
+        let subdivisions: Int
+        let sampleWidth: Int
+        let sampleHeight: Int
         let values: [[Double]]
 
         func level(at position: Position) -> Double {
-            guard position.x >= 0,
-                  position.y >= 0,
-                  position.x < width,
-                  position.y < height else {
+            level(
+                atWorldX: Double(position.x) + 0.5,
+                y: Double(position.y) + 0.5
+            )
+        }
+
+        func level(atWorldX worldX: Double, y worldY: Double) -> Double {
+            guard worldX >= 0.0,
+                  worldY >= 0.0,
+                  worldX < Double(width),
+                  worldY < Double(height) else {
                 return ambient
             }
-            return values[position.y][position.x]
+
+            guard sampleWidth > 0, sampleHeight > 0, !values.isEmpty else {
+                return ambient
+            }
+
+            let scaledX = (worldX * Double(subdivisions)) - 0.5
+            let scaledY = (worldY * Double(subdivisions)) - 0.5
+            let clampedX = max(0.0, min(Double(sampleWidth - 1), scaledX))
+            let clampedY = max(0.0, min(Double(sampleHeight - 1), scaledY))
+
+            let x0 = Int(floor(clampedX))
+            let y0 = Int(floor(clampedY))
+            let x1 = min(sampleWidth - 1, x0 + 1)
+            let y1 = min(sampleHeight - 1, y0 + 1)
+            let tx = clampedX - Double(x0)
+            let ty = clampedY - Double(y0)
+
+            let top = (values[y0][x0] * (1.0 - tx)) + (values[y0][x1] * tx)
+            let bottom = (values[y1][x0] * (1.0 - tx)) + (values[y1][x1] * tx)
+            return max(0.0, min(1.0, (top * (1.0 - ty)) + (bottom * ty)))
         }
     }
 
@@ -178,6 +228,7 @@ enum GraphicsSceneSnapshotBuilder {
         let mapID: String
         let width: Int
         let height: Int
+        let subdivisions: Int
         let ambientBucket: Int
         let openedInteractablesHash: Int
         let bossStateHash: Int
@@ -321,7 +372,8 @@ enum GraphicsSceneSnapshotBuilder {
         let lightField = makeDepthLightField(
             from: state,
             board: board,
-            ambient: profile.ambientLight
+            ambient: profile.ambientLight,
+            subdivisions: profile.lightSubdivisions
         )
 
         let origin = DepthPoint(
@@ -348,6 +400,14 @@ enum GraphicsSceneSnapshotBuilder {
             lightField: lightField
         )
             .sorted { $0.distance > $1.distance }
+        let floorLighting = makeDepthFloorLighting(
+            from: state,
+            lightField: lightField,
+            fieldOfView: profile.fieldOfView,
+            maxDistance: profile.maxDistance,
+            columns: profile.columns,
+            bands: profile.floorLightBands
+        )
 
         return DepthSceneSnapshot(
             facing: state.player.facing,
@@ -355,7 +415,8 @@ enum GraphicsSceneSnapshotBuilder {
             maxDistance: profile.maxDistance,
             usesSkyBackdrop: skyBackdrop,
             samples: samples,
-            billboards: billboards
+            billboards: billboards,
+            floorLighting: floorLighting
         )
     }
 
@@ -409,6 +470,44 @@ enum GraphicsSceneSnapshotBuilder {
         }
 
         return billboards
+    }
+
+    private static func makeDepthFloorLighting(
+        from state: GameState,
+        lightField: DepthLightField,
+        fieldOfView: Double,
+        maxDistance: Double,
+        columns: Int,
+        bands: Int
+    ) -> DepthFloorLightingSnapshot {
+        let safeColumns = max(1, columns)
+        let safeBands = max(8, bands)
+        let originX = Double(state.player.position.x) + 0.5
+        let originY = Double(state.player.position.y) + 0.5
+        let baseAngle = facingAngle(for: state.player.facing)
+
+        let values: [[Double]] = (0..<safeBands).map { band in
+            let t = (Double(band) + 0.5) / Double(safeBands)
+            let distance = 0.72 + (pow(1.0 - t, 1.45) * (maxDistance - 0.72))
+            return (0..<safeColumns).map { column in
+                let cameraOffset = ((Double(column) + 0.5) / Double(safeColumns)) - 0.5
+                let rayAngle = baseAngle + (cameraOffset * fieldOfView)
+                let sampleX = originX + (cos(rayAngle) * distance)
+                let sampleY = originY + (sin(rayAngle) * distance)
+                let level = lightField.level(atWorldX: sampleX, y: sampleY)
+                return max(
+                    lightField.ambient * 0.82,
+                    min(1.0, pow(level, 0.78) + 0.05)
+                )
+            }
+        }
+
+        return DepthFloorLightingSnapshot(
+            columns: safeColumns,
+            bands: safeBands,
+            ambient: lightField.ambient,
+            values: values
+        )
     }
 
     private static func makeBillboard(
@@ -545,7 +644,9 @@ enum GraphicsSceneSnapshotBuilder {
                 fieldOfView: .pi / 3.4,
                 maxDistance: 8.5,
                 columns: 96,
-                ambientLight: 0.16
+                ambientLight: 0.14,
+                lightSubdivisions: 8,
+                floorLightBands: 20
             )
         }
         if usesSkyBackdrop {
@@ -553,27 +654,45 @@ enum GraphicsSceneSnapshotBuilder {
                 fieldOfView: .pi / 2.95,
                 maxDistance: 12.0,
                 columns: 128,
-                ambientLight: 0.36
+                ambientLight: 0.32,
+                lightSubdivisions: 8,
+                floorLightBands: 22
             )
         }
         return DepthRenderProfile(
             fieldOfView: defaultDepthFieldOfView,
             maxDistance: 10.0,
             columns: 112,
-            ambientLight: 0.24
+            ambientLight: 0.21,
+            lightSubdivisions: 8,
+            floorLightBands: 20
         )
     }
 
     private static func makeDepthLightField(
         from state: GameState,
         board: MapBoardSnapshot,
-        ambient: Double
+        ambient: Double,
+        subdivisions: Int
     ) -> DepthLightField {
         guard board.width > 0, board.height > 0 else {
-            return DepthLightField(width: board.width, height: board.height, ambient: ambient, values: [])
+            return DepthLightField(
+                width: board.width,
+                height: board.height,
+                ambient: ambient,
+                subdivisions: max(1, subdivisions),
+                sampleWidth: 0,
+                sampleHeight: 0,
+                values: []
+            )
         }
 
-        let staticKey = staticLightCacheKey(from: state, board: board, ambient: ambient)
+        let staticKey = staticLightCacheKey(
+            from: state,
+            board: board,
+            ambient: ambient,
+            subdivisions: subdivisions
+        )
         let staticField: DepthLightField
         if let cached = cachedStaticLightField, cached.key == staticKey {
             staticField = cached.field
@@ -583,6 +702,7 @@ enum GraphicsSceneSnapshotBuilder {
                 width: board.width,
                 height: board.height,
                 ambient: ambient,
+                subdivisions: max(1, subdivisions),
                 sources: staticSources,
                 board: board
             )
@@ -600,11 +720,14 @@ enum GraphicsSceneSnapshotBuilder {
         }
 
         var values = staticField.values
-        applyLightSource(lantern, to: &values, board: board)
+        applyLightSource(lantern, to: &values, field: staticField, board: board)
         let finalField = DepthLightField(
             width: board.width,
             height: board.height,
             ambient: ambient,
+            subdivisions: staticField.subdivisions,
+            sampleWidth: staticField.sampleWidth,
+            sampleHeight: staticField.sampleHeight,
             values: values
         )
         cachedFinalLightField = (finalKey, finalField)
@@ -614,7 +737,8 @@ enum GraphicsSceneSnapshotBuilder {
     private static func staticLightCacheKey(
         from state: GameState,
         board: MapBoardSnapshot,
-        ambient: Double
+        ambient: Double,
+        subdivisions: Int
     ) -> DepthStaticLightCacheKey {
         let openedInteractablesHash = hashStrings(state.world.openedInteractables)
         let bossMarkers = state.world.enemies
@@ -625,6 +749,7 @@ enum GraphicsSceneSnapshotBuilder {
             mapID: state.player.currentMapID,
             width: board.width,
             height: board.height,
+            subdivisions: max(1, subdivisions),
             ambientBucket: Int(ambient * 1000.0),
             openedInteractablesHash: openedInteractablesHash,
             bossStateHash: bossStateHash
@@ -644,8 +769,8 @@ enum GraphicsSceneSnapshotBuilder {
         let lanternStrength = max(0.0, min(1.0, Double(player.effectiveLanternCapacity()) / 18.0))
         return DepthLightSource(
             position: player.position,
-            intensity: 0.34 + (lanternStrength * 0.34),
-            radius: 3.2 + (lanternStrength * 3.0)
+            intensity: 0.46 + (lanternStrength * 0.40),
+            radius: 4.0 + (lanternStrength * 3.6)
         )
     }
 
@@ -653,20 +778,36 @@ enum GraphicsSceneSnapshotBuilder {
         width: Int,
         height: Int,
         ambient: Double,
+        subdivisions: Int,
         sources: [DepthLightSource],
         board: MapBoardSnapshot
     ) -> DepthLightField {
+        let sampleScale = max(1, subdivisions)
+        let sampleWidth = max(0, width * sampleScale)
+        let sampleHeight = max(0, height * sampleScale)
         var values = Array(
-            repeating: Array(repeating: ambient, count: width),
-            count: height
+            repeating: Array(repeating: ambient, count: sampleWidth),
+            count: sampleHeight
+        )
+        let field = DepthLightField(
+            width: width,
+            height: height,
+            ambient: ambient,
+            subdivisions: sampleScale,
+            sampleWidth: sampleWidth,
+            sampleHeight: sampleHeight,
+            values: values
         )
         for source in sources {
-            applyLightSource(source, to: &values, board: board)
+            applyLightSource(source, to: &values, field: field, board: board)
         }
         return DepthLightField(
             width: width,
             height: height,
             ambient: ambient,
+            subdivisions: sampleScale,
+            sampleWidth: sampleWidth,
+            sampleHeight: sampleHeight,
             values: values
         )
     }
@@ -674,31 +815,56 @@ enum GraphicsSceneSnapshotBuilder {
     private static func applyLightSource(
         _ source: DepthLightSource,
         to values: inout [[Double]],
+        field: DepthLightField,
         board: MapBoardSnapshot
     ) {
-        guard board.width > 0, board.height > 0 else { return }
+        guard board.width > 0,
+              board.height > 0,
+              field.sampleWidth > 0,
+              field.sampleHeight > 0 else {
+            return
+        }
 
-        let minX = max(0, Int(floor(Double(source.position.x) - source.radius)))
-        let maxX = min(board.width - 1, Int(ceil(Double(source.position.x) + source.radius)))
-        let minY = max(0, Int(floor(Double(source.position.y) - source.radius)))
-        let maxY = min(board.height - 1, Int(ceil(Double(source.position.y) + source.radius)))
+        let sourceWorldX = Double(source.position.x) + 0.5
+        let sourceWorldY = Double(source.position.y) + 0.5
+        let sampleScale = Double(field.subdivisions)
 
-        for y in minY...maxY {
-            for x in minX...maxX {
-                let target = Position(x: x, y: y)
-                let dx = Double(source.position.x - target.x)
-                let dy = Double(source.position.y - target.y)
+        let minSampleX = max(0, Int(floor((sourceWorldX - source.radius) * sampleScale)))
+        let maxSampleX = min(
+            field.sampleWidth - 1,
+            Int(ceil((sourceWorldX + source.radius) * sampleScale))
+        )
+        let minSampleY = max(0, Int(floor((sourceWorldY - source.radius) * sampleScale)))
+        let maxSampleY = min(
+            field.sampleHeight - 1,
+            Int(ceil((sourceWorldY + source.radius) * sampleScale))
+        )
+
+        guard minSampleX <= maxSampleX, minSampleY <= maxSampleY else {
+            return
+        }
+
+        for sampleY in minSampleY...maxSampleY {
+            let worldY = (Double(sampleY) + 0.5) / sampleScale
+            for sampleX in minSampleX...maxSampleX {
+                let worldX = (Double(sampleX) + 0.5) / sampleScale
+                let dx = sourceWorldX - worldX
+                let dy = sourceWorldY - worldY
                 let distance = hypot(dx, dy)
                 if distance > source.radius {
                     continue
                 }
 
-                let attenuation = pow(max(0.0, 1.0 - (distance / source.radius)), 1.75)
+                let attenuation = pow(max(0.0, 1.0 - (distance / source.radius)), 1.25)
                 var contribution = source.intensity * attenuation
-                if !hasLightLineOfSight(from: source.position, to: target, board: board) {
-                    contribution *= 0.24
+                let targetTile = Position(
+                    x: Int(floor(worldX)),
+                    y: Int(floor(worldY))
+                )
+                if !hasLightLineOfSight(from: source.position, to: targetTile, board: board) {
+                    contribution *= 0.34
                 }
-                values[y][x] = max(0.05, min(1.0, values[y][x] + contribution))
+                values[sampleY][sampleX] = max(0.03, min(1.0, values[sampleY][sampleX] + contribution))
             }
         }
     }
@@ -737,11 +903,11 @@ enum GraphicsSceneSnapshotBuilder {
         case .shrine:
             return DepthLightSource(position: cell.position, intensity: 0.58, radius: 5.2)
         case .switchLit:
-            return DepthLightSource(position: cell.position, intensity: 0.30, radius: 3.4)
+            return DepthLightSource(position: cell.position, intensity: 0.38, radius: 3.8)
         case .torchFloor:
-            return DepthLightSource(position: cell.position, intensity: 0.42, radius: 3.8)
+            return DepthLightSource(position: cell.position, intensity: 0.72, radius: 5.2)
         case .torchWall:
-            return DepthLightSource(position: cell.position, intensity: 0.36, radius: 3.2)
+            return DepthLightSource(position: cell.position, intensity: 0.64, radius: 4.7)
         case .gate:
             return DepthLightSource(position: cell.position, intensity: 0.16, radius: 2.1)
         case .none, .chest, .bed, .plateUp, .plateDown, .switchIdle:
@@ -750,7 +916,7 @@ enum GraphicsSceneSnapshotBuilder {
 
         switch cell.tile.type {
         case .doorOpen:
-            return DepthLightSource(position: cell.position, intensity: 0.22, radius: 2.6)
+            return DepthLightSource(position: cell.position, intensity: 0.30, radius: 3.2)
         case .beacon:
             return DepthLightSource(position: cell.position, intensity: 0.74, radius: 6.8)
         default:
@@ -872,6 +1038,19 @@ enum GraphicsSceneSnapshotBuilder {
             "sanctum"
         ]
         return indoorFragments.allSatisfy { !mapID.contains($0) }
+    }
+
+    private static func facingAngle(for direction: Direction) -> Double {
+        switch direction {
+        case .up:
+            return -.pi / 2
+        case .down:
+            return .pi / 2
+        case .left:
+            return .pi
+        case .right:
+            return 0
+        }
     }
 
     private static func facingUnitVector(for direction: Direction) -> (x: Double, y: Double) {

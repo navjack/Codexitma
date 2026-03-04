@@ -989,6 +989,9 @@ enum SDLGraphicsLauncher {
         let floorNear = blended(depthTheme.floor, toward: .bright, amount: 0.09)
         let floorFar = blended(depthTheme.floor, toward: .void, amount: 0.52)
         let floorBands = max(12, frame.height / 20)
+        let floorLighting = depth.floorLighting
+        let lightingBands = max(1, floorLighting.bands)
+        let lightingColumns = max(1, floorLighting.columns)
         for band in 0..<floorBands {
             let t0 = Double(band) / Double(floorBands)
             let t1 = Double(band + 1) / Double(floorBands)
@@ -997,6 +1000,32 @@ enum SDLGraphicsLauncher {
             let ratio = pow(t1, 0.62)
             let base = blended(floorFar, toward: floorNear, amount: ratio)
             fill(renderer, x: frame.x, y: y0, width: frame.width, height: max(1, y1 - y0), color: base)
+
+            let mappedBand = min(
+                lightingBands - 1,
+                Int((Double(band) + 0.5) / Double(floorBands) * Double(lightingBands))
+            )
+            for lightColumn in 0..<lightingColumns {
+                let level = floorLighting.level(column: lightColumn, band: mappedBand)
+                let lift = max(0.0, level - floorLighting.ambient)
+                let dim = max(0.0, floorLighting.ambient - level)
+                if lift <= 0.01, dim <= 0.01 {
+                    continue
+                }
+
+                let x0 = frame.x + (lightColumn * frame.width / lightingColumns)
+                let x1 = frame.x + ((lightColumn + 1) * frame.width / lightingColumns)
+                let width = max(1, x1 - x0)
+                if lift > 0.01 {
+                    let alpha = UInt8(max(0, min(170, Int((0.05 + (lift * 0.58)) * 255.0))))
+                    let glow = blended(depthTheme.innerBorder, toward: .bright, amount: 0.34)
+                    fill(renderer, x: x0, y: y0, width: width, height: max(1, y1 - y0), color: glow.withAlpha(alpha))
+                }
+                if dim > 0.01 {
+                    let alpha = UInt8(max(0, min(110, Int((0.04 + (dim * 0.34)) * 255.0))))
+                    fill(renderer, x: x0, y: y0, width: width, height: max(1, y1 - y0), color: .void.withAlpha(alpha))
+                }
+            }
             if band.isMultiple(of: 2) {
                 fill(renderer, x: frame.x, y: y0, width: frame.width, height: 1, color: depthTheme.innerBorder.withAlpha(18))
             }

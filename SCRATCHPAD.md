@@ -151,3 +151,5 @@
 - Extended Depth 3D billboard generation to render more non-wall map tiles (stairs, shrine/beacon, brush, open doors) and torch interactables, reducing cases where meaningful world objects appeared missing in first-person view.
 - Added authored torch placements to both bundled adventures (`world.json` and `world_starfall.json`) across village, field, dungeon, fen, and spire maps so the runtime light-probe effect is visible during normal progression.
 - Added depth lightmap caching in the snapshot builder (static map light field + player-lantern composite cache) to keep the new lighting pass cheap when no relevant light inputs changed.
+- Increased depth-light fidelity from per-tile sampling to an 8x subdivided light field with bilinear world-position sampling, then projected that into a per-band/per-column floor-light buffer so the ground plane reacts to torches and lanterns instead of staying mostly flat.
+- Tuned light strength/falloff to be less subtle: torchs and lantern now have larger radii and stronger intensity, and both native + SDL depth backdrops now blend local floor glow/shadow patches from the cached floor-light buffer.

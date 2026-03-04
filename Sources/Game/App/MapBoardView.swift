@@ -150,6 +150,12 @@ struct MapBoardView: View {
         let floorRect = CGRect(x: 0, y: horizon, width: size.width, height: size.height - horizon)
         let stripeStrength: Double
         let floorBands: Int
+        let floorLighting = scene.depth?.floorLighting
+        let lightingColumns = floorLighting?.columns ?? 0
+        let lightingBands = floorLighting?.bands ?? 0
+        let lightingColumnWidth = lightingColumns > 0
+            ? (size.width / CGFloat(lightingColumns))
+            : 0
         switch theme.pattern {
         case .brick:
             stripeStrength = 0.08
@@ -226,6 +232,39 @@ struct MapBoardView: View {
                 : Color.black.opacity(max(0.03, stripeStrength - 0.02))
             context.fill(Path(rect), with: .color(theme.floor.opacity(shade)))
             context.fill(Path(rect.insetBy(dx: 0, dy: 0)), with: .color(stripe))
+
+            if let floorLighting,
+               lightingColumns > 0,
+               lightingBands > 0 {
+                let mappedBand = min(
+                    lightingBands - 1,
+                    Int((Double(band) + 0.5) / Double(floorBands) * Double(lightingBands))
+                )
+                for lightColumn in 0..<lightingColumns {
+                    let level = floorLighting.level(column: lightColumn, band: mappedBand)
+                    let lift = max(0.0, level - floorLighting.ambient)
+                    let dim = max(0.0, floorLighting.ambient - level)
+                    if lift <= 0.01, dim <= 0.01 {
+                        continue
+                    }
+
+                    let x = CGFloat(lightColumn) * lightingColumnWidth
+                    let patch = CGRect(
+                        x: x,
+                        y: rect.minY,
+                        width: max(1, lightingColumnWidth + 1),
+                        height: rect.height
+                    )
+                    if lift > 0.01 {
+                        let glow = theme.roomHighlight.opacity(min(0.44, 0.06 + (lift * 0.58)))
+                        context.fill(Path(patch), with: .color(glow))
+                    }
+                    if dim > 0.01 {
+                        let shadow = Color.black.opacity(min(0.22, 0.05 + (dim * 0.34)))
+                        context.fill(Path(patch), with: .color(shadow))
+                    }
+                }
+            }
 
             if band > 0 {
                 let line = Path(CGRect(x: 0, y: y0, width: size.width, height: 1))
