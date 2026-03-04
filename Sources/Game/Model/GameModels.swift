@@ -800,6 +800,7 @@ struct InteractableDefinition: Codable {
     let title: String
     let lines: [String]
     let rewardItem: ItemID?
+    let rewardMarks: Int?
     let requiredFlag: QuestFlag?
     let grantsFlag: QuestFlag?
 }

@@ -58,6 +58,7 @@ final class GameSessionController: ObservableObject {
     @Published private(set) var state: GameState
     @Published private(set) var visualTheme: GraphicsVisualTheme = .gemstone
 
+    private let library: GameContentLibrary
     private let engine: GameEngine
     private let preferenceStore: GraphicsPreferenceStore
     private let soundEngine: AppleIISoundEngine
@@ -69,6 +70,7 @@ final class GameSessionController: ObservableObject {
         preferenceStore: GraphicsPreferenceStore = .shared,
         soundEngine: AppleIISoundEngine = .shared
     ) {
+        self.library = library
         self.preferenceStore = preferenceStore
         self.soundEngine = soundEngine
         let engine = GameEngine(library: library, saveRepository: saveRepository)
@@ -102,6 +104,43 @@ final class GameSessionController: ObservableObject {
     func selectVisualTheme(_ theme: GraphicsVisualTheme) {
         visualTheme = theme
         preferenceStore.saveTheme(theme)
+    }
+
+    func canOpenEditorFromCurrentMode() -> Bool {
+        state.mode != .ending
+    }
+
+    func editorTargetAdventureID() -> AdventureID {
+        switch state.mode {
+        case .title, .characterCreation:
+            return state.selectedAdventureID()
+        default:
+            return state.currentAdventureID
+        }
+    }
+
+    func editorConfirmationLines() -> [String] {
+        let adventureID = editorTargetAdventureID()
+        let isExternal = library.entry(for: adventureID)?.folder.contains("/") == true
+        var lines: [String] = []
+
+        if isExternal {
+            lines.append("THIS OPENS THE RESOLVED USER PACK OR OVERRIDE FOR \(adventureID.rawValue.uppercased()).")
+            lines.append("SAVES WILL WRITE BACK INTO THAT EXISTING EXTERNAL PACK FOLDER.")
+        } else {
+            lines.append("THIS OPENS THE BUNDLED ADVENTURE \(adventureID.rawValue.uppercased()) IN THE EDITOR.")
+            lines.append("SAVES WILL CREATE OR UPDATE A SAFE EXTERNAL OVERRIDE. THE APP BUNDLE STAYS READ-ONLY.")
+        }
+
+        if state.mode != .title && state.mode != .characterCreation {
+            lines.append("YOUR CURRENT RUN STAYS OPEN IN THIS WINDOW WHILE THE EDITOR OPENS.")
+        }
+
+        return lines
+    }
+
+    func openEditorForCurrentContext() {
+        AdventureEditorLauncher.present(library: library, initialAdventureID: editorTargetAdventureID())
     }
 
     private func resolvedCommand(for command: ActionCommand) -> ActionCommand {
@@ -260,6 +299,7 @@ final class GraphicsAppDelegate: NSObject, NSApplicationDelegate {
 
 struct GameRootView: View {
     @ObservedObject var session: GameSessionController
+    @State private var showingEditorConfirm = false
 
     private let palette = UltimaPalette()
 
@@ -268,8 +308,18 @@ struct GameRootView: View {
             palette.background.ignoresSafeArea()
             PixelStars(color: starfieldColor).ignoresSafeArea()
             PixelKeyCapture(
-                onCommand: { session.send($0) },
-                onThemeToggle: { session.cycleVisualTheme() }
+                onCommand: {
+                    guard !showingEditorConfirm else { return }
+                    session.send($0)
+                },
+                onThemeToggle: {
+                    guard !showingEditorConfirm else { return }
+                    session.cycleVisualTheme()
+                },
+                onEditorRequest: {
+                    guard !showingEditorConfirm else { return }
+                    requestEditor()
+                }
             )
                 .frame(width: 1, height: 1)
                 .allowsHitTesting(false)
@@ -283,6 +333,10 @@ struct GameRootView: View {
                 endingView
             default:
                 worldView
+            }
+
+            if showingEditorConfirm {
+                editorConfirmOverlay
             }
         }
         .onMoveCommand(perform: handleMove)
@@ -304,6 +358,7 @@ struct GameRootView: View {
                 menuButton("D: NEXT") { session.send(.move(.right)) }
                 menuButton("N: CREATE") { session.send(.newGame) }
                 menuButton("L: LOAD") { session.send(.load) }
+                menuButton("M: EDIT") { requestEditor() }
                 menuButton("X: QUIT") { session.send(.quit) }
             }
             .frame(maxWidth: 900)
@@ -332,7 +387,8 @@ struct GameRootView: View {
                 Text("A/D PICK ADVENTURE   ARROWS/WASD STEP ROOM TO ROOM")
                 Text("E TALK OR USE   I OPEN PACK")
                 Text("J SHOW GOAL   K SAVE   L LOAD   T SWITCH STYLE")
-                Text("Q BACKS OUT OF MENUS   --BRIDGE / --SCRIPT FOR HEADLESS CONTROL")
+                Text("M OPENS EDITOR   Q BACKS OUT OF MENUS")
+                Text("--BRIDGE / --SCRIPT FOR HEADLESS CONTROL")
             }
             .font(.system(size: 10, weight: .regular, design: .monospaced))
             .foregroundStyle(palette.text.opacity(0.85))
@@ -407,6 +463,7 @@ struct GameRootView: View {
                 Text(session.visualTheme.displayName.uppercased())
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
                     .foregroundStyle(palette.accentBlue)
+                menuButton("M: EDIT") { requestEditor() }
                 menuButton("E: BEGIN") { session.send(.confirm) }
                 menuButton("Q: BACK") { session.send(.cancel) }
             }
@@ -657,6 +714,10 @@ struct GameRootView: View {
                             menuButton("X") { session.send(.quit) }
                         }
                     }
+                    HStack(spacing: 8) {
+                        menuButton("M") { requestEditor() }
+                        menuButton("T") { session.cycleVisualTheme() }
+                    }
                 }
             }
         }
@@ -740,6 +801,7 @@ struct GameRootView: View {
     }
 
     private func handleMove(_ direction: MoveCommandDirection) {
+        guard !showingEditorConfirm else { return }
         switch direction {
         case .up:
             session.send(.move(.up))
@@ -861,10 +923,49 @@ struct GameRootView: View {
             return "T STYLE  I ALSO LEAVES"
         default:
             if session.visualTheme == .depth3D {
-                return "Q BACK  T STYLE  X QUIT"
+                return "Q BACK  M EDIT  X QUIT"
             }
-            return "T STYLE  X QUIT"
+            return "T STYLE  M EDIT  X QUIT"
         }
+    }
+
+    private var editorConfirmOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.74)
+                .ignoresSafeArea()
+
+            PixelPanel(title: "OPEN EDITOR?", palette: palette) {
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(Array(session.editorConfirmationLines().enumerated()), id: \.offset) { _, line in
+                        Text(line)
+                            .font(.system(size: 10, weight: .regular, design: .monospaced))
+                            .foregroundStyle(palette.text)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Text("ARE YOU SURE?")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundStyle(palette.lightGold)
+
+                    HStack(spacing: 10) {
+                        menuButton("YES OPEN") {
+                            showingEditorConfirm = false
+                            session.openEditorForCurrentContext()
+                        }
+                        menuButton("NO STAY") {
+                            showingEditorConfirm = false
+                        }
+                    }
+                }
+                .frame(width: 520, alignment: .leading)
+            }
+            .frame(width: 580)
+        }
+    }
+
+    private func requestEditor() {
+        guard session.canOpenEditorFromCurrentMode() else { return }
+        showingEditorConfirm = true
     }
 }
 
@@ -2873,11 +2974,13 @@ private struct PixelStars: View {
 private struct PixelKeyCapture: NSViewRepresentable {
     let onCommand: (ActionCommand) -> Void
     let onThemeToggle: () -> Void
+    let onEditorRequest: () -> Void
 
     func makeNSView(context: Context) -> KeyCaptureView {
         let view = KeyCaptureView()
         view.onCommand = onCommand
         view.onThemeToggle = onThemeToggle
+        view.onEditorRequest = onEditorRequest
         DispatchQueue.main.async {
             view.window?.makeFirstResponder(view)
         }
@@ -2887,6 +2990,7 @@ private struct PixelKeyCapture: NSViewRepresentable {
     func updateNSView(_ nsView: KeyCaptureView, context: Context) {
         nsView.onCommand = onCommand
         nsView.onThemeToggle = onThemeToggle
+        nsView.onEditorRequest = onEditorRequest
         DispatchQueue.main.async {
             nsView.window?.makeFirstResponder(nsView)
         }
@@ -2896,12 +3000,15 @@ private struct PixelKeyCapture: NSViewRepresentable {
 private final class KeyCaptureView: NSView {
     var onCommand: ((ActionCommand) -> Void)?
     var onThemeToggle: (() -> Void)?
+    var onEditorRequest: (() -> Void)?
 
     override var acceptsFirstResponder: Bool { true }
 
     override func keyDown(with event: NSEvent) {
         if isThemeToggle(event) {
             onThemeToggle?()
+        } else if isEditorRequest(event) {
+            onEditorRequest?()
         } else if let command = parse(event) {
             onCommand?(command)
         } else {
@@ -2915,6 +3022,14 @@ private final class KeyCaptureView: NSView {
             return false
         }
         return char == "t"
+    }
+
+    private func isEditorRequest(_ event: NSEvent) -> Bool {
+        guard let chars = event.charactersIgnoringModifiers?.lowercased(),
+              let char = chars.first else {
+            return false
+        }
+        return char == "m"
     }
 
     private func parse(_ event: NSEvent) -> ActionCommand? {

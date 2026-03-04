@@ -39,6 +39,8 @@
 - Began the first real inspector pass in the editor: selected NPCs, enemies, interactables, and portals can now be edited from the right-side panel instead of only being summarized.
 - Completed the editor-suite milestone push: added content tabs for dialogues, quest flow, encounters, shops, NPCs, and enemies; seeded blank packs with playable starter data; and added `SAVE + PLAYTEST` so the editor can export and launch directly into the current adventure.
 - Filled in more inspector coverage so enemies expose AI, interactables expose reward/flag fields, and portals expose destination coordinates.
+- Finished the merge-blocking editor polish pass: added pre-export validation with surfaced issues, interactable `rewardMarks`, portal gate text/flag authoring, and promoted the editor into a first-class graphics-mode feature via `M` from the title screen or a live run with a confirmation prompt.
+- Bundled adventures now open in the editor as safe external overrides, while external packs and existing user mods reopen and save back into their existing pack folder.
 
 ## Current Notes
 

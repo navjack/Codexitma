@@ -4,29 +4,71 @@ import SwiftUI
 
 @MainActor
 enum AdventureEditorLauncher {
-    private static var retainedDelegate: AdventureEditorAppDelegate?
+    private static var retainedAppDelegate: StandaloneEditorAppDelegate?
+    private static var retainedControllers: [AdventureEditorWindowController] = []
 
     static func run(library: GameContentLibrary) {
         let app = NSApplication.shared
         app.setActivationPolicy(.regular)
-        let delegate = AdventureEditorAppDelegate(library: library)
-        retainedDelegate = delegate
+        let delegate = StandaloneEditorAppDelegate()
+        retainedAppDelegate = delegate
         app.delegate = delegate
+        present(library: library)
         app.activate(ignoringOtherApps: true)
         app.run()
+    }
+
+    static func present(library: GameContentLibrary, initialAdventureID: AdventureID? = nil) {
+        let controller = AdventureEditorWindowController(
+            library: library,
+            initialAdventureID: initialAdventureID
+        ) { closedController in
+            retainedControllers.removeAll { $0 === closedController }
+        }
+        retainedControllers.append(controller)
+        controller.show()
     }
 }
 
 @MainActor
-final class AdventureEditorAppDelegate: NSObject, NSApplicationDelegate {
+private final class StandaloneEditorAppDelegate: NSObject, NSApplicationDelegate {
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        true
+    }
+}
+
+@MainActor
+private final class AdventureEditorWindowController: NSObject, NSWindowDelegate {
     private let store: AdventureEditorStore
+    private let onClose: (AdventureEditorWindowController) -> Void
     private var window: NSWindow?
 
-    init(library: GameContentLibrary) {
+    init(
+        library: GameContentLibrary,
+        initialAdventureID: AdventureID?,
+        onClose: @escaping (AdventureEditorWindowController) -> Void
+    ) {
         self.store = AdventureEditorStore(library: library)
+        self.onClose = onClose
+        super.init()
+        if let initialAdventureID {
+            store.selectCatalogAdventure(initialAdventureID)
+        }
     }
 
-    func applicationDidFinishLaunching(_ notification: Notification) {
+    func show() {
+        let window = self.window ?? makeWindow()
+        self.window = window
+        window.makeKeyAndOrderFront(nil)
+        NSApplication.shared.activate(ignoringOtherApps: true)
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        onClose(self)
+        window = nil
+    }
+
+    private func makeWindow() -> NSWindow {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1380, height: 840),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
@@ -36,14 +78,10 @@ final class AdventureEditorAppDelegate: NSObject, NSApplicationDelegate {
         window.title = "Codexitma Adventure Editor"
         window.backgroundColor = .black
         window.contentMinSize = NSSize(width: 1180, height: 760)
+        window.delegate = self
         window.center()
         window.contentView = NSHostingView(rootView: AdventureEditorRootView(store: store))
-        window.makeKeyAndOrderFront(nil)
-        self.window = window
-    }
-
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        true
+        return window
     }
 }
 
@@ -177,6 +215,7 @@ final class AdventureEditorStore: ObservableObject {
     @Published var selectedEncounterIndex = 0
     @Published var selectedShopIndex = 0
     @Published var selectedShopOfferIndex = 0
+    @Published var validationMessages: [String] = []
     @Published var statusLine = "READY. FORK AN ADVENTURE OR CREATE A NEW TEMPLATE."
 
     let catalog: [AdventureCatalogEntry]
@@ -350,6 +389,28 @@ final class AdventureEditorStore: ObservableObject {
         return shop.offers[index]
     }
 
+    var savePolicyLines: [String] {
+        guard let adventureID = selectedCatalogID,
+              let entry = library.entry(for: adventureID) else {
+            return [
+                "SOURCE: NEW CUSTOM PACK",
+                "SAVE WRITES A BRAND NEW USER ADVENTURE IN APPLICATION SUPPORT."
+            ]
+        }
+
+        if entry.folder.contains("/") {
+            return [
+                "SOURCE: USER PACK OR OVERRIDE",
+                "SAVE WRITES BACK INTO THE EXISTING EXTERNAL PACK FOLDER."
+            ]
+        }
+
+        return [
+            "SOURCE: BUNDLED ADVENTURE",
+            "SAVE WRITES A SAFE EXTERNAL OVERRIDE. THE APP BUNDLE IS NEVER MODIFIED."
+        ]
+    }
+
     var selectedNPCShop: ShopDefinition? {
         guard let npc = selectedNPC else { return nil }
         return document.shops.first(where: { $0.merchantID == npc.id })
@@ -369,6 +430,7 @@ final class AdventureEditorStore: ObservableObject {
         resetSecondarySelections()
         selectedContentTab = .maps
         selectedCanvasSelection = nil
+        validationMessages = []
         statusLine = "LOADED \(entry.title.uppercased()) FOR EDITING."
     }
 
@@ -378,10 +440,24 @@ final class AdventureEditorStore: ObservableObject {
         resetSecondarySelections()
         selectedContentTab = .maps
         selectedCanvasSelection = nil
+        validationMessages = []
         statusLine = "BLANK TEMPLATE CREATED. SAVE IT TO EXPORT A NEW ADVENTURE PACK."
     }
 
+    @discardableResult
+    func validateCurrentPack() -> Bool {
+        let issues = exporter.validate(document: document)
+        validationMessages = issues
+        if issues.isEmpty {
+            statusLine = "VALIDATION CLEAN. THE PACK IS READY TO EXPORT."
+            return true
+        }
+        statusLine = "VALIDATION FAILED: \(issues.count) ISSUE(S)."
+        return false
+    }
+
     func saveCurrentPack() {
+        guard validateCurrentPack() else { return }
         do {
             let exportedURL = try exporter.save(document: document)
             statusLine = "EXPORTED TO \(exportedURL.path.uppercased())"
@@ -391,6 +467,7 @@ final class AdventureEditorStore: ObservableObject {
     }
 
     func saveAndPlaytestCurrentPack() {
+        guard validateCurrentPack() else { return }
         do {
             _ = try exporter.save(document: document)
             try playtestLauncher(AdventureID(rawValue: document.adventureID))
@@ -704,6 +781,7 @@ final class AdventureEditorStore: ObservableObject {
             title: interactable.title,
             lines: interactable.lines,
             rewardItem: interactable.rewardItem,
+            rewardMarks: interactable.rewardMarks,
             requiredFlag: interactable.requiredFlag,
             grantsFlag: interactable.grantsFlag
         )
@@ -720,6 +798,7 @@ final class AdventureEditorStore: ObservableObject {
             title: value,
             lines: interactable.lines,
             rewardItem: interactable.rewardItem,
+            rewardMarks: interactable.rewardMarks,
             requiredFlag: interactable.requiredFlag,
             grantsFlag: interactable.grantsFlag
         )
@@ -735,6 +814,7 @@ final class AdventureEditorStore: ObservableObject {
             title: interactable.title,
             lines: kind.defaultLines,
             rewardItem: kind == .chest ? .healingTonic : nil,
+            rewardMarks: interactable.rewardMarks,
             requiredFlag: interactable.requiredFlag,
             grantsFlag: interactable.grantsFlag
         )
@@ -751,6 +831,23 @@ final class AdventureEditorStore: ObservableObject {
             title: interactable.title,
             lines: interactable.lines,
             rewardItem: itemID,
+            rewardMarks: interactable.rewardMarks,
+            requiredFlag: interactable.requiredFlag,
+            grantsFlag: interactable.grantsFlag
+        )
+    }
+
+    func updateSelectedInteractableRewardMarks(_ amount: Int) {
+        guard let index = selectedInteractableIndex else { return }
+        let interactable = document.maps[document.selectedMapIndex].interactables[index]
+        document.maps[document.selectedMapIndex].interactables[index] = InteractableDefinition(
+            id: interactable.id,
+            kind: interactable.kind,
+            position: interactable.position,
+            title: interactable.title,
+            lines: interactable.lines,
+            rewardItem: interactable.rewardItem,
+            rewardMarks: amount > 0 ? amount : nil,
             requiredFlag: interactable.requiredFlag,
             grantsFlag: interactable.grantsFlag
         )
@@ -766,6 +863,7 @@ final class AdventureEditorStore: ObservableObject {
             title: interactable.title,
             lines: interactable.lines,
             rewardItem: interactable.rewardItem,
+            rewardMarks: interactable.rewardMarks,
             requiredFlag: flag,
             grantsFlag: interactable.grantsFlag
         )
@@ -781,6 +879,7 @@ final class AdventureEditorStore: ObservableObject {
             title: interactable.title,
             lines: interactable.lines,
             rewardItem: interactable.rewardItem,
+            rewardMarks: interactable.rewardMarks,
             requiredFlag: interactable.requiredFlag,
             grantsFlag: flag
         )
@@ -835,6 +934,31 @@ final class AdventureEditorStore: ObservableObject {
             toPosition: Position(x: portal.toPosition.x, y: max(0, value)),
             requiredFlag: portal.requiredFlag,
             blockedMessage: portal.blockedMessage
+        )
+    }
+
+    func updateSelectedPortalRequiredFlag(_ flag: QuestFlag?) {
+        guard let index = selectedPortalIndex else { return }
+        let portal = document.maps[document.selectedMapIndex].portals[index]
+        document.maps[document.selectedMapIndex].portals[index] = Portal(
+            from: portal.from,
+            toMap: portal.toMap,
+            toPosition: portal.toPosition,
+            requiredFlag: flag,
+            blockedMessage: portal.blockedMessage
+        )
+    }
+
+    func updateSelectedPortalBlockedMessage(_ value: String) {
+        guard let index = selectedPortalIndex else { return }
+        let portal = document.maps[document.selectedMapIndex].portals[index]
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        document.maps[document.selectedMapIndex].portals[index] = Portal(
+            from: portal.from,
+            toMap: portal.toMap,
+            toPosition: portal.toPosition,
+            requiredFlag: portal.requiredFlag,
+            blockedMessage: trimmed.isEmpty ? nil : trimmed
         )
     }
 
@@ -1459,6 +1583,7 @@ final class AdventureEditorStore: ObservableObject {
             title: selectedInteractableKind.editorTitle,
             lines: selectedInteractableKind.defaultLines,
             rewardItem: selectedInteractableKind == .chest ? .healingTonic : nil,
+            rewardMarks: nil,
             requiredFlag: nil,
             grantsFlag: nil
         )
@@ -1803,6 +1928,7 @@ final class AdventureEditorStore: ObservableObject {
                             title: "Starter Cache",
                             lines: ["A small cache sits here for testing rewards."],
                             rewardItem: .healingTonic,
+                            rewardMarks: 4,
                             requiredFlag: nil,
                             grantsFlag: nil
                         )
@@ -1910,7 +2036,150 @@ struct AdventurePackExporter {
         }
     }
 
+    func validate(document: EditableAdventureDocument) -> [String] {
+        var issues: [String] = []
+        let loader = ContentLoader()
+
+        if document.folderName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            issues.append("Folder name cannot be empty.")
+        }
+        if document.adventureID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            issues.append("Adventure ID cannot be empty.")
+        }
+        if document.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            issues.append("Adventure title cannot be empty.")
+        }
+        if document.maps.isEmpty {
+            issues.append("At least one map is required.")
+        }
+        if document.questFlow.stages.isEmpty {
+            issues.append("At least one quest stage is required.")
+        }
+        if document.dialogues.isEmpty {
+            issues.append("At least one dialogue is required.")
+        }
+
+        issues.append(contentsOf: duplicateIDIssues(for: document.maps.map(\.id), label: "map"))
+        issues.append(contentsOf: duplicateIDIssues(for: document.dialogues.map(\.id), label: "dialogue"))
+        issues.append(contentsOf: duplicateIDIssues(for: document.encounters.map(\.id), label: "encounter"))
+        issues.append(contentsOf: duplicateIDIssues(for: document.npcs.map(\.id), label: "npc"))
+        issues.append(contentsOf: duplicateIDIssues(for: document.enemies.map(\.id), label: "enemy"))
+        issues.append(contentsOf: duplicateIDIssues(for: document.shops.map(\.id), label: "shop"))
+
+        var mapsByID: [String: EditableMap] = [:]
+        for map in document.maps {
+            mapsByID[map.id] = map
+        }
+
+        for map in document.maps {
+            let mapDefinition = MapDefinition(
+                id: map.id,
+                name: map.name,
+                layoutFile: "maps/\(sanitizePathComponent(map.id)).txt",
+                lines: map.lines,
+                spawn: map.spawn,
+                portals: map.portals,
+                interactables: map.interactables
+            )
+            do {
+                try loader.validate(map: mapDefinition)
+            } catch {
+                issues.append("Map \(map.id) has invalid layout data.")
+            }
+
+            if !contains(position: map.spawn, in: map) {
+                issues.append("Map \(map.id) has a spawn outside its bounds.")
+            } else if !isWalkable(position: map.spawn, in: map) {
+                issues.append("Map \(map.id) spawn must be on a walkable tile.")
+            }
+
+            issues.append(contentsOf: duplicateIDIssues(for: map.interactables.map(\.id), label: "interactable in \(map.id)"))
+
+            for interactable in map.interactables {
+                if !contains(position: interactable.position, in: map) {
+                    issues.append("Interactable \(interactable.id) is outside \(map.id).")
+                }
+                if let marks = interactable.rewardMarks, marks < 0 {
+                    issues.append("Interactable \(interactable.id) cannot award negative marks.")
+                }
+            }
+
+            for portal in map.portals {
+                if !contains(position: portal.from, in: map) {
+                    issues.append("A portal in \(map.id) starts outside the map.")
+                }
+                if portal.requiredFlag != nil,
+                   (portal.blockedMessage?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) {
+                    issues.append("A gated portal in \(map.id) needs blocked text.")
+                }
+                guard let destinationMap = mapsByID[portal.toMap] else {
+                    issues.append("A portal in \(map.id) points to missing map \(portal.toMap).")
+                    continue
+                }
+                if !contains(position: portal.toPosition, in: destinationMap) {
+                    issues.append("A portal in \(map.id) lands outside \(portal.toMap).")
+                }
+            }
+        }
+
+        let dialogueIDs = Set(document.dialogues.map(\.id))
+        for npc in document.npcs {
+            guard let map = mapsByID[npc.mapID] else {
+                issues.append("NPC \(npc.id) points to missing map \(npc.mapID).")
+                continue
+            }
+            if !contains(position: npc.position, in: map) {
+                issues.append("NPC \(npc.id) is outside \(npc.mapID).")
+            }
+            if !dialogueIDs.contains(npc.dialogueID) {
+                issues.append("NPC \(npc.id) points to missing dialogue \(npc.dialogueID).")
+            }
+        }
+
+        let enemyIDs = Set(document.enemies.map(\.id))
+        for enemy in document.enemies {
+            guard let map = mapsByID[enemy.mapID] else {
+                issues.append("Enemy \(enemy.id) points to missing map \(enemy.mapID).")
+                continue
+            }
+            if !contains(position: enemy.position, in: map) {
+                issues.append("Enemy \(enemy.id) is outside \(enemy.mapID).")
+            }
+        }
+
+        for encounter in document.encounters {
+            if !enemyIDs.contains(encounter.enemyID) {
+                issues.append("Encounter \(encounter.id) points to missing enemy \(encounter.enemyID).")
+            }
+        }
+
+        let npcIDs = Set(document.npcs.map(\.id))
+        var allOfferIDs: [String] = []
+        for shop in document.shops {
+            if !npcIDs.contains(shop.merchantID) {
+                issues.append("Shop \(shop.id) points to missing merchant \(shop.merchantID).")
+            }
+            if shop.offers.isEmpty {
+                issues.append("Shop \(shop.id) must have at least one offer.")
+            }
+            for offer in shop.offers {
+                if offer.price < 0 {
+                    issues.append("Shop offer \(offer.id) cannot have a negative price.")
+                }
+                allOfferIDs.append(offer.id)
+            }
+        }
+        issues.append(contentsOf: duplicateIDIssues(for: allOfferIDs, label: "shop offer"))
+
+        return issues
+    }
+
     func save(document: EditableAdventureDocument) throws -> URL {
+        let issues = validate(document: document)
+        if !issues.isEmpty {
+            throw AdventurePackValidationError(issues: issues)
+        }
+
         let folderName = sanitizePathComponent(document.folderName.isEmpty ? document.adventureID : document.folderName)
         let packURL = externalRootURL.appendingPathComponent(folderName, isDirectory: true)
         let mapsURL = packURL.appendingPathComponent("maps", isDirectory: true)
@@ -1980,6 +2249,37 @@ struct AdventurePackExporter {
         let safe = String(filtered).trimmingCharacters(in: CharacterSet(charactersIn: "_"))
         return safe.isEmpty ? "adventure" : safe
     }
+
+    private func duplicateIDIssues(for ids: [String], label: String) -> [String] {
+        var seen: Set<String> = []
+        var duplicates: Set<String> = []
+        for id in ids {
+            if !seen.insert(id).inserted {
+                duplicates.insert(id)
+            }
+        }
+        return duplicates.sorted().map { "Duplicate \(label) id: \($0)." }
+    }
+
+    private func contains(position: Position, in map: EditableMap) -> Bool {
+        guard position.y >= 0, position.y < map.lines.count else { return false }
+        let row = Array(map.lines[position.y])
+        return position.x >= 0 && position.x < row.count
+    }
+
+    private func isWalkable(position: Position, in map: EditableMap) -> Bool {
+        guard contains(position: position, in: map) else { return false }
+        let row = Array(map.lines[position.y])
+        return TileFactory.tile(for: row[position.x]).walkable
+    }
+}
+
+struct AdventurePackValidationError: LocalizedError {
+    let issues: [String]
+
+    var errorDescription: String? {
+        issues.joined(separator: " | ")
+    }
 }
 
 private struct EditorAdventureManifest: Codable {
@@ -2031,6 +2331,10 @@ struct AdventureEditorRootView: View {
                 .font(.system(size: 20, weight: .bold, design: .monospaced))
                 .foregroundStyle(palette.title)
             Spacer()
+            Button("VALIDATE") {
+                _ = store.validateCurrentPack()
+            }
+            .buttonStyle(EditorButtonStyle(background: palette.panelAlt))
             Button("SAVE + PLAYTEST") {
                 store.saveAndPlaytestCurrentPack()
             }
@@ -2078,8 +2382,39 @@ struct AdventureEditorRootView: View {
                     store.createBlankAdventure()
                 }
                 .buttonStyle(EditorButtonStyle(background: palette.panelAlt))
+
+                validationPanel
             }
         }
+    }
+
+    private var validationPanel: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("VALIDATION")
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundStyle(palette.label)
+
+            if store.validationMessages.isEmpty {
+                Text("NO SAVED VALIDATION ISSUES. USE VALIDATE, SAVE, OR SAVE + PLAYTEST TO CHECK THE PACK.")
+                    .font(.system(size: 9, weight: .regular, design: .monospaced))
+                    .foregroundStyle(palette.text.opacity(0.78))
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                ForEach(Array(store.validationMessages.prefix(5).enumerated()), id: \.offset) { _, issue in
+                    Text("• \(issue.uppercased())")
+                        .font(.system(size: 9, weight: .regular, design: .monospaced))
+                        .foregroundStyle(palette.text.opacity(0.78))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                if store.validationMessages.count > 5 {
+                    Text("• ...AND \(store.validationMessages.count - 5) MORE")
+                        .font(.system(size: 9, weight: .regular, design: .monospaced))
+                        .foregroundStyle(palette.text.opacity(0.70))
+                }
+            }
+        }
+        .padding(.top, 6)
     }
 
     private var metadataPanel: some View {
@@ -2127,6 +2462,13 @@ struct AdventureEditorRootView: View {
                     .font(.system(size: 10, weight: .regular, design: .monospaced))
                     .foregroundStyle(palette.text.opacity(0.84))
                     .fixedSize(horizontal: false, vertical: true)
+
+                ForEach(Array(store.savePolicyLines.enumerated()), id: \.offset) { _, line in
+                    Text(line)
+                        .font(.system(size: 10, weight: .regular, design: .monospaced))
+                        .foregroundStyle(palette.text.opacity(0.78))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
     }
@@ -3087,6 +3429,11 @@ struct AdventureEditorRootView: View {
                 .labelsHidden()
             }
 
+            labeledStepper("REWARD MARKS", value: Binding(
+                get: { store.selectedInteractable?.rewardMarks ?? interactable.rewardMarks ?? 0 },
+                set: { store.updateSelectedInteractableRewardMarks($0) }
+            ), range: 0...999)
+
             VStack(alignment: .leading, spacing: 4) {
                 Text("REQUIRED FLAG")
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
@@ -3148,6 +3495,41 @@ struct AdventureEditorRootView: View {
                 store.syncSelectedPortalToDestinationSpawn()
             }
             .buttonStyle(EditorButtonStyle(background: palette.panelAlt))
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("REQUIRED FLAG")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundStyle(palette.label)
+
+                Picker("Portal Flag", selection: Binding(
+                    get: { store.selectedPortal?.requiredFlag ?? portal.requiredFlag },
+                    set: { store.updateSelectedPortalRequiredFlag($0) }
+                )) {
+                    Text("NONE").tag(Optional<QuestFlag>.none)
+                    ForEach(QuestFlag.allCases, id: \.self) { flag in
+                        Text(flag.rawValue).tag(Optional(flag))
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("BLOCKED TEXT")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundStyle(palette.label)
+                TextEditor(text: Binding(
+                    get: { store.selectedPortal?.blockedMessage ?? portal.blockedMessage ?? "" },
+                    set: { store.updateSelectedPortalBlockedMessage($0) }
+                ))
+                .font(.system(size: 11, weight: .regular, design: .monospaced))
+                .scrollContentBackground(.hidden)
+                .foregroundStyle(palette.text)
+                .frame(height: 72)
+                .padding(6)
+                .background(palette.panelAlt)
+                .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
+            }
 
             HStack(spacing: 8) {
                 labeledStepper("TO X", value: Binding(

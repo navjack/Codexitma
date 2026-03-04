@@ -517,6 +517,12 @@ final class GameEngine {
             if let reward = interactable.rewardItem {
                 grantItem(reward, message: interactable.lines.first ?? "You find something useful.")
             }
+            if let reward = interactable.rewardMarks, reward > 0 {
+                let message = interactable.rewardItem == nil
+                    ? (interactable.lines.first ?? "You find a cache of old coin.")
+                    : nil
+                grantMarks(reward, message: message)
+            }
         case .bed:
             state.player.lastSavePosition = state.player.position
             state.player.lastSaveMapID = state.player.currentMapID
@@ -617,6 +623,15 @@ final class GameEngine {
         }
         state.player.inventory.append(item)
         state.log(message)
+    }
+
+    private func grantMarks(_ amount: Int, message: String?) {
+        guard amount > 0 else { return }
+        state.player.marks += amount
+        if let message {
+            state.log(message)
+        }
+        state.log("You gain \(amount) marks.")
     }
 
     private func moveInventorySelection(_ direction: Direction) {

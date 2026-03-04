@@ -42,8 +42,9 @@ What it can do right now:
   - NPC ids, names, and dialogue ids
   - shop creation for selected NPCs
   - Enemy ids, names, AI, and core combat stats
-  - Interactable ids, titles, kinds, reward items, and quest flags
-  - Portal destination map, plus destination coordinates
+  - Interactable ids, titles, kinds, reward items, reward marks, and quest flags
+  - Portal destination map, destination coordinates, and gate text
+- Validate packs before export with human-readable issue lists
 - Edit non-spatial records through dedicated tabs:
   - `Dialogues`
   - `Quest Flow`
@@ -52,6 +53,7 @@ What it can do right now:
   - `NPC Roster`
   - `Enemy Roster`
 - Save and immediately launch a live playtest session with `SAVE + PLAYTEST`
+- Open the editor directly from the graphics title screen or an active run with an in-game confirmation prompt
 - Export a full external content pack into `~/Library/Application Support/Codexitma/Adventures`
 
 ## Current Export Behavior
@@ -99,11 +101,9 @@ The editor now covers the full currently-shipped content model at a practical le
 
 Remaining gaps:
 
-- Reward `marks` on interactables
-- Portal `requiredFlag` and `blockedMessage`
 - Enemy respawn / one-shot authoring beyond the current `active` default
 - Richer encounter-to-map placement workflows beyond the current record editor
-- Deep validation with inline error surfacing before export
+- Deeper validation helpers such as auto-fix suggestions or direct jump-to-error navigation
 
 These are refinements on top of a working authoring suite, not foundational editor gaps.
 

@@ -446,7 +446,13 @@ import Testing
             ],
             completionText: "Done."
         ),
-        dialogues: [],
+        dialogues: [
+            DialogueNode(
+                id: "forge_intro",
+                speaker: "Forge Guide",
+                lines: ["The forge is awake."]
+            )
+        ],
         encounters: [],
         npcs: [],
         enemies: [],
@@ -648,6 +654,7 @@ import Testing
         store.updateSelectedInteractableTitle("Signal Plate")
         store.updateSelectedInteractableKind(.switchRune)
         store.updateSelectedInteractableRewardItem(.lanternOil)
+        store.updateSelectedInteractableRewardMarks(12)
         store.updateSelectedInteractableRequiredFlag(.metElder)
         store.updateSelectedInteractableGrantsFlag(.fenCrossed)
 
@@ -657,6 +664,7 @@ import Testing
         #expect(editedInteractable.title == "Signal Plate")
         #expect(editedInteractable.kind == .switchRune)
         #expect(editedInteractable.rewardItem == .lanternOil)
+        #expect(editedInteractable.rewardMarks == 12)
         #expect(editedInteractable.requiredFlag == .metElder)
         #expect(editedInteractable.grantsFlag == .fenCrossed)
     }
@@ -764,4 +772,111 @@ import Testing
     #expect(launchedAdventure == AdventureID(rawValue: "editorplaytest"))
     let packURL = root.appendingPathComponent("editor_playtest", isDirectory: true)
     #expect(FileManager.default.fileExists(atPath: packURL.appendingPathComponent("adventure.json").path))
+}
+
+@Test func interactableRewardMarksIncreasePlayerCurrency() async throws {
+    let library = try ContentLoader().load()
+    let saveURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString).appendingPathExtension("json")
+    let engine = GameEngine(library: library, saveRepository: SaveRepository(fileURL: saveURL))
+
+    engine.handle(.newGame)
+    engine.handle(.confirm)
+    engine.state.world.npcs = []
+    engine.state.world.enemies = []
+
+    let mapID = engine.state.player.currentMapID
+    var map = try #require(engine.state.world.maps[mapID])
+    let interactable = InteractableDefinition(
+        id: "coin_cache",
+        kind: .chest,
+        position: engine.state.player.position,
+        title: "Coin Cache",
+        lines: ["Loose marks spill into your hands."],
+        rewardItem: nil,
+        rewardMarks: 7,
+        requiredFlag: nil,
+        grantsFlag: nil
+    )
+    map = MapDefinition(
+        id: map.id,
+        name: map.name,
+        layoutFile: map.layoutFile,
+        lines: map.lines,
+        spawn: map.spawn,
+        portals: map.portals,
+        interactables: map.interactables + [interactable]
+    )
+    engine.state.world.maps[mapID] = map
+
+    let marksBefore = engine.state.player.marks
+    engine.handle(.interact)
+
+    #expect(engine.state.player.marks == marksBefore + 7)
+    #expect(engine.state.world.openedInteractables.contains("coin_cache"))
+}
+
+@Test func adventurePackExporterValidationCatchesBrokenReferences() async throws {
+    let exporter = AdventurePackExporter(
+        externalRootURL: URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString, isDirectory: true)
+    )
+    let document = EditableAdventureDocument(
+        folderName: "broken_pack",
+        adventureID: "brokenPack",
+        title: "Broken Pack",
+        summary: "A deliberately invalid pack.",
+        introLine: "Nothing lines up.",
+        maps: [
+            EditableMap(
+                id: "merrow_village",
+                name: "Broken Grounds",
+                lines: [
+                    "#####",
+                    "#...#",
+                    "#####"
+                ],
+                spawn: Position(x: 9, y: 9),
+                portals: [
+                    Portal(
+                        from: Position(x: 1, y: 1),
+                        toMap: "missing_map",
+                        toPosition: Position(x: 0, y: 0),
+                        requiredFlag: .metElder,
+                        blockedMessage: nil
+                    )
+                ],
+                interactables: []
+            )
+        ],
+        selectedMapIndex: 0,
+        questFlow: QuestFlowDefinition(
+            stages: [QuestStageDefinition(objective: "Find a path.", completeWhenFlag: .metElder)],
+            completionText: "Done."
+        ),
+        dialogues: [DialogueNode(id: "intro", speaker: "Guide", lines: ["Hello"])],
+        encounters: [EncounterDefinition(id: "bad_encounter", enemyID: "missing_enemy", introLine: "Oops")],
+        npcs: [
+            NPCState(
+                id: "guide",
+                name: "Guide",
+                position: Position(x: 1, y: 1),
+                mapID: "merrow_village",
+                dialogueID: "missing_dialogue",
+                glyphSymbol: "&",
+                glyphColor: .yellow,
+                dialogueState: 0
+            )
+        ],
+        enemies: [],
+        shops: []
+    )
+
+    let issues = exporter.validate(document: document)
+    #expect(issues.contains(where: { $0.contains("spawn outside") }))
+    #expect(issues.contains(where: { $0.contains("missing map") }))
+    #expect(issues.contains(where: { $0.contains("missing dialogue") }))
+    #expect(issues.contains(where: { $0.contains("needs blocked text") }))
+    #expect(issues.contains(where: { $0.contains("missing enemy") }))
+    #expect(throws: AdventurePackValidationError.self) {
+        try exporter.save(document: document)
+    }
 }
