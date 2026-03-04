@@ -399,6 +399,7 @@ struct MapBoardView: View {
         let stripeStrength: Double
         let floorBands: Int
         let floorLighting = scene.depth?.floorLighting
+        let worldLighting = scene.depth?.worldLighting
         let depthTextureAtlas = Self.depthTextureAtlas
         let facing = scene.depth?.facing ?? scene.player.facing
         let fieldOfView = scene.depth?.fieldOfView ?? depthFieldOfView
@@ -482,6 +483,7 @@ struct MapBoardView: View {
                     rect: rect,
                     atlas: depthTextureAtlas,
                     floorLighting: floorLighting,
+                    worldLighting: worldLighting,
                     theme: theme,
                     horizon: horizon,
                     canvasSize: size,
@@ -535,6 +537,7 @@ struct MapBoardView: View {
         rect: CGRect,
         atlas: DepthTextureAtlas,
         floorLighting: DepthFloorLightingSnapshot?,
+        worldLighting: DepthWorldLightingSnapshot?,
         theme: RegionTheme,
         horizon: CGFloat,
         canvasSize: CGSize,
@@ -563,6 +566,7 @@ struct MapBoardView: View {
         let rowDistance = (posZ / rowDepth) * perspectiveWarp
         let stripScale = 0.78 + (pow(1.0 - bandNorm, 1.2) * 0.72)
         let stripCount = max(96, Int((Double(canvasSize.width) * 0.52) * stripScale))
+        var stripLightLevels = Array(repeating: floorLighting?.ambient ?? worldLighting?.ambient ?? 0.20, count: stripCount)
 
         context.withCGContext { cgContext in
             cgContext.interpolationQuality = .none
@@ -586,12 +590,20 @@ struct MapBoardView: View {
                 if let pixel = atlas.floorPixel(u: u, v: v) {
                     cgContext.draw(pixel, in: stripe)
                 }
+
+                let light = worldLighting?.level(atWorldX: worldX, y: worldY)
+                    ?? floorLighting?.interpolatedLevel(
+                        xNormalized: xNorm,
+                        yNormalized: bandNorm
+                    )
+                    ?? (floorLighting?.ambient ?? worldLighting?.ambient ?? 0.20)
+                stripLightLevels[strip] = light
             }
         }
 
-        if let floorLighting {
+        let ambient = floorLighting?.ambient ?? worldLighting?.ambient
+        if let ambient {
             for strip in 0..<stripCount {
-                let xNorm = (Double(strip) + 0.5) / Double(stripCount)
                 let x0 = rect.minX + (CGFloat(strip) / CGFloat(stripCount)) * rect.width
                 let x1 = rect.minX + (CGFloat(strip + 1) / CGFloat(stripCount)) * rect.width
                 let stripe = CGRect(
@@ -600,12 +612,9 @@ struct MapBoardView: View {
                     width: max(1, x1 - x0),
                     height: rect.height
                 )
-                let light = floorLighting.interpolatedLevel(
-                    xNormalized: xNorm,
-                    yNormalized: bandNorm
-                )
-                let lift = max(0.0, light - floorLighting.ambient)
-                let dim = max(0.0, floorLighting.ambient - light)
+                let light = stripLightLevels[strip]
+                let lift = max(0.0, light - ambient)
+                let dim = max(0.0, ambient - light)
                 if lift > 0.01 {
                     let glow = theme.roomHighlight.opacity(min(0.44, 0.05 + (lift * 0.60)))
                     context.fill(Path(stripe), with: .color(glow))

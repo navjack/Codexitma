@@ -168,3 +168,7 @@
 - Extended top-down map rendering to optionally apply the same runtime lighting field as an overlay, so lighting behavior can be verified from overhead view without switching tools.
 - Completed and wired `DepthTileLightingSnapshot` generation (`makeDepthTileLighting`) and added a shared `mapLighting` snapshot path so non-depth themes can still consume lightmap data.
 - Tuned textured floor perspective sampling in native Depth3D with a depth-based warp and variable strip density so near-floor texels read larger and distant tiles compress more naturally.
+- Added `DepthWorldLightingSnapshot` to the shared depth scene so both native and SDL renderers can sample lighting directly in world-space from the high-resolution light field instead of only column/band buckets.
+- Switched native floor shading to consume world-space lighting samples at each projected floor strip (`worldX/worldY`), which better anchors cast-shadow transitions to geometry.
+- Reworked SDL depth floor shading to use cached floor-projection geometry (band/strip ray factors) plus world-space light sampling per strip, reducing per-step math and improving visual shadow contact alignment.
+- Added a wall-contact shadow pass in SDL depth mode to keep wall/floor intersections visually grounded and reduce detached-looking shadow edges.

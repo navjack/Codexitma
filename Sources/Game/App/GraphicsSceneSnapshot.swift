@@ -136,6 +136,45 @@ struct DepthTileLightingSnapshot {
     }
 }
 
+struct DepthWorldLightingSnapshot {
+    let width: Int
+    let height: Int
+    let ambient: Double
+    let subdivisions: Int
+    let sampleWidth: Int
+    let sampleHeight: Int
+    let values: [[Double]]
+
+    func level(atWorldX worldX: Double, y worldY: Double) -> Double {
+        guard worldX >= 0.0,
+              worldY >= 0.0,
+              worldX < Double(width),
+              worldY < Double(height) else {
+            return ambient
+        }
+
+        guard sampleWidth > 0, sampleHeight > 0, !values.isEmpty else {
+            return ambient
+        }
+
+        let scaledX = (worldX * Double(subdivisions)) - 0.5
+        let scaledY = (worldY * Double(subdivisions)) - 0.5
+        let clampedX = max(0.0, min(Double(sampleWidth - 1), scaledX))
+        let clampedY = max(0.0, min(Double(sampleHeight - 1), scaledY))
+
+        let x0 = Int(floor(clampedX))
+        let y0 = Int(floor(clampedY))
+        let x1 = min(sampleWidth - 1, x0 + 1)
+        let y1 = min(sampleHeight - 1, y0 + 1)
+        let tx = clampedX - Double(x0)
+        let ty = clampedY - Double(y0)
+
+        let top = (values[y0][x0] * (1.0 - tx)) + (values[y0][x1] * tx)
+        let bottom = (values[y1][x0] * (1.0 - tx)) + (values[y1][x1] * tx)
+        return max(0.0, min(1.0, (top * (1.0 - ty)) + (bottom * ty)))
+    }
+}
+
 struct DepthSceneSnapshot {
     let facing: Direction
     let fieldOfView: Double
@@ -145,6 +184,7 @@ struct DepthSceneSnapshot {
     let billboards: [DepthBillboardSnapshot]
     let floorLighting: DepthFloorLightingSnapshot
     let tileLighting: DepthTileLightingSnapshot
+    let worldLighting: DepthWorldLightingSnapshot
 }
 
 struct InventoryEntrySnapshot {
@@ -454,6 +494,7 @@ enum GraphicsSceneSnapshotBuilder {
             bands: profile.floorLightBands
         )
         let tileLighting = makeDepthTileLighting(board: board, lightField: lightField)
+        let worldLighting = makeDepthWorldLighting(lightField: lightField)
 
         return DepthSceneSnapshot(
             facing: state.player.facing,
@@ -463,7 +504,8 @@ enum GraphicsSceneSnapshotBuilder {
             samples: samples,
             billboards: billboards,
             floorLighting: floorLighting,
-            tileLighting: tileLighting
+            tileLighting: tileLighting,
+            worldLighting: worldLighting
         )
     }
 
@@ -586,6 +628,18 @@ enum GraphicsSceneSnapshotBuilder {
             height: board.height,
             ambient: lightField.ambient,
             values: values
+        )
+    }
+
+    private static func makeDepthWorldLighting(lightField: DepthLightField) -> DepthWorldLightingSnapshot {
+        DepthWorldLightingSnapshot(
+            width: lightField.width,
+            height: lightField.height,
+            ambient: lightField.ambient,
+            subdivisions: lightField.subdivisions,
+            sampleWidth: lightField.sampleWidth,
+            sampleHeight: lightField.sampleHeight,
+            values: lightField.values
         )
     }
 
