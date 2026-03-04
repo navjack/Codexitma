@@ -40,13 +40,10 @@ struct LaunchOptions: Equatable {
             let arg = arguments[index]
             switch arg {
             case "--terminal":
-                target = .interactive
                 graphicsBackend = .native
             case "--graphics":
-                target = .interactive
                 graphicsBackend = .native
             case "--sdl":
-                target = .interactive
                 graphicsBackend = .sdl
             case "--editor":
                 target = .editor

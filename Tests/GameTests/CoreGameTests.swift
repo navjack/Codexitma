@@ -98,6 +98,21 @@ import Testing
     #expect(options.graphicsBackend == .sdl)
 }
 
+@Test func launchOptionsDoNotLetGraphicsFlagsOverrideNonInteractiveModes() async throws {
+    let scriptOptions = try LaunchOptions.parse(arguments: ["Game", "--script", "state", "--sdl"])
+    #expect(scriptOptions.target == .script)
+    #expect(scriptOptions.graphicsBackend == .sdl)
+    #expect(scriptOptions.commands == ["state"])
+
+    let bridgeOptions = try LaunchOptions.parse(arguments: ["Game", "--bridge", "--sdl"])
+    #expect(bridgeOptions.target == .bridge)
+    #expect(bridgeOptions.graphicsBackend == .sdl)
+
+    let editorOptions = try LaunchOptions.parse(arguments: ["Game", "--editor", "--sdl"])
+    #expect(editorOptions.target == .editor)
+    #expect(editorOptions.graphicsBackend == .sdl)
+}
+
 @Test func graphicsVisualThemeCyclesBetweenModes() async throws {
     #expect(GraphicsVisualTheme.gemstone.next() == .ultima)
     #expect(GraphicsVisualTheme.ultima.next() == .depth3D)
