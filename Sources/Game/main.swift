@@ -7,7 +7,10 @@ do {
     case .interactive(let mode):
         switch mode {
         case .graphics:
-            app.runGraphics(playtestAdventureID: options.playtestAdventureID)
+            try app.runGraphics(
+                playtestAdventureID: options.playtestAdventureID,
+                backend: options.graphicsBackend
+            )
         case .terminal:
             try app.runTerminal()
         }
@@ -19,6 +22,6 @@ do {
         try app.runBridge()
     }
 } catch {
-    fputs("Codexitma failed to start: \(error)\n", stderr)
-    exit(1)
+    PlatformRuntimeSupport.writeError("Codexitma failed to start: \(error)\n")
+    PlatformRuntimeSupport.exitFailure()
 }

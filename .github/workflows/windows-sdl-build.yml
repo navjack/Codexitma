@@ -1,0 +1,126 @@
+name: Windows SDL Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  windows-sdl:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: Check Out Repository
+        uses: actions/checkout@v4
+
+      - name: Install Swift
+        uses: compnerd/gha-setup-swift@main
+        with:
+          swift-version: swift-6.3-branch
+          swift-build: 6.3-DEVELOPMENT-SNAPSHOT-2026-02-27-a
+          update-sdk-modules: true
+
+      - name: Set Up Visual Studio Build Environment
+        uses: compnerd/gha-setup-vsdevenv@main
+        with:
+          arch: amd64
+
+      - name: Verify Swift Toolchain
+        run: swift --version
+
+      - name: Download SDL3 SDK
+        run: |
+          $sdlVersion = "3.4.2"
+          $archiveName = "SDL3-devel-$sdlVersion-VC.zip"
+          $archivePath = Join-Path $env:RUNNER_TEMP $archiveName
+          $extractRoot = Join-Path $env:RUNNER_TEMP "sdl3-sdk"
+          $downloadUrl = "https://github.com/libsdl-org/SDL/releases/download/release-$sdlVersion/$archiveName"
+
+          Invoke-WebRequest -Uri $downloadUrl -OutFile $archivePath
+          Expand-Archive -LiteralPath $archivePath -DestinationPath $extractRoot -Force
+
+          $sdlRoot = Join-Path $extractRoot "SDL3-$sdlVersion"
+          if (-not (Test-Path $sdlRoot)) {
+            throw "SDL3 SDK was not extracted where expected: $sdlRoot"
+          }
+
+          "SDL3_ROOT=$sdlRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "C_INCLUDE_PATH=$($sdlRoot)\include" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+          $libraryPath = "$($sdlRoot)\lib\x64"
+          if ($env:LIB) {
+            "LIB=$libraryPath;$env:LIB" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          } else {
+            "LIB=$libraryPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          }
+
+      - name: Build Release Binary
+        run: swift build -c release
+
+      - name: Stage Windows Artifact
+        run: |
+          $buildRoot = Resolve-Path ".build"
+          $gameExe = Get-ChildItem -Path $buildRoot -Filter "Game.exe" -Recurse |
+            Where-Object { $_.FullName -match '[\\/]release[\\/]' } |
+            Select-Object -First 1
+
+          if (-not $gameExe) {
+            throw "Unable to locate the built Game.exe artifact."
+          }
+
+          $releaseDir = Split-Path -Parent $gameExe.FullName
+          $dist = Join-Path $env:RUNNER_TEMP "Codexitma-win64"
+          New-Item -ItemType Directory -Path $dist -Force | Out-Null
+
+          Copy-Item -LiteralPath $gameExe.FullName -Destination (Join-Path $dist "Codexitma.exe")
+
+          Get-ChildItem -Path $releaseDir |
+            Where-Object { $_.Name -like "Game*" -and $_.Name -ne $gameExe.Name } |
+            ForEach-Object {
+              Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $dist $_.Name) -Recurse -Force
+            }
+
+          Get-ChildItem -Path $releaseDir -Filter "*.dll" -File |
+            ForEach-Object {
+              Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $dist $_.Name) -Force
+            }
+
+          $targetInfo = swiftc -print-target-info | ConvertFrom-Json
+          $runtimeDirs = @()
+          if ($targetInfo.paths.runtimeLibraryPaths) {
+            $runtimeDirs += $targetInfo.paths.runtimeLibraryPaths
+          }
+          if ($targetInfo.paths.runtimeResourcePath) {
+            $runtimeDirs += $targetInfo.paths.runtimeResourcePath
+          }
+
+          $runtimeDirs |
+            Where-Object { $_ -and (Test-Path $_) } |
+            Select-Object -Unique |
+            ForEach-Object {
+              Get-ChildItem -Path $_ -Filter "*.dll" -File -ErrorAction SilentlyContinue |
+                ForEach-Object {
+                  Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $dist $_.Name) -Force
+                }
+            }
+
+          $sdlDllCandidates = @(
+            (Join-Path $env:SDL3_ROOT "lib\x64\SDL3.dll"),
+            (Join-Path $env:SDL3_ROOT "bin\x64\SDL3.dll")
+          )
+          $sdlDll = $sdlDllCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if ($sdlDll) {
+            Copy-Item -LiteralPath $sdlDll -Destination (Join-Path $dist "SDL3.dll")
+          } else {
+            throw "SDL3.dll was not found in the downloaded SDK."
+          }
+
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Codexitma-win64
+          path: ${{ runner.temp }}/Codexitma-win64

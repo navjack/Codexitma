@@ -1,3 +1,4 @@
+#if canImport(AppKit)
 import AppKit
 import Foundation
 import SwiftUI
@@ -44,3 +45,4 @@ struct AdventureEditorRootView: View {
     }
 
 }
+#endif

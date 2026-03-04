@@ -1,23 +1,21 @@
-import AppKit
 import Foundation
-import SwiftUI
 
 @MainActor
-final class AdventureEditorStore: ObservableObject {
-    @Published var selectedCatalogID: AdventureID?
-    @Published var document: EditableAdventureDocument
-    @Published var selectedContentTab: EditorContentTab = .maps
-    @Published var selectedTool: EditorTool = .terrain
-    @Published var selectedGlyph: Character = "#"
-    @Published var selectedInteractableKind: InteractableKind = .chest
-    @Published var selectedCanvasSelection: EditorCanvasSelection?
-    @Published var selectedDialogueIndex = 0
-    @Published var selectedQuestStageIndex = 0
-    @Published var selectedEncounterIndex = 0
-    @Published var selectedShopIndex = 0
-    @Published var selectedShopOfferIndex = 0
-    @Published var validationMessages: [String] = []
-    @Published var statusLine = "READY. FORK AN ADVENTURE OR CREATE A NEW TEMPLATE."
+final class AdventureEditorStore: EditorObservableObject {
+    @EditorPublished var selectedCatalogID: AdventureID?
+    @EditorPublished var document: EditableAdventureDocument
+    @EditorPublished var selectedContentTab: EditorContentTab = .maps
+    @EditorPublished var selectedTool: EditorTool = .terrain
+    @EditorPublished var selectedGlyph: Character = "#"
+    @EditorPublished var selectedInteractableKind: InteractableKind = .chest
+    @EditorPublished var selectedCanvasSelection: EditorCanvasSelection?
+    @EditorPublished var selectedDialogueIndex = 0
+    @EditorPublished var selectedQuestStageIndex = 0
+    @EditorPublished var selectedEncounterIndex = 0
+    @EditorPublished var selectedShopIndex = 0
+    @EditorPublished var selectedShopOfferIndex = 0
+    @EditorPublished var validationMessages: [String] = []
+    @EditorPublished var statusLine = "READY. FORK AN ADVENTURE OR CREATE A NEW TEMPLATE."
 
     let catalog: [AdventureCatalogEntry]
 

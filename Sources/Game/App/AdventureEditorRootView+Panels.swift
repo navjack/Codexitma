@@ -1,3 +1,4 @@
+#if canImport(AppKit)
 import AppKit
 import Foundation
 import SwiftUI
@@ -513,3 +514,4 @@ extension AdventureEditorRootView {
         }
     }
 }
+#endif

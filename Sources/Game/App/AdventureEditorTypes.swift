@@ -1,6 +1,4 @@
-import AppKit
 import Foundation
-import SwiftUI
 
 enum EditorTool: String, CaseIterable, Identifiable {
     case terrain
@@ -112,10 +110,16 @@ struct EditorCanvasSelection: Equatable {
     let position: Position
 }
 
+enum EditorCanvasOverlayStyle: Equatable {
+    case ansi(ANSIColor)
+    case interactable(InteractableKind)
+    case portal
+    case spawn
+}
+
 struct EditorCanvasOverlay {
     let glyph: String
-    let fill: Color
-    let text: Color
+    let style: EditorCanvasOverlayStyle
 }
 
 extension InteractableKind {

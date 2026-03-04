@@ -100,6 +100,12 @@ import Testing
     #expect(LaunchMode.parse(arguments: ["Game", "--terminal"]) == .terminal)
 }
 
+@Test func launchOptionsSelectSDLGraphicsBackend() async throws {
+    let options = try LaunchOptions.parse(arguments: ["Game", "--sdl"])
+    #expect(options.target == .interactive(.graphics))
+    #expect(options.graphicsBackend == .sdl)
+}
+
 @Test func graphicsVisualThemeCyclesBetweenModes() async throws {
     #expect(GraphicsVisualTheme.gemstone.next() == .ultima)
     #expect(GraphicsVisualTheme.ultima.next() == .depth3D)
@@ -119,6 +125,74 @@ import Testing
     #expect(store.loadTheme() == .depth3D)
 }
 
+@Test func graphicsSceneSnapshotBuildsBoardAndDepthViewData() async throws {
+    let library = try ContentLoader().load()
+    let saveURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString).appendingPathExtension("json")
+    let engine = GameEngine(library: library, saveRepository: SaveRepository(fileURL: saveURL))
+
+    let topDown = GraphicsSceneSnapshotBuilder.build(state: engine.state, visualTheme: .gemstone)
+    #expect(topDown.board.width > 0)
+    #expect(topDown.board.height > 0)
+    #expect(topDown.depth == nil)
+    #expect(topDown.availableAdventures.isEmpty == false)
+    #expect(topDown.selectedHeroClass == engine.state.selectedHeroClass())
+
+    let depth = GraphicsSceneSnapshotBuilder.build(state: engine.state, visualTheme: .depth3D)
+    #expect(depth.depth != nil)
+    #expect((depth.depth?.samples.count ?? 0) == 96)
+}
+
+@Test func sharedGameSessionUsesSameDepthControlRemapAsNativeGraphics() async throws {
+    let library = try ContentLoader().load()
+    let saveURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString).appendingPathExtension("json")
+
+    let session = await MainActor.run {
+        SharedGameSession(
+            library: library,
+            saveRepository: SaveRepository(fileURL: saveURL),
+            soundEngine: SilentGameSoundEngine.shared
+        )
+    }
+
+    await MainActor.run {
+        session.send(.newGame)
+        session.send(.confirm)
+        let start = session.state.player.position
+        let startFacing = session.state.player.facing
+
+        session.selectVisualTheme(.depth3D)
+        session.send(.move(.left))
+
+        #expect(session.state.player.facing == startFacing.leftTurn)
+        #expect(session.state.player.position == start)
+    }
+}
+
+@Test func sharedGameSessionUsesSelectedOrCurrentAdventureForEditorTarget() async throws {
+    let library = try ContentLoader().load()
+    let saveURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString).appendingPathExtension("json")
+
+    let session = await MainActor.run {
+        SharedGameSession(
+            library: library,
+            saveRepository: SaveRepository(fileURL: saveURL),
+            soundEngine: SilentGameSoundEngine.shared
+        )
+    }
+
+    await MainActor.run {
+        session.send(.move(.right))
+        #expect(session.editorTargetAdventureID() == session.state.selectedAdventureID())
+        #expect(session.canOpenEditorFromCurrentMode())
+
+        session.send(.newGame)
+        session.send(.confirm)
+
+        #expect(session.editorTargetAdventureID() == session.state.currentAdventureID)
+        #expect(session.editorConfirmationLines().isEmpty == false)
+    }
+}
+
 @Test func depthRaycasterMeasuresCenterWallDistance() async throws {
     let map = [
         "#####",
@@ -127,7 +201,7 @@ import Testing
     ]
 
     let caster = DepthRaycaster(
-        origin: CGPoint(x: 2.5, y: 1.5),
+        origin: DepthPoint(x: 2.5, y: 1.5),
         facing: .right
     ) { position in
         guard position.y >= 0,
@@ -174,4 +248,3 @@ import Testing
     #expect(engine.state.player.facing == .right)
     #expect(engine.state.player.position == Position(x: start.x - 1, y: start.y))
 }
-

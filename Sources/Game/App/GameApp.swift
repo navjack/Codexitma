@@ -14,6 +14,9 @@ struct GameApp {
     }
 
     func runTerminal() throws {
+#if os(Windows)
+        PlatformRuntimeSupport.writeError("Codexitma terminal mode is not currently supported on Windows. Use the SDL graphics path instead.\n")
+#else
         let engine = GameEngine(library: library, saveRepository: saves)
         renderer.prepare()
         defer { renderer.restore() }
@@ -35,24 +38,47 @@ struct GameApp {
         }
 
         renderer.render(renderer.makeShutdownFrame(message: "The embers dim. Farewell, wanderer."))
+#endif
     }
 
-    func runGraphics(playtestAdventureID: AdventureID? = nil) {
+    func runGraphics(playtestAdventureID: AdventureID? = nil, backend: GraphicsBackend = .native) throws {
         let library = self.library
         let saves = self.saves
-        MainActor.assumeIsolated {
-            GraphicsGameLauncher.run(
-                library: library,
-                saveRepository: saves,
-                playtestAdventureID: playtestAdventureID
-            )
+        try MainActor.assumeIsolated {
+            switch backend {
+            case .native:
+#if canImport(AppKit)
+                GraphicsGameLauncher.run(
+                    library: library,
+                    saveRepository: saves,
+                    playtestAdventureID: playtestAdventureID
+                )
+#else
+                try SDLGraphicsLauncher.run(
+                    library: library,
+                    saveRepository: saves,
+                    playtestAdventureID: playtestAdventureID
+                )
+#endif
+            case .sdl:
+                try SDLGraphicsLauncher.run(
+                    library: library,
+                    saveRepository: saves,
+                    playtestAdventureID: playtestAdventureID
+                )
+            }
         }
     }
 
     func runEditor() {
         let library = self.library
         MainActor.assumeIsolated {
+#if canImport(AppKit)
             AdventureEditorLauncher.run(library: library)
+#else
+            _ = library
+            PlatformRuntimeSupport.writeError("Codexitma editor mode is currently only available in the native macOS frontend.\n")
+#endif
         }
     }
 

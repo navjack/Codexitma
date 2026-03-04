@@ -158,6 +158,61 @@ import Testing
     }
 }
 
+@Test func adventureEditorSessionBuildsRendererNeutralSnapshot() async throws {
+    let library = try ContentLoader().load()
+    let session = await MainActor.run {
+        let session = AdventureEditorSession(library: library)
+        session.createBlankAdventure()
+        return session
+    }
+
+    await MainActor.run {
+        let initial = session.sceneSnapshot
+        #expect(initial.mapLines.isEmpty == false)
+        #expect(initial.selectedTool == .terrain)
+        #expect(initial.currentMapID == "merrow_village")
+
+        session.cycleTool()
+        #expect(session.sceneSnapshot.selectedTool == .npc)
+
+        session.setCursor(Position(x: 4, y: 4))
+        session.applyCurrentTool()
+
+        let snapshot = session.sceneSnapshot
+        #expect(snapshot.cursor == Position(x: 4, y: 4))
+        #expect(snapshot.selectionSummaryLines.first?.contains("NPC") == true)
+        #expect(snapshot.statusLine.contains("PLACED NPC"))
+    }
+}
+
+@Test func adventureEditorSessionSupportsDocumentTabEditing() async throws {
+    let library = try ContentLoader().load()
+    let session = await MainActor.run {
+        let session = AdventureEditorSession(library: library)
+        session.createBlankAdventure()
+        return session
+    }
+
+    await MainActor.run {
+        session.cycleContentTab()
+        #expect(session.showsDocumentPanel)
+        #expect(session.sceneSnapshot.selectedContentTab == .dialogues)
+        #expect(session.sceneSnapshot.panelFields.isEmpty == false)
+
+        let originalSpeaker = session.store.selectedDialogue?.speaker
+        session.movePanelSelection(step: 1)
+        session.adjustSelectedField(step: 1)
+        #expect(session.store.selectedDialogue?.speaker != originalSpeaker)
+
+        session.cycleContentTab()
+        #expect(session.sceneSnapshot.selectedContentTab == .questFlow)
+        let originalFlag = session.store.selectedQuestStage?.completeWhenFlag
+        session.movePanelSelection(step: 2)
+        session.adjustSelectedField(step: 1)
+        #expect(session.store.selectedQuestStage?.completeWhenFlag != originalFlag)
+    }
+}
+
 @Test func editorStoreDataEditorsMutateDialogueQuestEncounterAndShopContent() async throws {
     let library = try ContentLoader().load()
     let store = await MainActor.run {

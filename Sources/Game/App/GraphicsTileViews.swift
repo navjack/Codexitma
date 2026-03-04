@@ -1,3 +1,4 @@
+#if canImport(AppKit)
 import AppKit
 import Foundation
 import SwiftUI
@@ -520,3 +521,4 @@ struct LowResTileView: View {
         return palette.lightGold
     }
 }
+#endif

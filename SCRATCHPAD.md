@@ -47,6 +47,30 @@
 - Completed the second `codex/refactor-modules` pass: `GameEngine` is now split by behavior domain, `AdventureEditorStore` is split into document/canvas/content/helper extensions, and the editor chrome panels were extracted into dedicated SwiftUI subviews to reduce root-view context size.
 - Fixed the in-game editor launch overlay so it renders as a true overlay instead of expanding the game window, and made the spawned editor window explicitly order to the front when opened from a live session.
 - Fixed the editor window close path again: the controller now keeps the editor window alive through `windowWillClose` and only releases its strong references on the next main-queue turn, avoiding a crash when the user closes the editor window mid-session.
+- Started the local-only `codex/sdl-cross-platform` branch and added an explicit graphics backend seam so `Codexitma` can launch either the native AppKit frontend or a new SDL frontend.
+- Switched the branch target to SDL3.4.2 instead of SDL2 because SDL3 is installed locally and is the better long-term base for the cross-platform graphical port.
+- Added a backend-neutral `GraphicsSceneSnapshot` layer so the active map board and depth-ray data can be built once from `GameState` and then consumed by multiple graphical frontends.
+- Refactored the native `MapBoardView` to consume the shared scene snapshot for its active board/depth rendering path instead of pulling those visible cells directly from `GameState`.
+- Replaced the SDL stub with a real SDL3 window, input loop, and low-resolution renderer: `--sdl` now launches, drives the shared `GameEngine`, renders a top-down board, and shows a minimal depth view when `Depth 3D` is active.
+- Extracted a shared `SharedGameSession` runtime so the native AppKit frontend and the SDL frontend now use the same command handling, theme persistence, sound cue rules, and depth-control remapping.
+- Expanded the scene snapshot to include mode-specific UI data (adventure selection, hero selection, dialogue, inventory, and shop state) so parity work does not require SDL to peek back into SwiftUI-only state.
+- Upgraded the SDL frontend from an exploration-only viewer into a mode-aware frontend that now renders title, character creation, dialogue, inventory, shop, and ending states using the same shared session/snapshot pipeline.
+- Replaced the SDL frontend's temporary debug-text pass with a built-in low-resolution bitmap font so the renderer has a controlled retro text style instead of relying on SDL debug helpers.
+- Made the SDL renderer respond to the live render output size: board/panel framing and single-column fallback now adapt to the current window dimensions instead of the startup size.
+- Upgraded the SDL visuals again so top-down occupants/features and `Depth 3D` billboards now use patterned pixel sprites with shadows instead of only solid color rectangles.
+- Added the adventure editor flow to the SDL frontend: pressing `M` now raises the same confirmation prompt concept used by the native frontend.
+- Added a shared-session regression test for editor targeting so the SDL/editor integration keeps using the selected adventure on title screens and the active adventure during a live run.
+- Added a backend-neutral `AdventureEditorSession` snapshot layer and moved editor canvas overlay colors out of `AdventureEditorStore`, so the editor state is less tied to SwiftUI and easier to drive from an eventual SDL-native editor.
+- Replaced the SDL branch's editor fallback with a first SDL-native in-window editor shell: the `M` prompt now opens an SDL editor mode with cursor movement, tool application, validation, saving, map cycling, and return-to-game flow.
+- Tightened the SDL editor UX after live testing: the editor now has clearly distinct blue/cyan chrome instead of blending into the gameplay HUD, and `X` exits editor mode back to the game instead of quitting the application.
+- Extended the SDL editor past map work: the non-spatial content tabs now have cycle-based in-window editing for dialogue, quest stages, encounters, shops, NPCs, and enemies instead of being view-only dead ends.
+- Installed the local Windows cross-toolchain pieces `mingw-w64` and `zig`, and verified `x86_64-w64-mingw32-gcc` can emit a real x86_64 PE executable. The remaining missing piece for actual Swift-to-Windows builds is still a Windows Swift SDK bundle.
+- Kept the native macOS path intact while starting the portability cleanup: `GameApp` now only calls the native launcher/editor on platforms that have them, and shared editor files no longer import AppKit/SwiftUI when they do not actually need those frameworks.
+- Split the shared depth math out of the native SwiftUI renderer: `DepthRaycaster` and its sample types no longer depend on `CGPoint` or `CoreGraphics`, and the AppKit-only depth presentation types are fenced back into the native layer.
+- Added platform guards around the native AppKit frontend files, made the terminal/sound/runtime helpers compile without hard `Darwin` or `AVFoundation` assumptions, and added a first Windows GitHub Actions SDL build lane that installs Swift plus the SDL3 VC SDK on a Windows runner.
+- The first Windows CI run proved the workflow path is live; it failed at Swift installation, and the branch is now pointed at the available Swift 6.3 Windows development snapshot (`2026-02-27-a`) instead of the missing 6.3 release installer.
+- The next Windows failure was real progress: the 6.3 snapshot installed and reached `swift build`, then died because the MSVC CRT libraries were not on the linker path while compiling the manifest. The workflow now explicitly loads the Visual Studio developer environment before building.
+- The next Windows failure after that was a Swift frontend crash during optimization of `GameApp.runTerminal()`. Since the Windows target is SDL-first, `runTerminal()` is now stubbed out on Windows so that code path does not participate in the Win64 build.
 
 ## Current Notes
 
@@ -63,6 +87,15 @@
 - External content packs can now extend the title menu without modifying the app bundle, as long as they follow the expected manifest and JSON file layout.
 - The editor and graphics shells now intentionally use `ViewThatFits` plus scroll-backed fallbacks; keep future panel additions responsive instead of adding more fixed-width rows.
 - The remaining refactor hotspots have shifted to `AdventureEditorStore+Helpers.swift`, `AdventureEditorRootView+Panels.swift`, and `GraphicsGameUI.swift`; future passes should keep extracting by behavior-specific helpers and dedicated subviews instead of rebuilding large mixed-purpose files.
+- The SDL branch is intentionally local-only for now; do not push it until the renderer is stable enough that missing AppKit parity will not confuse the public repo.
+- The SDL frontend currently links against the locally installed `sdl3` Homebrew package and emits a linker warning because the Homebrew bottle was built for a newer host SDK than the package's declared macOS target.
+- The shared scene snapshot is now the correct seam for future renderer work; continue moving rendering decisions out of SwiftUI views and into snapshot-to-pixels adapters.
+- The intended product split is now explicit: native AppKit stays the preferred macOS frontend, while SDL is the parity/cross-platform path that should eventually become the real Windows/Linux graphics frontend.
+- SDL still needs more fidelity work, but it is now much closer to a true second frontend and less of a diagnostic shell: text, layout, and sprite reads are no longer the most glaring parity gaps.
+- The SDL branch now has a real in-window editor shell, but it is still a focused first pass: the spatial map workflow is there, while the richer non-spatial content panels from the native editor are not fully ported yet.
+- The SDL branch now covers both spatial and non-spatial editor workflows, but it still uses cycle-based editing rather than true text entry for authored content fields.
+- The next SDL/editor move should add proper text entry for authored strings in the SDL editor so those tabs are not limited to curated template cycles.
+- The codebase now has a first compile-surface split via platform fences; the next portability move is validating the Windows runner and, if it still hits package-graph issues, tightening that into a stricter target-level split.
 
 ## Next Build Targets
 
@@ -72,3 +105,10 @@
 - Add more authored map events, optional treasure loops, and denser region-specific enemy encounters.
 - Build a full scripted playthrough using the bridge so progression can be regression-tested end to end.
 - Expand the external pack format so third-party adventures can define custom quest flags and bespoke item tables, not just reuse the built-in systems.
+- Continue the SDL branch by adding real low-res bitmap font rendering, proper sprite-pattern drawing, and layout scaling based on live window size instead of the current fixed frame.
+- Keep pushing SDL toward native feature parity on macOS before attempting the first real Linux/Win64 build path.
+- The next SDL parity pass should focus on denser tile-surface art, fewer hardcoded spacing constants, and then fixing any real Windows-runner fallout from the new CI lane.
+- Local CrossOver testing on macOS proved the first successful Windows artifact was still incomplete: the EXE imports Swift runtime DLLs (`swiftCore.dll`, `Foundation.dll`, etc.), so the Windows CI packaging step now needs to bundle runtime DLLs from both the release folder and `swiftc -print-target-info` runtime paths.
+
+- Windows SDL crash under Wine traced to Foundation UserDefaults in GraphicsPreferenceStore.loadTheme(); switched Windows theme persistence to a simple JSON file under Application Support while keeping macOS on UserDefaults.
+- The SDL cross-platform branch is ready to merge: `windows-builds/` is now ignored locally, and the Windows SDL workflow is set to run from `main` pushes (plus manual dispatch) rather than PR branch updates.

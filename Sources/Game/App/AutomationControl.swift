@@ -23,12 +23,14 @@ enum AutomationError: Error, CustomStringConvertible {
 
 struct LaunchOptions: Equatable {
     let target: LaunchTarget
+    let graphicsBackend: GraphicsBackend
     let commands: [String]
     let emitStepSnapshots: Bool
     let playtestAdventureID: AdventureID?
 
     static func parse(arguments: [String]) throws -> LaunchOptions {
         var target: LaunchTarget = .interactive(LaunchMode.parse(arguments: arguments))
+        var graphicsBackend: GraphicsBackend = .native
         var commands: [String] = []
         var emitStepSnapshots = false
         var playtestAdventureID: AdventureID?
@@ -41,6 +43,10 @@ struct LaunchOptions: Equatable {
                 target = .interactive(.terminal)
             case "--graphics":
                 target = .interactive(.graphics)
+                graphicsBackend = .native
+            case "--sdl":
+                target = .interactive(.graphics)
+                graphicsBackend = .sdl
             case "--editor":
                 target = .editor
             case "--bridge":
@@ -77,6 +83,7 @@ struct LaunchOptions: Equatable {
 
         return LaunchOptions(
             target: target,
+            graphicsBackend: graphicsBackend,
             commands: commands,
             emitStepSnapshots: emitStepSnapshots,
             playtestAdventureID: playtestAdventureID
