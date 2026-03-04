@@ -8,6 +8,8 @@ DIST_DIR="$ROOT_DIR/dist/$VERSION"
 
 cd "$ROOT_DIR"
 
+swift build -c release
+
 BIN_PATH=$(swift build -c release --show-bin-path)
 BUILD_BIN="$BIN_PATH/Game"
 RESOURCE_BUNDLE="$BIN_PATH/Game_Game.bundle"
