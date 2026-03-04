@@ -100,6 +100,12 @@ import Testing
     #expect(LaunchMode.parse(arguments: ["Game", "--terminal"]) == .terminal)
 }
 
+@Test func launchOptionsSelectSDLGraphicsBackend() async throws {
+    let options = try LaunchOptions.parse(arguments: ["Game", "--sdl"])
+    #expect(options.target == .interactive(.graphics))
+    #expect(options.graphicsBackend == .sdl)
+}
+
 @Test func graphicsVisualThemeCyclesBetweenModes() async throws {
     #expect(GraphicsVisualTheme.gemstone.next() == .ultima)
     #expect(GraphicsVisualTheme.ultima.next() == .depth3D)
@@ -174,4 +180,3 @@ import Testing
     #expect(engine.state.player.facing == .right)
     #expect(engine.state.player.position == Position(x: start.x - 1, y: start.y))
 }
-
