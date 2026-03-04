@@ -47,11 +47,94 @@ final class AdventureEditorAppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
+enum EditorTool: String, CaseIterable, Identifiable {
+    case terrain
+    case npc
+    case enemy
+    case interactable
+    case portal
+    case spawn
+    case erase
+    case select
+
+    var id: String { rawValue }
+
+    var shortLabel: String {
+        switch self {
+        case .terrain: return "TERR"
+        case .npc: return "NPC"
+        case .enemy: return "ENM"
+        case .interactable: return "INT"
+        case .portal: return "PORT"
+        case .spawn: return "SPAWN"
+        case .erase: return "ERASE"
+        case .select: return "SEL"
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .terrain: return "Terrain"
+        case .npc: return "NPC"
+        case .enemy: return "Enemy"
+        case .interactable: return "Interactable"
+        case .portal: return "Portal"
+        case .spawn: return "Spawn"
+        case .erase: return "Erase"
+        case .select: return "Select"
+        }
+    }
+
+    var helpText: String {
+        switch self {
+        case .terrain:
+            return "Paint terrain onto the tile layer."
+        case .npc:
+            return "Place layered NPC records and auto-seed a stub dialogue."
+        case .enemy:
+            return "Place layered enemies on top of the terrain."
+        case .interactable:
+            return "Place a coordinate-based interactable record."
+        case .portal:
+            return "Place a portal that links to the next map's spawn."
+        case .spawn:
+            return "Move the active map's player spawn point."
+        case .erase:
+            return "Remove a placed object, or clear a tile back to floor."
+        case .select:
+            return "Inspect what already exists at a coordinate."
+        }
+    }
+}
+
+enum EditorSelectionKind: Equatable {
+    case tile
+    case spawn
+    case npc(id: String)
+    case enemy(id: String)
+    case interactable(id: String)
+    case portal(index: Int)
+}
+
+struct EditorCanvasSelection: Equatable {
+    let kind: EditorSelectionKind
+    let position: Position
+}
+
+fileprivate struct EditorCanvasOverlay {
+    let glyph: String
+    let fill: Color
+    let text: Color
+}
+
 @MainActor
 final class AdventureEditorStore: ObservableObject {
     @Published var selectedCatalogID: AdventureID?
     @Published var document: EditableAdventureDocument
+    @Published var selectedTool: EditorTool = .terrain
     @Published var selectedGlyph: Character = "#"
+    @Published var selectedInteractableKind: InteractableKind = .chest
+    @Published var selectedCanvasSelection: EditorCanvasSelection?
     @Published var statusLine = "READY. FORK AN ADVENTURE OR CREATE A NEW TEMPLATE."
 
     let catalog: [AdventureCatalogEntry]
@@ -85,6 +168,88 @@ final class AdventureEditorStore: ObservableObject {
         return document.maps[index]
     }
 
+    var currentMapID: String? {
+        currentMap?.id
+    }
+
+    var selectedToolSummary: String {
+        "\(selectedTool.title.uppercased()): \(selectedTool.helpText.uppercased())"
+    }
+
+    var selectionSummaryLines: [String] {
+        guard let selection = selectedCanvasSelection,
+              let map = currentMap else {
+            return [
+                "NO ACTIVE SELECTION",
+                "USE SELECT TO INSPECT OR PLACE A NEW OBJECT."
+            ]
+        }
+
+        switch selection.kind {
+        case .tile:
+            let glyph = glyphAt(selection.position, in: map)
+            let tile = TileFactory.tile(for: glyph)
+            return [
+                "TILE \(selection.position.x),\(selection.position.y)",
+                "GLYPH \(displayGlyph(glyph))",
+                "TYPE \(tileTypeLabel(tile.type))"
+            ]
+        case .spawn:
+            return [
+                "SPAWN POINT",
+                "MAP \(map.id)",
+                "AT \(selection.position.x),\(selection.position.y)"
+            ]
+        case .npc(let id):
+            guard let npc = document.npcs.first(where: { $0.id == id }) else {
+                return ["NPC \(id.uppercased())", "NO LONGER PRESENT"]
+            }
+            return [
+                "NPC \(npc.name.uppercased())",
+                "ID \(npc.id)",
+                "DIALOGUE \(npc.dialogueID)"
+            ]
+        case .enemy(let id):
+            guard let enemy = document.enemies.first(where: { $0.id == id }) else {
+                return ["ENEMY \(id.uppercased())", "NO LONGER PRESENT"]
+            }
+            return [
+                "ENEMY \(enemy.name.uppercased())",
+                "ID \(enemy.id)",
+                "HP \(enemy.hp)  ATK \(enemy.attack)  DEF \(enemy.defense)"
+            ]
+        case .interactable(let id):
+            guard let interactable = map.interactables.first(where: { $0.id == id }) else {
+                return ["INTERACTABLE \(id.uppercased())", "NO LONGER PRESENT"]
+            }
+            return [
+                "INTERACTABLE \(interactable.id.uppercased())",
+                "KIND \(interactable.kind.rawValue.uppercased())",
+                interactable.title.uppercased()
+            ]
+        case .portal(let index):
+            guard index >= 0, index < map.portals.count else {
+                return ["PORTAL", "NO LONGER PRESENT"]
+            }
+            let portal = map.portals[index]
+            return [
+                "PORTAL AT \(portal.from.x),\(portal.from.y)",
+                "TO \(portal.toMap)",
+                "DEST \(portal.toPosition.x),\(portal.toPosition.y)"
+            ]
+        }
+    }
+
+    var currentMapCountsLine: String {
+        guard let map = currentMap else { return "NO MAP" }
+        let mapID = map.id
+        let npcCount = document.npcs.filter { $0.mapID == mapID }.count
+        let enemyCount = document.enemies.filter { $0.mapID == mapID }.count
+        let interactableCount = map.interactables.count
+        let portalCount = map.portals.count
+        return "NPC \(npcCount)  ENM \(enemyCount)  INT \(interactableCount)  PORT \(portalCount)"
+    }
+
     func selectCatalogAdventure(_ adventureID: AdventureID) {
         selectedCatalogID = adventureID
         let entry = library.entry(for: adventureID) ?? AdventureCatalogEntry(
@@ -96,12 +261,14 @@ final class AdventureEditorStore: ObservableObject {
             introLine: ""
         )
         document = Self.makeDocument(entry: entry, content: library.content(for: adventureID))
+        selectedCanvasSelection = nil
         statusLine = "LOADED \(entry.title.uppercased()) FOR EDITING."
     }
 
     func createBlankAdventure() {
         selectedCatalogID = nil
         document = Self.makeBlankDocument()
+        selectedCanvasSelection = nil
         statusLine = "BLANK TEMPLATE CREATED. SAVE IT TO EXPORT A NEW ADVENTURE PACK."
     }
 
@@ -117,6 +284,8 @@ final class AdventureEditorStore: ObservableObject {
     func selectMap(index: Int) {
         guard !document.maps.isEmpty else { return }
         document.selectedMapIndex = max(0, min(index, document.maps.count - 1))
+        selectedCanvasSelection = nil
+        statusLine = "EDITING \(document.maps[document.selectedMapIndex].name.uppercased())."
     }
 
     func addMap() {
@@ -172,7 +341,31 @@ final class AdventureEditorStore: ObservableObject {
 
     func updateCurrentMapID(_ value: String) {
         guard !document.maps.isEmpty else { return }
-        document.maps[document.selectedMapIndex].id = sanitizeIdentifier(value)
+        let oldID = document.maps[document.selectedMapIndex].id
+        let newID = sanitizeIdentifier(value)
+        document.maps[document.selectedMapIndex].id = newID
+        if oldID != newID {
+            for index in document.npcs.indices where document.npcs[index].mapID == oldID {
+                document.npcs[index].mapID = newID
+            }
+            for index in document.enemies.indices where document.enemies[index].mapID == oldID {
+                document.enemies[index].mapID = newID
+            }
+            for mapIndex in document.maps.indices {
+                for portalIndex in document.maps[mapIndex].portals.indices {
+                    if document.maps[mapIndex].portals[portalIndex].toMap == oldID {
+                        let portal = document.maps[mapIndex].portals[portalIndex]
+                        document.maps[mapIndex].portals[portalIndex] = Portal(
+                            from: portal.from,
+                            toMap: newID,
+                            toPosition: portal.toPosition,
+                            requiredFlag: portal.requiredFlag,
+                            blockedMessage: portal.blockedMessage
+                        )
+                    }
+                }
+            }
+        }
     }
 
     func updateCurrentMapName(_ value: String) {
@@ -183,6 +376,74 @@ final class AdventureEditorStore: ObservableObject {
     func paintTile(x: Int, y: Int) {
         guard !document.maps.isEmpty else { return }
         document.maps[document.selectedMapIndex].setGlyph(selectedGlyph, atX: x, y: y)
+        selectedCanvasSelection = EditorCanvasSelection(kind: .tile, position: Position(x: x, y: y))
+        statusLine = "PAINTED \(displayGlyph(selectedGlyph)) AT \(x),\(y)."
+    }
+
+    func selectTool(_ tool: EditorTool) {
+        selectedTool = tool
+        statusLine = "\(tool.title.uppercased()) TOOL READY. \(tool.helpText.uppercased())"
+    }
+
+    func handleCanvasClick(x: Int, y: Int) {
+        let position = Position(x: x, y: y)
+        switch selectedTool {
+        case .terrain:
+            paintTile(x: x, y: y)
+        case .npc:
+            placeNPC(at: position)
+        case .enemy:
+            placeEnemy(at: position)
+        case .interactable:
+            placeInteractable(at: position)
+        case .portal:
+            placePortal(at: position)
+        case .spawn:
+            setSpawn(at: position)
+        case .erase:
+            erase(at: position)
+        case .select:
+            selectCanvasObject(at: position)
+        }
+    }
+
+    fileprivate func overlay(atX x: Int, y: Int) -> EditorCanvasOverlay? {
+        guard let mapID = currentMapID else { return nil }
+        let position = Position(x: x, y: y)
+
+        if let npc = document.npcs.first(where: { $0.mapID == mapID && $0.position == position }) {
+            return EditorCanvasOverlay(glyph: String(npc.glyphSymbol), fill: color(for: npc.glyphColor), text: .black)
+        }
+
+        if let enemy = document.enemies.first(where: { $0.mapID == mapID && $0.position == position }) {
+            return EditorCanvasOverlay(glyph: String(enemy.glyph), fill: color(for: enemy.color), text: .black)
+        }
+
+        if let interactable = currentMap?.interactables.first(where: { $0.position == position }) {
+            return EditorCanvasOverlay(
+                glyph: interactableGlyph(for: interactable.kind),
+                fill: color(for: interactable.kind),
+                text: .black
+            )
+        }
+
+        if currentMap?.portals.contains(where: { $0.from == position }) == true {
+            return EditorCanvasOverlay(glyph: ">", fill: Color(red: 0.98, green: 0.82, blue: 0.20), text: .black)
+        }
+
+        if currentMap?.spawn == position {
+            return EditorCanvasOverlay(glyph: "@", fill: Color(red: 0.98, green: 0.95, blue: 0.62), text: .black)
+        }
+
+        return nil
+    }
+
+    func isSelected(x: Int, y: Int) -> Bool {
+        selectedCanvasSelection?.position == Position(x: x, y: y)
+    }
+
+    func isSpawn(x: Int, y: Int) -> Bool {
+        currentMap?.spawn == Position(x: x, y: y)
     }
 
     private func sanitizeIdentifier(_ value: String) -> String {
@@ -203,6 +464,308 @@ final class AdventureEditorStore: ObservableObject {
     private func sanitizeFolderName(_ value: String) -> String {
         let safe = sanitizeIdentifier(value)
         return safe.isEmpty ? "new_adventure" : safe
+    }
+
+    private func placeNPC(at position: Position) {
+        guard let mapID = currentMapID else { return }
+        if let existing = document.npcs.first(where: { $0.mapID == mapID && $0.position == position }) {
+            selectedCanvasSelection = EditorCanvasSelection(kind: .npc(id: existing.id), position: position)
+            statusLine = "NPC \(existing.name.uppercased()) IS ALREADY AT \(position.x),\(position.y)."
+            return
+        }
+
+        let npcID = nextIdentifier(prefix: "npc", existing: document.npcs.map(\.id))
+        let number = suffixNumber(from: npcID)
+        let name = "Wanderer \(number)"
+        let dialogueID = nextIdentifier(prefix: "\(npcID)_intro", existing: document.dialogues.map(\.id))
+        let npc = NPCState(
+            id: npcID,
+            name: name,
+            position: position,
+            mapID: mapID,
+            dialogueID: dialogueID,
+            glyphSymbol: "&",
+            glyphColor: .yellow,
+            dialogueState: 0
+        )
+        document.npcs.append(npc)
+
+        if !document.dialogues.contains(where: { $0.id == dialogueID }) {
+            document.dialogues.append(
+                DialogueNode(
+                    id: dialogueID,
+                    speaker: name,
+                    lines: [
+                        "The cartographer has only just started this road.",
+                        "Return later and there will be more to say."
+                    ]
+                )
+            )
+        }
+
+        selectedCanvasSelection = EditorCanvasSelection(kind: .npc(id: npcID), position: position)
+        statusLine = "PLACED NPC \(name.uppercased()) AT \(position.x),\(position.y)."
+    }
+
+    private func placeEnemy(at position: Position) {
+        guard let mapID = currentMapID else { return }
+        if let existing = document.enemies.first(where: { $0.mapID == mapID && $0.position == position }) {
+            selectedCanvasSelection = EditorCanvasSelection(kind: .enemy(id: existing.id), position: position)
+            statusLine = "ENEMY \(existing.name.uppercased()) IS ALREADY AT \(position.x),\(position.y)."
+            return
+        }
+
+        let enemyID = nextIdentifier(prefix: "enemy", existing: document.enemies.map(\.id))
+        let number = suffixNumber(from: enemyID)
+        let enemy = EnemyState(
+            id: enemyID,
+            name: "Shade \(number)",
+            position: position,
+            hp: 8,
+            maxHP: 8,
+            attack: 3,
+            defense: 1,
+            ai: .stalk,
+            glyph: "g",
+            color: .red,
+            mapID: mapID,
+            active: true
+        )
+        document.enemies.append(enemy)
+        selectedCanvasSelection = EditorCanvasSelection(kind: .enemy(id: enemyID), position: position)
+        statusLine = "PLACED ENEMY \(enemy.name.uppercased()) AT \(position.x),\(position.y)."
+    }
+
+    private func placeInteractable(at position: Position) {
+        guard !document.maps.isEmpty else { return }
+        if let existing = currentMap?.interactables.first(where: { $0.position == position }) {
+            selectedCanvasSelection = EditorCanvasSelection(kind: .interactable(id: existing.id), position: position)
+            statusLine = "INTERACTABLE \(existing.id.uppercased()) IS ALREADY AT \(position.x),\(position.y)."
+            return
+        }
+
+        let interactableID = nextIdentifier(
+            prefix: selectedInteractableKind.rawValue,
+            existing: document.maps.flatMap { $0.interactables.map(\.id) }
+        )
+        let interactable = InteractableDefinition(
+            id: interactableID,
+            kind: selectedInteractableKind,
+            position: position,
+            title: selectedInteractableKind.editorTitle,
+            lines: selectedInteractableKind.defaultLines,
+            rewardItem: selectedInteractableKind == .chest ? .healingTonic : nil,
+            requiredFlag: nil,
+            grantsFlag: nil
+        )
+        document.maps[document.selectedMapIndex].interactables.append(interactable)
+        selectedCanvasSelection = EditorCanvasSelection(kind: .interactable(id: interactableID), position: position)
+        statusLine = "PLACED \(selectedInteractableKind.rawValue.uppercased()) AT \(position.x),\(position.y)."
+    }
+
+    private func placePortal(at position: Position) {
+        guard !document.maps.isEmpty else { return }
+        if let index = currentMap?.portals.firstIndex(where: { $0.from == position }) {
+            selectedCanvasSelection = EditorCanvasSelection(kind: .portal(index: index), position: position)
+            statusLine = "PORTAL IS ALREADY AT \(position.x),\(position.y)."
+            return
+        }
+
+        let destinationIndex = document.maps.count > 1
+            ? (document.selectedMapIndex + 1) % document.maps.count
+            : document.selectedMapIndex
+        let destinationMap = document.maps[destinationIndex]
+        let portal = Portal(
+            from: position,
+            toMap: destinationMap.id,
+            toPosition: destinationMap.spawn,
+            requiredFlag: nil,
+            blockedMessage: nil
+        )
+        document.maps[document.selectedMapIndex].portals.append(portal)
+        let newIndex = document.maps[document.selectedMapIndex].portals.count - 1
+        selectedCanvasSelection = EditorCanvasSelection(kind: .portal(index: newIndex), position: position)
+        statusLine = "PLACED PORTAL TO \(destinationMap.name.uppercased()) FROM \(position.x),\(position.y)."
+    }
+
+    private func setSpawn(at position: Position) {
+        guard !document.maps.isEmpty else { return }
+        document.maps[document.selectedMapIndex].spawn = position
+        selectedCanvasSelection = EditorCanvasSelection(kind: .spawn, position: position)
+        statusLine = "SPAWN MOVED TO \(position.x),\(position.y)."
+    }
+
+    private func erase(at position: Position) {
+        guard !document.maps.isEmpty else { return }
+        let mapID = document.maps[document.selectedMapIndex].id
+
+        if let index = document.npcs.firstIndex(where: { $0.mapID == mapID && $0.position == position }) {
+            let removed = document.npcs.remove(at: index)
+            selectedCanvasSelection = nil
+            statusLine = "REMOVED NPC \(removed.name.uppercased())."
+            return
+        }
+
+        if let index = document.enemies.firstIndex(where: { $0.mapID == mapID && $0.position == position }) {
+            let removed = document.enemies.remove(at: index)
+            selectedCanvasSelection = nil
+            statusLine = "REMOVED ENEMY \(removed.name.uppercased())."
+            return
+        }
+
+        if let index = document.maps[document.selectedMapIndex].interactables.firstIndex(where: { $0.position == position }) {
+            let removed = document.maps[document.selectedMapIndex].interactables.remove(at: index)
+            selectedCanvasSelection = nil
+            statusLine = "REMOVED INTERACTABLE \(removed.id.uppercased())."
+            return
+        }
+
+        if let index = document.maps[document.selectedMapIndex].portals.firstIndex(where: { $0.from == position }) {
+            document.maps[document.selectedMapIndex].portals.remove(at: index)
+            selectedCanvasSelection = nil
+            statusLine = "REMOVED PORTAL AT \(position.x),\(position.y)."
+            return
+        }
+
+        if document.maps[document.selectedMapIndex].spawn == position {
+            document.maps[document.selectedMapIndex].spawn = Position(x: 1, y: 1)
+            selectedCanvasSelection = EditorCanvasSelection(kind: .spawn, position: Position(x: 1, y: 1))
+            statusLine = "SPAWN RESET TO 1,1."
+            return
+        }
+
+        document.maps[document.selectedMapIndex].setGlyph(".", atX: position.x, y: position.y)
+        selectedCanvasSelection = EditorCanvasSelection(kind: .tile, position: position)
+        statusLine = "CLEARED TILE AT \(position.x),\(position.y)."
+    }
+
+    private func selectCanvasObject(at position: Position) {
+        guard let map = currentMap else { return }
+        if let npc = document.npcs.first(where: { $0.mapID == map.id && $0.position == position }) {
+            selectedCanvasSelection = EditorCanvasSelection(kind: .npc(id: npc.id), position: position)
+            statusLine = "SELECTED NPC \(npc.name.uppercased())."
+            return
+        }
+
+        if let enemy = document.enemies.first(where: { $0.mapID == map.id && $0.position == position }) {
+            selectedCanvasSelection = EditorCanvasSelection(kind: .enemy(id: enemy.id), position: position)
+            statusLine = "SELECTED ENEMY \(enemy.name.uppercased())."
+            return
+        }
+
+        if let interactable = map.interactables.first(where: { $0.position == position }) {
+            selectedCanvasSelection = EditorCanvasSelection(kind: .interactable(id: interactable.id), position: position)
+            statusLine = "SELECTED INTERACTABLE \(interactable.id.uppercased())."
+            return
+        }
+
+        if let index = map.portals.firstIndex(where: { $0.from == position }) {
+            selectedCanvasSelection = EditorCanvasSelection(kind: .portal(index: index), position: position)
+            statusLine = "SELECTED PORTAL AT \(position.x),\(position.y)."
+            return
+        }
+
+        if map.spawn == position {
+            selectedCanvasSelection = EditorCanvasSelection(kind: .spawn, position: position)
+            statusLine = "SELECTED MAP SPAWN."
+            return
+        }
+
+        selectedCanvasSelection = EditorCanvasSelection(kind: .tile, position: position)
+        statusLine = "SELECTED TILE AT \(position.x),\(position.y)."
+    }
+
+    private func nextIdentifier(prefix: String, existing: [String]) -> String {
+        let base = sanitizeIdentifier(prefix)
+        let existingSet = Set(existing)
+        if !existingSet.contains(base) {
+            return base
+        }
+
+        var counter = 1
+        while existingSet.contains("\(base)_\(counter)") {
+            counter += 1
+        }
+        return "\(base)_\(counter)"
+    }
+
+    private func suffixNumber(from identifier: String) -> Int {
+        let component = identifier.split(separator: "_").last.flatMap { Int($0) }
+        return component ?? (document.npcs.count + document.enemies.count + 1)
+    }
+
+    private func glyphAt(_ position: Position, in map: EditableMap) -> Character {
+        guard position.y >= 0, position.y < map.lines.count else { return "." }
+        let row = Array(map.lines[position.y])
+        guard position.x >= 0, position.x < row.count else { return "." }
+        return row[position.x]
+    }
+
+    private func displayGlyph(_ glyph: Character) -> String {
+        glyph == " " ? "EMP" : String(glyph)
+    }
+
+    private func tileTypeLabel(_ type: TileType) -> String {
+        switch type {
+        case .floor: return "FLOOR"
+        case .wall: return "WALL"
+        case .water: return "WATER"
+        case .brush: return "BRUSH"
+        case .doorLocked: return "LOCKED DOOR"
+        case .doorOpen: return "OPEN DOOR"
+        case .shrine: return "SHRINE"
+        case .stairs: return "STAIRS"
+        case .beacon: return "BEACON"
+        }
+    }
+
+    private func interactableGlyph(for kind: InteractableKind) -> String {
+        switch kind {
+        case .npc: return "&"
+        case .shrine: return "*"
+        case .chest: return "$"
+        case .bed: return "Z"
+        case .gate: return "+"
+        case .beacon: return "B"
+        case .plate: return "o"
+        case .switchRune: return "="
+        }
+    }
+
+    private func color(for ansi: ANSIColor) -> Color {
+        switch ansi {
+        case .black: return .black
+        case .red: return Color(red: 0.86, green: 0.22, blue: 0.16)
+        case .green: return Color(red: 0.27, green: 0.78, blue: 0.19)
+        case .yellow: return Color(red: 0.98, green: 0.84, blue: 0.20)
+        case .blue: return Color(red: 0.24, green: 0.56, blue: 0.92)
+        case .magenta: return Color(red: 0.76, green: 0.34, blue: 0.86)
+        case .cyan: return Color(red: 0.22, green: 0.80, blue: 0.86)
+        case .white: return Color(red: 0.95, green: 0.94, blue: 0.87)
+        case .brightBlack: return Color(red: 0.42, green: 0.42, blue: 0.44)
+        case .reset: return Color(red: 0.95, green: 0.94, blue: 0.87)
+        }
+    }
+
+    private func color(for kind: InteractableKind) -> Color {
+        switch kind {
+        case .npc:
+            return Color(red: 0.98, green: 0.84, blue: 0.20)
+        case .shrine:
+            return Color(red: 0.78, green: 0.42, blue: 0.94)
+        case .chest:
+            return Color(red: 0.84, green: 0.56, blue: 0.12)
+        case .bed:
+            return Color(red: 0.65, green: 0.32, blue: 0.18)
+        case .gate:
+            return Color(red: 0.88, green: 0.72, blue: 0.18)
+        case .beacon:
+            return Color(red: 0.99, green: 0.94, blue: 0.34)
+        case .plate:
+            return Color(red: 0.72, green: 0.72, blue: 0.72)
+        case .switchRune:
+            return Color(red: 0.28, green: 0.74, blue: 0.90)
+        }
     }
 
     private static func makeDocument(entry: AdventureCatalogEntry, content: GameContent) -> EditableAdventureDocument {
@@ -612,7 +1175,7 @@ struct AdventureEditorRootView: View {
     }
 
     private var mapEditorPanel: some View {
-        EditorPanel(title: "MAP PAINTER", palette: palette) {
+        EditorPanel(title: "MAP WORKBENCH", palette: palette) {
             VStack(alignment: .leading, spacing: 8) {
                 if store.currentMap != nil {
                     HStack(spacing: 8) {
@@ -626,40 +1189,110 @@ struct AdventureEditorRootView: View {
                         ))
                     }
 
-                    tilePalette
+                    toolPalette
 
-                    ScrollView([.horizontal, .vertical]) {
-                        VStack(alignment: .leading, spacing: 1) {
-                            ForEach(Array((store.currentMap?.lines ?? []).enumerated()), id: \.offset) { y, line in
-                                HStack(spacing: 1) {
-                                    ForEach(Array(line.enumerated()), id: \.offset) { x, glyph in
-                                        Button {
-                                            store.paintTile(x: x, y: y)
-                                        } label: {
-                                            ZStack {
-                                                Rectangle()
-                                                    .fill(tileColor(for: glyph))
-                                                Text(displayGlyph(glyph))
-                                                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                                    .foregroundStyle(palette.background)
+                    if store.selectedTool == .terrain {
+                        tilePalette
+                    }
+
+                    if store.selectedTool == .interactable {
+                        interactablePalette
+                    }
+
+                    HStack(alignment: .top, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(store.currentMapCountsLine)
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .foregroundStyle(palette.text.opacity(0.84))
+
+                            Text(store.selectedToolSummary)
+                                .font(.system(size: 10, weight: .regular, design: .monospaced))
+                                .foregroundStyle(palette.text.opacity(0.80))
+                                .fixedSize(horizontal: false, vertical: true)
+
+                            ScrollView([.horizontal, .vertical]) {
+                                VStack(alignment: .leading, spacing: 1) {
+                                    ForEach(Array((store.currentMap?.lines ?? []).enumerated()), id: \.offset) { y, line in
+                                        HStack(spacing: 1) {
+                                            ForEach(Array(line.enumerated()), id: \.offset) { x, glyph in
+                                                Button {
+                                                    store.handleCanvasClick(x: x, y: y)
+                                                } label: {
+                                                    let overlay = store.overlay(atX: x, y: y)
+                                                    ZStack {
+                                                        Rectangle()
+                                                            .fill(tileColor(for: glyph))
+
+                                                        if store.isSpawn(x: x, y: y) {
+                                                            RoundedRectangle(cornerRadius: 2)
+                                                                .stroke(palette.light.opacity(0.85), lineWidth: 1.2)
+                                                                .padding(2)
+                                                        }
+
+                                                        if let overlay {
+                                                            RoundedRectangle(cornerRadius: 2)
+                                                                .fill(overlay.fill)
+                                                                .padding(2)
+                                                            Text(overlay.glyph)
+                                                                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                                                .foregroundStyle(overlay.text)
+                                                        } else {
+                                                            Text(displayGlyph(glyph))
+                                                                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                                                .foregroundStyle(palette.background)
+                                                        }
+                                                    }
+                                                    .frame(width: 18, height: 18)
+                                                    .overlay(
+                                                        Rectangle().stroke(
+                                                            store.isSelected(x: x, y: y) ? palette.title : palette.border.opacity(0.55),
+                                                            lineWidth: store.isSelected(x: x, y: y) ? 1.5 : 0.5
+                                                        )
+                                                    )
+                                                }
+                                                .buttonStyle(.plain)
                                             }
-                                            .frame(width: 18, height: 18)
-                                            .overlay(Rectangle().stroke(palette.border.opacity(0.55), lineWidth: 0.5))
                                         }
-                                        .buttonStyle(.plain)
                                     }
                                 }
+                                .padding(6)
+                                .background(palette.panelAlt)
                             }
+                            .frame(minHeight: 360)
+                            .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
                         }
-                        .padding(6)
-                        .background(palette.panelAlt)
+
+                        selectionPanel
+                            .frame(width: 220)
                     }
-                    .frame(minHeight: 360)
-                    .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
                 } else {
                     Text("NO MAP IS ACTIVE.")
                         .font(.system(size: 12, weight: .bold, design: .monospaced))
                         .foregroundStyle(palette.text)
+                }
+            }
+        }
+    }
+
+    private var toolPalette: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("EDITOR TOOLS")
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundStyle(palette.label)
+
+            HStack(spacing: 6) {
+                ForEach(EditorTool.allCases) { tool in
+                    Button {
+                        store.selectTool(tool)
+                    } label: {
+                        Text(tool.shortLabel)
+                            .frame(minWidth: 44)
+                    }
+                    .buttonStyle(
+                        EditorButtonStyle(
+                            background: store.selectedTool == tool ? palette.title : palette.panelAlt
+                        )
+                    )
                 }
             }
         }
@@ -698,6 +1331,72 @@ struct AdventureEditorRootView: View {
                     }
                     .buttonStyle(.plain)
                 }
+            }
+        }
+    }
+
+    private var interactablePalette: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("INTERACTABLE KIND")
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundStyle(palette.label)
+
+            HStack(spacing: 6) {
+                ForEach(editorInteractablePalette, id: \.kind) { choice in
+                    Button {
+                        store.selectedInteractableKind = choice.kind
+                    } label: {
+                        VStack(spacing: 2) {
+                            ZStack {
+                                Rectangle()
+                                    .fill(choice.color)
+                                Text(choice.glyph)
+                                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                    .foregroundStyle(Color.black)
+                            }
+                            .frame(width: 26, height: 26)
+                            .overlay(
+                                Rectangle().stroke(
+                                    store.selectedInteractableKind == choice.kind ? palette.title : palette.border,
+                                    lineWidth: store.selectedInteractableKind == choice.kind ? 2 : 1
+                                )
+                            )
+                            Text(choice.label)
+                                .font(.system(size: 8, weight: .regular, design: .monospaced))
+                                .foregroundStyle(palette.text.opacity(0.82))
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private var selectionPanel: some View {
+        EditorPanel(title: "SELECTION", palette: palette) {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(Array(store.selectionSummaryLines.enumerated()), id: \.offset) { _, line in
+                    Text(line)
+                        .font(.system(size: 10, weight: .regular, design: .monospaced))
+                        .foregroundStyle(palette.text.opacity(0.86))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Divider()
+                    .overlay(palette.border)
+
+                Text("ACTIVE TOOL")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundStyle(palette.label)
+
+                Text(store.selectedTool.title.uppercased())
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .foregroundStyle(palette.title)
+
+                Text(store.selectedTool.helpText.uppercased())
+                    .font(.system(size: 10, weight: .regular, design: .monospaced))
+                    .foregroundStyle(palette.text.opacity(0.80))
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -818,6 +1517,13 @@ private struct EditorTileChoice {
     let label: String
 }
 
+private struct EditorInteractableChoice {
+    let kind: InteractableKind
+    let glyph: String
+    let label: String
+    let color: Color
+}
+
 private let editorTilePalette: [EditorTileChoice] = [
     EditorTileChoice(glyph: ".", label: "FLR"),
     EditorTileChoice(glyph: "#", label: "WAL"),
@@ -830,3 +1536,92 @@ private let editorTilePalette: [EditorTileChoice] = [
     EditorTileChoice(glyph: "B", label: "BCN"),
     EditorTileChoice(glyph: " ", label: "EMP"),
 ]
+
+private let editorInteractablePalette: [EditorInteractableChoice] = [
+    EditorInteractableChoice(
+        kind: .chest,
+        glyph: "$",
+        label: "CHEST",
+        color: Color(red: 0.84, green: 0.56, blue: 0.12)
+    ),
+    EditorInteractableChoice(
+        kind: .shrine,
+        glyph: "*",
+        label: "SHRINE",
+        color: Color(red: 0.78, green: 0.42, blue: 0.94)
+    ),
+    EditorInteractableChoice(
+        kind: .bed,
+        glyph: "Z",
+        label: "BED",
+        color: Color(red: 0.65, green: 0.32, blue: 0.18)
+    ),
+    EditorInteractableChoice(
+        kind: .gate,
+        glyph: "+",
+        label: "GATE",
+        color: Color(red: 0.88, green: 0.72, blue: 0.18)
+    ),
+    EditorInteractableChoice(
+        kind: .beacon,
+        glyph: "B",
+        label: "BEACON",
+        color: Color(red: 0.99, green: 0.94, blue: 0.34)
+    ),
+    EditorInteractableChoice(
+        kind: .plate,
+        glyph: "o",
+        label: "PLATE",
+        color: Color(red: 0.72, green: 0.72, blue: 0.72)
+    ),
+    EditorInteractableChoice(
+        kind: .switchRune,
+        glyph: "=",
+        label: "RUNE",
+        color: Color(red: 0.28, green: 0.74, blue: 0.90)
+    ),
+]
+
+private extension InteractableKind {
+    var editorTitle: String {
+        switch self {
+        case .npc:
+            return "Waystation Speaker"
+        case .shrine:
+            return "Quiet Shrine"
+        case .chest:
+            return "Weathered Chest"
+        case .bed:
+            return "Traveler's Cot"
+        case .gate:
+            return "Rust Gate"
+        case .beacon:
+            return "Dormant Beacon"
+        case .plate:
+            return "Stone Plate"
+        case .switchRune:
+            return "Rune Switch"
+        }
+    }
+
+    var defaultLines: [String] {
+        switch self {
+        case .npc:
+            return ["A silent marker waits for a proper NPC record."]
+        case .shrine:
+            return ["The shrine is cold, but ready to take a new ritual."]
+        case .chest:
+            return ["The lid groans when it opens."]
+        case .bed:
+            return ["A rough bed offers a safe place to rest."]
+        case .gate:
+            return ["The gate's latch is not yet assigned."]
+        case .beacon:
+            return ["A beacon core could be mounted here one day."]
+        case .plate:
+            return ["The stone sinks slightly beneath your weight."]
+        case .switchRune:
+            return ["A rune flickers, waiting for a sequence."]
+        }
+    }
+}

@@ -520,3 +520,66 @@ import Testing
     let options = try LaunchOptions.parse(arguments: ["Game", "--editor"])
     #expect(options.target == .editor)
 }
+
+@Test func editorStorePlacesLayeredObjectsAndSeedsDialogue() async throws {
+    let library = try ContentLoader().load()
+    let store = await MainActor.run {
+        let store = AdventureEditorStore(library: library)
+        store.createBlankAdventure()
+        return store
+    }
+
+    await MainActor.run {
+        store.selectTool(.npc)
+        store.handleCanvasClick(x: 4, y: 4)
+
+        #expect(store.document.npcs.count == 1)
+        #expect(store.document.npcs[0].position == Position(x: 4, y: 4))
+        #expect(store.document.npcs[0].mapID == store.document.maps[0].id)
+        #expect(store.document.dialogues.contains(where: { $0.id == store.document.npcs[0].dialogueID }))
+
+        store.selectTool(.interactable)
+        store.selectedInteractableKind = .plate
+        store.handleCanvasClick(x: 5, y: 4)
+
+        #expect(store.document.maps[0].interactables.count == 1)
+        #expect(store.document.maps[0].interactables[0].kind == .plate)
+        #expect(store.selectedCanvasSelection?.position == Position(x: 5, y: 4))
+    }
+}
+
+@Test func editorStoreRenamingMapsCascadesReferencesAndEraseRemovesObjects() async throws {
+    let library = try ContentLoader().load()
+    let store = await MainActor.run {
+        let store = AdventureEditorStore(library: library)
+        store.createBlankAdventure()
+        return store
+    }
+
+    await MainActor.run {
+        store.selectTool(.npc)
+        store.handleCanvasClick(x: 2, y: 2)
+
+        store.selectTool(.enemy)
+        store.handleCanvasClick(x: 3, y: 2)
+
+        store.addMap()
+        store.selectTool(.portal)
+        store.handleCanvasClick(x: 2, y: 2)
+
+        store.selectMap(index: 0)
+        store.updateCurrentMapID("forge hall")
+
+        #expect(store.document.maps[0].id == "forge_hall")
+        #expect(store.document.npcs[0].mapID == "forge_hall")
+        #expect(store.document.enemies[0].mapID == "forge_hall")
+        #expect(store.document.maps[1].portals[0].toMap == "forge_hall")
+
+        store.selectTool(.erase)
+        store.handleCanvasClick(x: 2, y: 2)
+        #expect(store.document.npcs.isEmpty)
+
+        store.handleCanvasClick(x: 3, y: 2)
+        #expect(store.document.enemies.isEmpty)
+    }
+}
