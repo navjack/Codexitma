@@ -144,8 +144,30 @@ struct DepthWorldLightingSnapshot {
     let sampleWidth: Int
     let sampleHeight: Int
     let values: [[Double]]
+    let shadowValues: [[Double]]
 
     func level(atWorldX worldX: Double, y worldY: Double) -> Double {
+        sample(from: values, atWorldX: worldX, y: worldY)
+    }
+
+    func shadowLevel(atWorldX worldX: Double, y worldY: Double) -> Double {
+        sample(from: shadowValues, atWorldX: worldX, y: worldY)
+    }
+
+    func effectiveLevel(
+        atWorldX worldX: Double,
+        y worldY: Double,
+        shadowWeight: Double = 0.74,
+        minimumAmbientFactor: Double = 0.10
+    ) -> Double {
+        let light = level(atWorldX: worldX, y: worldY)
+        let shadow = shadowLevel(atWorldX: worldX, y: worldY)
+        let shaded = light - (shadow * shadowWeight)
+        let minimum = max(0.01, ambient * minimumAmbientFactor)
+        return max(minimum, min(1.0, shaded))
+    }
+
+    private func sample(from grid: [[Double]], atWorldX worldX: Double, y worldY: Double) -> Double {
         guard worldX >= 0.0,
               worldY >= 0.0,
               worldX < Double(width),
@@ -153,7 +175,7 @@ struct DepthWorldLightingSnapshot {
             return ambient
         }
 
-        guard sampleWidth > 0, sampleHeight > 0, !values.isEmpty else {
+        guard sampleWidth > 0, sampleHeight > 0, !grid.isEmpty else {
             return ambient
         }
 
@@ -169,8 +191,8 @@ struct DepthWorldLightingSnapshot {
         let tx = clampedX - Double(x0)
         let ty = clampedY - Double(y0)
 
-        let top = (values[y0][x0] * (1.0 - tx)) + (values[y0][x1] * tx)
-        let bottom = (values[y1][x0] * (1.0 - tx)) + (values[y1][x1] * tx)
+        let top = (grid[y0][x0] * (1.0 - tx)) + (grid[y0][x1] * tx)
+        let bottom = (grid[y1][x0] * (1.0 - tx)) + (grid[y1][x1] * tx)
         return max(0.0, min(1.0, (top * (1.0 - ty)) + (bottom * ty)))
     }
 }
@@ -266,6 +288,7 @@ enum GraphicsSceneSnapshotBuilder {
         let sampleWidth: Int
         let sampleHeight: Int
         let values: [[Double]]
+        let shadowValues: [[Double]]
 
         func level(at position: Position) -> Double {
             level(
@@ -275,6 +298,47 @@ enum GraphicsSceneSnapshotBuilder {
         }
 
         func level(atWorldX worldX: Double, y worldY: Double) -> Double {
+            sample(from: values, atWorldX: worldX, y: worldY)
+        }
+
+        func shadowLevel(at position: Position) -> Double {
+            shadowLevel(
+                atWorldX: Double(position.x) + 0.5,
+                y: Double(position.y) + 0.5
+            )
+        }
+
+        func shadowLevel(atWorldX worldX: Double, y worldY: Double) -> Double {
+            sample(from: shadowValues, atWorldX: worldX, y: worldY)
+        }
+
+        func effectiveLevel(
+            at position: Position,
+            shadowWeight: Double = 0.74,
+            minimumAmbientFactor: Double = 0.10
+        ) -> Double {
+            effectiveLevel(
+                atWorldX: Double(position.x) + 0.5,
+                y: Double(position.y) + 0.5,
+                shadowWeight: shadowWeight,
+                minimumAmbientFactor: minimumAmbientFactor
+            )
+        }
+
+        func effectiveLevel(
+            atWorldX worldX: Double,
+            y worldY: Double,
+            shadowWeight: Double = 0.74,
+            minimumAmbientFactor: Double = 0.10
+        ) -> Double {
+            let light = level(atWorldX: worldX, y: worldY)
+            let shadow = shadowLevel(atWorldX: worldX, y: worldY)
+            let shaded = light - (shadow * shadowWeight)
+            let minimum = max(0.01, ambient * minimumAmbientFactor)
+            return max(minimum, min(1.0, shaded))
+        }
+
+        private func sample(from grid: [[Double]], atWorldX worldX: Double, y worldY: Double) -> Double {
             guard worldX >= 0.0,
                   worldY >= 0.0,
                   worldX < Double(width),
@@ -282,7 +346,7 @@ enum GraphicsSceneSnapshotBuilder {
                 return ambient
             }
 
-            guard sampleWidth > 0, sampleHeight > 0, !values.isEmpty else {
+            guard sampleWidth > 0, sampleHeight > 0, !grid.isEmpty else {
                 return ambient
             }
 
@@ -298,8 +362,8 @@ enum GraphicsSceneSnapshotBuilder {
             let tx = clampedX - Double(x0)
             let ty = clampedY - Double(y0)
 
-            let top = (values[y0][x0] * (1.0 - tx)) + (values[y0][x1] * tx)
-            let bottom = (values[y1][x0] * (1.0 - tx)) + (values[y1][x1] * tx)
+            let top = (grid[y0][x0] * (1.0 - tx)) + (grid[y0][x1] * tx)
+            let bottom = (grid[y1][x0] * (1.0 - tx)) + (grid[y1][x1] * tx)
             return max(0.0, min(1.0, (top * (1.0 - ty)) + (bottom * ty)))
         }
     }
@@ -471,6 +535,9 @@ enum GraphicsSceneSnapshotBuilder {
             },
             lightAtWorld: { worldX, worldY in
                 lightField.level(atWorldX: worldX, y: worldY)
+            },
+            shadowAtWorld: { worldX, worldY in
+                lightField.shadowLevel(atWorldX: worldX, y: worldY)
             }
         ) { position in
             board.cell(at: position)?.tile ?? TileFactory.tile(for: "#")
@@ -566,7 +633,11 @@ enum GraphicsSceneSnapshotBuilder {
                     distance: distance,
                     angleOffset: angleOffset,
                     maxDistance: maxDistance,
-                    lightLevel: lightField.level(at: cell.position)
+                    lightLevel: lightField.effectiveLevel(
+                        at: cell.position,
+                        shadowWeight: 0.76,
+                        minimumAmbientFactor: 0.08
+                    )
                 ) {
                     billboards.append(billboard)
                 }
@@ -620,7 +691,11 @@ enum GraphicsSceneSnapshotBuilder {
     ) -> DepthTileLightingSnapshot {
         let values = board.rows.map { row in
             row.map { cell in
-                max(lightField.ambient, min(1.0, lightField.level(at: cell.position)))
+                lightField.effectiveLevel(
+                    at: cell.position,
+                    shadowWeight: 0.74,
+                    minimumAmbientFactor: 0.10
+                )
             }
         }
         return DepthTileLightingSnapshot(
@@ -639,7 +714,8 @@ enum GraphicsSceneSnapshotBuilder {
             subdivisions: lightField.subdivisions,
             sampleWidth: lightField.sampleWidth,
             sampleHeight: lightField.sampleHeight,
-            values: lightField.values
+            values: lightField.values,
+            shadowValues: lightField.shadowValues
         )
     }
 
@@ -816,7 +892,8 @@ enum GraphicsSceneSnapshotBuilder {
                 subdivisions: max(1, subdivisions),
                 sampleWidth: 0,
                 sampleHeight: 0,
-                values: []
+                values: [],
+                shadowValues: []
             )
         }
 
@@ -857,7 +934,9 @@ enum GraphicsSceneSnapshotBuilder {
         }
 
         var values = staticField.values
-        applyLightSource(lantern, to: &values, field: staticField, board: board)
+        var shadowValues = staticField.shadowValues
+        applyLightSource(lantern, lightValues: &values, shadowValues: &shadowValues, field: staticField, board: board)
+        shadowValues = softenedShadowMask(shadowValues)
         let finalField = DepthLightField(
             width: board.width,
             height: board.height,
@@ -865,7 +944,8 @@ enum GraphicsSceneSnapshotBuilder {
             subdivisions: staticField.subdivisions,
             sampleWidth: staticField.sampleWidth,
             sampleHeight: staticField.sampleHeight,
-            values: values
+            values: values,
+            shadowValues: shadowValues
         )
         cachedFinalLightField = (finalKey, finalField)
         return finalField
@@ -933,6 +1013,10 @@ enum GraphicsSceneSnapshotBuilder {
             repeating: Array(repeating: ambient, count: sampleWidth),
             count: sampleHeight
         )
+        var shadowValues = Array(
+            repeating: Array(repeating: 0.0, count: sampleWidth),
+            count: sampleHeight
+        )
         let field = DepthLightField(
             width: width,
             height: height,
@@ -940,11 +1024,19 @@ enum GraphicsSceneSnapshotBuilder {
             subdivisions: sampleScale,
             sampleWidth: sampleWidth,
             sampleHeight: sampleHeight,
-            values: values
+            values: values,
+            shadowValues: shadowValues
         )
         for source in sources {
-            applyLightSource(source, to: &values, field: field, board: board)
+            applyLightSource(
+                source,
+                lightValues: &values,
+                shadowValues: &shadowValues,
+                field: field,
+                board: board
+            )
         }
+        shadowValues = softenedShadowMask(shadowValues)
         return DepthLightField(
             width: width,
             height: height,
@@ -952,13 +1044,15 @@ enum GraphicsSceneSnapshotBuilder {
             subdivisions: sampleScale,
             sampleWidth: sampleWidth,
             sampleHeight: sampleHeight,
-            values: values
+            values: values,
+            shadowValues: shadowValues
         )
     }
 
     private static func applyLightSource(
         _ source: DepthLightSource,
-        to values: inout [[Double]],
+        lightValues: inout [[Double]],
+        shadowValues: inout [[Double]],
         field: DepthLightField,
         board: MapBoardSnapshot
     ) {
@@ -1011,15 +1105,52 @@ enum GraphicsSceneSnapshotBuilder {
                 if blocked {
                     contribution *= source.blockedTransmission
                 }
-                var next = values[sampleY][sampleX]
-                if blocked {
-                    next -= source.shadowStrength * attenuation
-                }
+                var next = lightValues[sampleY][sampleX]
                 next += contribution
-                let minimum = max(0.01, field.ambient * 0.10)
-                values[sampleY][sampleX] = max(minimum, min(1.0, next))
+                let minimum = max(0.01, field.ambient * 0.12)
+                lightValues[sampleY][sampleX] = max(minimum, min(1.0, next))
+
+                if blocked {
+                    let occlusion = max(0.0, 1.0 - source.blockedTransmission)
+                    let shadowContribution = source.shadowStrength * attenuation * occlusion
+                    let shadowNext = shadowValues[sampleY][sampleX] + shadowContribution
+                    shadowValues[sampleY][sampleX] = max(0.0, min(1.0, shadowNext))
+                }
             }
         }
+    }
+
+    private static func softenedShadowMask(_ values: [[Double]]) -> [[Double]] {
+        guard !values.isEmpty, !values[0].isEmpty else {
+            return values
+        }
+
+        let height = values.count
+        let width = values[0].count
+        var output = values
+
+        for y in 0..<height {
+            for x in 0..<width {
+                var weightedSum = 0.0
+                var totalWeight = 0.0
+
+                for dy in -1...1 {
+                    for dx in -1...1 {
+                        let sampleX = min(max(0, x + dx), width - 1)
+                        let sampleY = min(max(0, y + dy), height - 1)
+                        let weightX = dx == 0 ? 2.0 : 1.0
+                        let weightY = dy == 0 ? 2.0 : 1.0
+                        let weight = weightX * weightY
+                        weightedSum += values[sampleY][sampleX] * weight
+                        totalWeight += weight
+                    }
+                }
+
+                output[y][x] = max(0.0, min(1.0, weightedSum / max(1.0, totalWeight)))
+            }
+        }
+
+        return output
     }
 
     private static func collectDepthLightSources(from state: GameState, board: MapBoardSnapshot) -> [DepthLightSource] {

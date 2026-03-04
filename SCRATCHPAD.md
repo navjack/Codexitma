@@ -185,3 +185,7 @@
 - Normalized warp-facing semantics to cardinal directions (`n/s/e/w`) rather than WASD movement aliases so scripted camera setup for lighting repros is less ambiguous.
 - Fixed automation tokenizer handling for full-line `# ...` comments in script files and added regression coverage; reusable checkpoint scripts can now include descriptive headers safely.
 - Added `scripts/lighting_checkpoints_ashes.txt` as a deterministic coordinate baseline for lighting/shadow repro runs.
+- Refactored Depth3D lighting into a shared world-space model with an explicit high-resolution shadow mask (`shadowValues`) alongside light values, sampled bilinearly in both native and SDL.
+- Removed screen-space wall-contact shadow anchoring passes in native and SDL and switched floor/wall shading to the shared world shadow mask, reducing detached/peter-panning artifacts.
+- Added a lightweight 3x3 softening filter on the shadow mask cache to reduce stair-stepped shadow edges while preserving occlusion structure.
+- Extended `DepthRaySample` with per-hit `shadowLevel` so wall shading can use the same world-space shadow source as the floor.

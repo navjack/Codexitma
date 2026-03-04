@@ -519,9 +519,7 @@ struct MapBoardView: View {
                     floorLighting: floorLighting,
                     worldLighting: worldLighting,
                     projection: projection,
-                    depthSamples: samples,
-                    theme: theme,
-                    maxDistance: scene.depth?.maxDistance ?? 12.0
+                    theme: theme
                 )
                 context.fill(Path(rect), with: .color(Color.black.opacity(0.06 + (Double(t1) * 0.10))))
                 context.fill(Path(rect.insetBy(dx: 0, dy: 0)), with: .color(stripe.opacity(0.16)))
@@ -570,9 +568,7 @@ struct MapBoardView: View {
         floorLighting: DepthFloorLightingSnapshot?,
         worldLighting: DepthWorldLightingSnapshot?,
         projection: DepthFloorBandProjection,
-        depthSamples: [DepthRaySample],
-        theme: RegionTheme,
-        maxDistance: Double
+        theme: RegionTheme
     ) {
         let playerX = Double(scene.player.position.x) + 0.5
         let playerY = Double(scene.player.position.y) + 0.5
@@ -581,7 +577,7 @@ struct MapBoardView: View {
         let stripCount = projection.strips.count
         guard stripCount > 0 else { return }
         var stripLightLevels = Array(repeating: floorLighting?.ambient ?? worldLighting?.ambient ?? 0.20, count: stripCount)
-        var stripContactLevels = Array(repeating: 0.0, count: stripCount)
+        var stripShadowLevels = Array(repeating: 0.0, count: stripCount)
 
         context.withCGContext { cgContext in
             cgContext.interpolationQuality = .none
@@ -611,21 +607,7 @@ struct MapBoardView: View {
                     )
                     ?? (floorLighting?.ambient ?? worldLighting?.ambient ?? 0.20)
                 stripLightLevels[index] = light
-
-                guard !depthSamples.isEmpty else { continue }
-                let sampleIndex = min(
-                    depthSamples.count - 1,
-                    max(0, Int(xNorm * Double(depthSamples.count)))
-                )
-                let sample = depthSamples[sampleIndex]
-                guard sample.didHit else { continue }
-                let delta = rowDistance - sample.correctedDistance
-                if delta < -0.05 {
-                    continue
-                }
-                let proximity = max(0.0, min(1.0, 1.0 - (delta / 0.62)))
-                let distanceFade = max(0.30, 1.0 - (sample.correctedDistance / maxDistance))
-                stripContactLevels[index] = proximity * distanceFade
+                stripShadowLevels[index] = worldLighting?.shadowLevel(atWorldX: worldX, y: worldY) ?? 0.0
             }
         }
 
@@ -639,6 +621,16 @@ struct MapBoardView: View {
             }
             stripLightLevels = smoothed
         }
+        if stripShadowLevels.count >= 3 {
+            var smoothed = stripShadowLevels
+            for index in stripShadowLevels.indices {
+                let left = stripShadowLevels[max(0, index - 1)]
+                let center = stripShadowLevels[index]
+                let right = stripShadowLevels[min(stripShadowLevels.count - 1, index + 1)]
+                smoothed[index] = (left * 0.24) + (center * 0.52) + (right * 0.24)
+            }
+            stripShadowLevels = smoothed
+        }
 
         let ambient = floorLighting?.ambient ?? worldLighting?.ambient
         if let ambient {
@@ -649,9 +641,10 @@ struct MapBoardView: View {
                     width: max(1, strip.x1 - strip.x0),
                     height: rect.height
                 )
-                let light = stripLightLevels[index]
-                let lift = max(0.0, light - ambient)
-                let dim = max(0.0, ambient - light)
+                let shadow = stripShadowLevels[index]
+                let shaded = max(ambient * 0.10, stripLightLevels[index] - (shadow * 0.74))
+                let lift = max(0.0, shaded - ambient)
+                let dim = max(max(0.0, ambient - shaded), shadow * 0.40)
                 if lift > 0.01 {
                     let glow = theme.roomHighlight.opacity(min(0.44, 0.05 + (lift * 0.60)))
                     context.fill(Path(stripe), with: .color(glow))
@@ -660,10 +653,9 @@ struct MapBoardView: View {
                     let shadow = Color.black.opacity(min(0.24, 0.04 + (dim * 0.38)))
                     context.fill(Path(stripe), with: .color(shadow))
                 }
-                let contact = stripContactLevels[index]
-                if contact > 0.01 {
-                    let anchorShadow = Color.black.opacity(min(0.24, 0.04 + (contact * 0.24)))
-                    context.fill(Path(stripe), with: .color(anchorShadow))
+                if shadow > 0.01 {
+                    let occlusion = Color.black.opacity(min(0.24, shadow * 0.28))
+                    context.fill(Path(stripe), with: .color(occlusion))
                 }
             }
         }
@@ -695,6 +687,8 @@ struct MapBoardView: View {
             let axisShade = sample.hitAxis == .vertical ? 0.78 : 0.92
             let distanceShade = max(0.20, 1.0 - ((sample.correctedDistance / sample.maxDistance) * 0.76))
             let lightShade = max(0.18, min(1.0, sample.lightLevel))
+            let shadowShade = max(0.0, min(1.0, sample.shadowLevel))
+            let effectiveShade = max(0.14, lightShade * (1.0 - (shadowShade * 0.78)))
             if let depthTextureAtlas {
                 context.withCGContext { cgContext in
                     cgContext.interpolationQuality = .none
@@ -705,11 +699,11 @@ struct MapBoardView: View {
                 let tint = frontWallColor(for: sample.hitTile, theme: theme).opacity(0.20)
                 context.fill(Path(rect), with: .color(tint))
             } else {
-                let wallColor = frontWallColor(for: sample.hitTile, theme: theme).opacity(distanceShade * axisShade * lightShade)
+                let wallColor = frontWallColor(for: sample.hitTile, theme: theme).opacity(distanceShade * axisShade * effectiveShade)
                 context.fill(Path(rect), with: .color(wallColor))
             }
 
-            let darkPass = 1.0 - (distanceShade * axisShade * lightShade)
+            let darkPass = 1.0 - (distanceShade * axisShade * effectiveShade)
             if darkPass > 0.02 {
                 context.fill(
                     Path(rect),
@@ -717,9 +711,13 @@ struct MapBoardView: View {
                 )
             }
 
-            if lightShade < 0.65 {
-                let darkness = (0.65 - lightShade) * 0.55
+            if effectiveShade < 0.65 {
+                let darkness = (0.65 - effectiveShade) * 0.55
                 context.fill(Path(rect), with: .color(Color.black.opacity(darkness)))
+            }
+            if shadowShade > 0.01 {
+                let shadow = Color.black.opacity(min(0.30, shadowShade * 0.26))
+                context.fill(Path(rect), with: .color(shadow))
             }
 
             if depthTextureAtlas == nil, sample.column.isMultiple(of: 3) {
@@ -734,23 +732,6 @@ struct MapBoardView: View {
 
             let topEdge = Path(CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: 1))
             context.fill(topEdge, with: .color(theme.roomHighlight.opacity(0.12)))
-
-            let distanceRatio = max(0.0, min(1.0, sample.correctedDistance / sample.maxDistance))
-            let contactOpacity = max(
-                0.06,
-                min(
-                    0.34,
-                    0.08 + ((1.0 - distanceRatio) * 0.14) + ((1.0 - lightShade) * 0.16)
-                )
-            )
-            let contactHeight = max(1, min(8, Int(2.0 + ((1.0 - distanceRatio) * 4.0))))
-            let contactRect = CGRect(
-                x: rect.minX,
-                y: min(size.height - 1, rect.maxY),
-                width: rect.width,
-                height: CGFloat(contactHeight)
-            )
-            context.fill(Path(contactRect), with: .color(Color.black.opacity(contactOpacity)))
 
             let fogAmount = max(0.0, min(0.72, ((sample.correctedDistance / sample.maxDistance) - 0.40) * 1.25))
             if fogAmount > 0.01 {

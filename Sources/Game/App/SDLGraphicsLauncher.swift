@@ -1057,6 +1057,11 @@ enum SDLGraphicsLauncher {
                 let worldY = playerY + (projection.rowDistance * strip.rayY)
                 return worldLighting.level(atWorldX: worldX, y: worldY)
             }
+            var stripShadowLevels = projection.strips.map { strip in
+                let worldX = playerX + (projection.rowDistance * strip.rayX)
+                let worldY = playerY + (projection.rowDistance * strip.rayY)
+                return worldLighting.shadowLevel(atWorldX: worldX, y: worldY)
+            }
             if stripLevels.count >= 3 {
                 var smoothed = stripLevels
                 for index in stripLevels.indices {
@@ -1067,27 +1072,22 @@ enum SDLGraphicsLauncher {
                 }
                 stripLevels = smoothed
             }
+            if stripShadowLevels.count >= 3 {
+                var smoothed = stripShadowLevels
+                for index in stripShadowLevels.indices {
+                    let left = stripShadowLevels[max(0, index - 1)]
+                    let center = stripShadowLevels[index]
+                    let right = stripShadowLevels[min(stripShadowLevels.count - 1, index + 1)]
+                    smoothed[index] = (left * 0.24) + (center * 0.52) + (right * 0.24)
+                }
+                stripShadowLevels = smoothed
+            }
 
             for (index, strip) in projection.strips.enumerated() {
-                let level = stripLevels[index]
-                let lift = max(0.0, level - floorLighting.ambient)
-                var dim = max(0.0, floorLighting.ambient - level)
-
-                if !depthSamples.isEmpty {
-                    let sampleIndex = min(
-                        depthSamples.count - 1,
-                        max(0, Int(strip.xNormalized * Double(depthSamples.count)))
-                    )
-                    let sample = depthSamples[sampleIndex]
-                    if sample.didHit {
-                        let delta = projection.rowDistance - sample.correctedDistance
-                        if delta >= -0.05 {
-                            let proximity = max(0.0, min(1.0, 1.0 - (delta / 0.62)))
-                            let distanceFade = max(0.30, 1.0 - (sample.correctedDistance / max(0.01, depth.maxDistance)))
-                            dim = max(dim, proximity * distanceFade * 0.36)
-                        }
-                    }
-                }
+                let shadow = stripShadowLevels[index]
+                let shaded = max(floorLighting.ambient * 0.10, stripLevels[index] - (shadow * 0.74))
+                let lift = max(0.0, shaded - floorLighting.ambient)
+                let dim = max(max(0.0, floorLighting.ambient - shaded), shadow * 0.40)
 
                 if lift <= 0.01, dim <= 0.01 {
                     continue
@@ -1101,6 +1101,10 @@ enum SDLGraphicsLauncher {
                 }
                 if dim > 0.01 {
                     let alpha = UInt8(max(0, min(110, Int((0.04 + (dim * 0.34)) * 255.0))))
+                    fill(renderer, x: strip.x0, y: y0, width: width, height: max(1, y1 - y0), color: .void.withAlpha(alpha))
+                }
+                if shadow > 0.01 {
+                    let alpha = UInt8(max(0, min(130, Int((shadow * 0.28) * 255.0))))
                     fill(renderer, x: strip.x0, y: y0, width: width, height: max(1, y1 - y0), color: .void.withAlpha(alpha))
                 }
             }
@@ -1128,7 +1132,6 @@ enum SDLGraphicsLauncher {
 
         guard !depthSamples.isEmpty else { return }
         let columnWidth = max(1, frame.width / depthSamples.count)
-        var wallBottomByColumn = Array(repeating: horizon, count: depthSamples.count)
         let fogColor = depth.usesSkyBackdrop
             ? blended(depthTheme.frameBackground, toward: .sky, amount: 0.35)
             : blended(.ceiling, toward: .void, amount: 0.40)
@@ -1139,15 +1142,14 @@ enum SDLGraphicsLauncher {
             let top = Int(Double(horizon) - (wallHeight * 0.5))
             let height = max(1, Int(wallHeight))
             let x = frame.x + (sample.column * columnWidth)
-            if sample.column >= 0, sample.column < wallBottomByColumn.count {
-                wallBottomByColumn[sample.column] = max(wallBottomByColumn[sample.column], top + height)
-            }
             let distanceRatio = sample.correctedDistance / depth.maxDistance
             let axisShade = sample.hitAxis == .vertical ? 0.78 : 0.92
             let lightShade = max(0.18, min(1.0, sample.lightLevel))
+            let shadowShade = max(0.0, min(1.0, sample.shadowLevel))
+            let effectiveShade = max(0.14, lightShade * (1.0 - (shadowShade * 0.78)))
             var color = shaded(
                 tileColor(for: sample.hitTile.type, theme: depthTheme),
-                intensity: max(0.22, 1.0 - (distanceRatio * 0.72)) * axisShade * lightShade
+                intensity: max(0.22, 1.0 - (distanceRatio * 0.72)) * axisShade * effectiveShade
             )
             let fogAmount = max(0.0, min(0.78, (distanceRatio - 0.34) * 1.35))
             color = blended(color, toward: fogColor, amount: fogAmount)
@@ -1163,9 +1165,13 @@ enum SDLGraphicsLauncher {
                     color: .void.withAlpha(24)
                 )
             }
-            if lightShade < 0.65 {
-                let darkness = UInt8(max(0, min(170, Int((0.65 - lightShade) * 255.0))))
+            if effectiveShade < 0.65 {
+                let darkness = UInt8(max(0, min(170, Int((0.65 - effectiveShade) * 255.0))))
                 fill(renderer, x: x, y: top, width: max(1, columnWidth + 1), height: height, color: .void.withAlpha(darkness))
+            }
+            if shadowShade > 0.01 {
+                let shadowAlpha = UInt8(max(0, min(130, Int((shadowShade * 0.26) * 255.0))))
+                fill(renderer, x: x, y: top, width: max(1, columnWidth + 1), height: height, color: .void.withAlpha(shadowAlpha))
             }
             fill(
                 renderer,
@@ -1174,23 +1180,6 @@ enum SDLGraphicsLauncher {
                 width: max(1, columnWidth + 1),
                 height: 1,
                 color: blended(color, toward: .bright, amount: 0.18).withAlpha(110)
-            )
-        }
-
-        // Anchor floor shading to the wall contact line to avoid detached ("peter-panning") shadows.
-        for (column, sample) in depthSamples.enumerated() where sample.didHit {
-            let distanceRatio = max(0.0, min(1.0, sample.correctedDistance / max(0.01, depth.maxDistance)))
-            let contactAlpha = UInt8(max(18, min(138, Int((0.42 - (distanceRatio * 0.30)) * 255.0))))
-            let contactHeight = max(1, min(8, Int(2.0 + ((1.0 - distanceRatio) * 4.0))))
-            let x = frame.x + (column * columnWidth)
-            let y = min(frame.y + frame.height - 1, wallBottomByColumn[column])
-            fill(
-                renderer,
-                x: x,
-                y: y,
-                width: max(1, columnWidth + 1),
-                height: contactHeight,
-                color: .shadow.withAlpha(contactAlpha)
             )
         }
 
