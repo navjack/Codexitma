@@ -86,6 +86,22 @@ struct DepthSceneSnapshot {
     let billboards: [DepthBillboardSnapshot]
 }
 
+struct InventoryEntrySnapshot {
+    let index: Int
+    let name: String
+    let isSelected: Bool
+    let isEquipped: Bool
+}
+
+struct ShopOfferSnapshot {
+    let index: Int
+    let label: String
+    let price: Int
+    let blurb: String
+    let isSelected: Bool
+    let soldOut: Bool
+}
+
 struct GraphicsSceneSnapshot {
     let mode: GameMode
     let visualTheme: GraphicsVisualTheme
@@ -98,6 +114,26 @@ struct GraphicsSceneSnapshot {
     let player: PlayerState
     let quests: QuestState
     let questFlow: QuestFlowDefinition
+    let availableAdventures: [AdventureCatalogEntry]
+    let selectedAdventureIndex: Int
+    let heroOptions: [HeroClass]
+    let selectedHeroIndex: Int
+    let selectedHeroClass: HeroClass
+    let selectedHeroSummary: String
+    let selectedHeroTraitsPrimary: String
+    let selectedHeroTraitsSecondary: String
+    let selectedHeroSkills: [String]
+    let currentObjective: String
+    let currentDialogueSpeaker: String?
+    let currentDialogueLines: [String]
+    let inventoryEntries: [InventoryEntrySnapshot]
+    let inventorySelectionIndex: Int
+    let inventoryDetail: String?
+    let shopTitle: String?
+    let shopLines: [String]
+    let shopOffers: [ShopOfferSnapshot]
+    let shopSelectionIndex: Int
+    let shopDetail: String?
 }
 
 enum GraphicsSceneSnapshotBuilder {
@@ -108,6 +144,9 @@ enum GraphicsSceneSnapshotBuilder {
     static func build(state: GameState, visualTheme: GraphicsVisualTheme) -> GraphicsSceneSnapshot {
         let board = makeBoard(from: state)
         let depth = visualTheme == .depth3D ? makeDepthScene(from: state, board: board) : nil
+        let selectedHeroClass = state.selectedHeroClass()
+        let selectedHeroTemplate = heroTemplate(for: selectedHeroClass)
+
         return GraphicsSceneSnapshot(
             mode: state.mode,
             visualTheme: visualTheme,
@@ -119,8 +158,85 @@ enum GraphicsSceneSnapshotBuilder {
             messages: state.messages,
             player: state.player,
             quests: state.quests,
-            questFlow: state.questFlow
+            questFlow: state.questFlow,
+            availableAdventures: state.availableAdventures,
+            selectedAdventureIndex: state.selectedAdventureIndex,
+            heroOptions: HeroClass.allCases,
+            selectedHeroIndex: state.selectedHeroIndex,
+            selectedHeroClass: selectedHeroClass,
+            selectedHeroSummary: selectedHeroTemplate.summary,
+            selectedHeroTraitsPrimary: traitSummaryLine(selectedHeroTemplate.traits),
+            selectedHeroTraitsSecondary: traitSummaryLineSecondary(selectedHeroTemplate.traits),
+            selectedHeroSkills: selectedHeroTemplate.skills.map(\.displayName),
+            currentObjective: QuestSystem.objective(for: state.quests, flow: state.questFlow),
+            currentDialogueSpeaker: state.currentDialogue?.speaker,
+            currentDialogueLines: state.currentDialogue?.lines ?? [],
+            inventoryEntries: inventoryEntries(from: state),
+            inventorySelectionIndex: state.inventorySelectionIndex,
+            inventoryDetail: inventoryDetail(from: state),
+            shopTitle: state.shopTitle,
+            shopLines: state.shopLines,
+            shopOffers: shopOffers(from: state),
+            shopSelectionIndex: state.shopSelectionIndex,
+            shopDetail: state.shopDetail
         )
+    }
+
+    private static func traitSummaryLine(_ traits: TraitProfile) -> String {
+        "\(TraitStat.brawn.shortLabel):\(traits.brawn) \(TraitStat.agility.shortLabel):\(traits.agility) \(TraitStat.grit.shortLabel):\(traits.grit)"
+    }
+
+    private static func traitSummaryLineSecondary(_ traits: TraitProfile) -> String {
+        "\(TraitStat.wits.shortLabel):\(traits.wits) \(TraitStat.lore.shortLabel):\(traits.lore) \(TraitStat.spark.shortLabel):\(traits.spark)"
+    }
+
+    private static func inventoryEntries(from state: GameState) -> [InventoryEntrySnapshot] {
+        state.player.inventory.enumerated().map { index, item in
+            InventoryEntrySnapshot(
+                index: index,
+                name: item.name,
+                isSelected: index == state.inventorySelectionIndex,
+                isEquipped: EquipmentSlot.allCases.contains { state.player.equipment.itemID(for: $0) == item.id }
+            )
+        }
+    }
+
+    private static func inventoryDetail(from state: GameState) -> String? {
+        guard !state.player.inventory.isEmpty else {
+            return nil
+        }
+        let index = max(0, min(state.inventorySelectionIndex, state.player.inventory.count - 1))
+        let item = state.player.inventory[index]
+
+        if item.isEquippable, let slot = item.slot {
+            return "\(item.name): \(slot.rawValue) +A\(item.attackBonus) +D\(item.defenseBonus) +L\(item.lanternBonus)"
+        }
+
+        switch item.kind {
+        case .consumable:
+            return "\(item.name): restores \(item.value)."
+        case .upgrade:
+            return "\(item.name): permanent boon when used."
+        case .key, .quest:
+            return "\(item.name): important, but not directly usable."
+        case .equipment:
+            return "\(item.name): equipable gear."
+        }
+    }
+
+    private static func shopOffers(from state: GameState) -> [ShopOfferSnapshot] {
+        state.shopOffers.enumerated().map { index, offer in
+            let soldOut = !offer.repeatable && state.world.purchasedShopOffers.contains(offer.id)
+            let itemName = itemTable[offer.itemID]?.name ?? offer.itemID.rawValue
+            return ShopOfferSnapshot(
+                index: index,
+                label: itemName,
+                price: offer.price,
+                blurb: offer.blurb,
+                isSelected: index == state.shopSelectionIndex,
+                soldOut: soldOut
+            )
+        }
     }
 
     private static func makeBoard(from state: GameState) -> MapBoardSnapshot {

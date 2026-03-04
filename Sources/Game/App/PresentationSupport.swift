@@ -24,14 +24,8 @@ final class GraphicsPreferenceStore: @unchecked Sendable {
     }
 }
 
-enum AppleIISoundCue {
-    case introMusic
-    case walk
-    case attack
-    case useItem
-    case menuConfirm
-
-    fileprivate var notes: [(frequency: Double, duration: Double)] {
+private extension GameSoundCue {
+    var notes: [(frequency: Double, duration: Double)] {
         switch self {
         case .introMusic:
             return [
@@ -65,7 +59,7 @@ enum AppleIISoundCue {
 }
 
 @MainActor
-final class AppleIISoundEngine {
+final class AppleIISoundEngine: GameSoundPlayback {
     static let shared = AppleIISoundEngine()
 
     private let engine = AVAudioEngine()
@@ -78,7 +72,7 @@ final class AppleIISoundEngine {
         configureIfNeeded()
     }
 
-    func play(_ cue: AppleIISoundCue) {
+    func play(_ cue: GameSoundCue) {
         guard configureIfNeeded() else { return }
         player.stop()
         player.reset()

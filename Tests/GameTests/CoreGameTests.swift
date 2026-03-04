@@ -134,10 +134,38 @@ import Testing
     #expect(topDown.board.width > 0)
     #expect(topDown.board.height > 0)
     #expect(topDown.depth == nil)
+    #expect(topDown.availableAdventures.isEmpty == false)
+    #expect(topDown.selectedHeroClass == engine.state.selectedHeroClass())
 
     let depth = GraphicsSceneSnapshotBuilder.build(state: engine.state, visualTheme: .depth3D)
     #expect(depth.depth != nil)
     #expect((depth.depth?.samples.count ?? 0) == 96)
+}
+
+@Test func sharedGameSessionUsesSameDepthControlRemapAsNativeGraphics() async throws {
+    let library = try ContentLoader().load()
+    let saveURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString).appendingPathExtension("json")
+
+    let session = await MainActor.run {
+        SharedGameSession(
+            library: library,
+            saveRepository: SaveRepository(fileURL: saveURL),
+            soundEngine: SilentGameSoundEngine.shared
+        )
+    }
+
+    await MainActor.run {
+        session.send(.newGame)
+        session.send(.confirm)
+        let start = session.state.player.position
+        let startFacing = session.state.player.facing
+
+        session.selectVisualTheme(.depth3D)
+        session.send(.move(.left))
+
+        #expect(session.state.player.facing == startFacing.leftTurn)
+        #expect(session.state.player.position == start)
+    }
 }
 
 @Test func depthRaycasterMeasuresCenterWallDistance() async throws {

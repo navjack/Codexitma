@@ -51,13 +51,13 @@ enum SDLGraphicsLauncher {
         }
         defer { SDL_DestroyRenderer(renderer) }
 
-        let engine = GameEngine(library: library, saveRepository: saveRepository)
-        if let playtestAdventureID {
-            engine.beginPlaytest(for: playtestAdventureID)
-        }
-
-        let preferences = GraphicsPreferenceStore.shared
-        var visualTheme = preferences.loadTheme()
+        let session = SharedGameSession(
+            library: library,
+            saveRepository: saveRepository,
+            playtestAdventureID: playtestAdventureID,
+            preferenceStore: .shared,
+            soundEngine: defaultGraphicsSoundEngine()
+        )
         var running = true
 
         while running {
@@ -71,20 +71,18 @@ enum SDLGraphicsLauncher {
                     }
                     if handleKey(
                         key: event.key.key,
-                        engine: engine,
-                        visualTheme: &visualTheme,
-                        preferences: preferences
+                        session: session
                     ) {
                         running = false
                     }
                 }
             }
 
-            if engine.shouldQuit {
+            if session.state.shouldQuit {
                 running = false
             }
 
-            let scene = GraphicsSceneSnapshotBuilder.build(state: engine.state, visualTheme: visualTheme)
+            let scene = session.sceneSnapshot
             renderScene(scene, with: renderer)
             _ = SDL_RenderPresent(renderer)
             SDL_Delay(16)
@@ -93,18 +91,15 @@ enum SDLGraphicsLauncher {
 
     private static func handleKey(
         key: SDL_Keycode,
-        engine: GameEngine,
-        visualTheme: inout GraphicsVisualTheme,
-        preferences: GraphicsPreferenceStore
+        session: SharedGameSession
     ) -> Bool {
         switch key {
         case SDLK_T:
-            visualTheme = visualTheme.next()
-            preferences.saveTheme(visualTheme)
+            session.cycleVisualTheme()
             return false
         case SDLK_X:
-            engine.handle(.quit)
-            return engine.shouldQuit
+            session.send(.quit)
+            return session.state.shouldQuit
         default:
             break
         }
@@ -112,8 +107,8 @@ enum SDLGraphicsLauncher {
         guard let command = actionCommand(for: key) else {
             return false
         }
-        engine.handle(resolved(command: command, theme: visualTheme, state: engine.state))
-        return engine.shouldQuit
+        session.send(command)
+        return session.state.shouldQuit
     }
 
     private static func actionCommand(for key: SDL_Keycode) -> ActionCommand? {
@@ -147,27 +142,22 @@ enum SDLGraphicsLauncher {
         }
     }
 
-    private static func resolved(command: ActionCommand, theme: GraphicsVisualTheme, state: GameState) -> ActionCommand {
-        guard theme == .depth3D, state.mode == .exploration else {
-            return command
-        }
-
-        switch command {
-        case .move(.up):
-            return .move(state.player.facing)
-        case .move(.down):
-            return .moveBackward
-        case .move(.left):
-            return .turnLeft
-        case .move(.right):
-            return .turnRight
-        default:
-            return command
-        }
-    }
-
     private static func renderScene(_ scene: GraphicsSceneSnapshot, with renderer: OpaquePointer) {
         fill(renderer, x: 0, y: 0, width: windowWidth, height: windowHeight, color: .background)
+
+        switch scene.mode {
+        case .title:
+            renderTitleScreen(scene, with: renderer)
+            return
+        case .characterCreation:
+            renderCharacterCreationScreen(scene, with: renderer)
+            return
+        case .ending:
+            renderEndingScreen(scene, with: renderer)
+            return
+        default:
+            break
+        }
 
         let boardFrame = SDLRect(x: 28, y: 28, width: 760, height: 704)
         let panelFrame = SDLRect(x: 812, y: 28, width: 440, height: 704)
@@ -185,6 +175,74 @@ enum SDLGraphicsLauncher {
         renderHeader(scene, boardFrame: boardFrame, with: renderer)
     }
 
+    private static func renderTitleScreen(_ scene: GraphicsSceneSnapshot, with renderer: OpaquePointer) {
+        let frame = SDLRect(x: 56, y: 54, width: windowWidth - 112, height: windowHeight - 108)
+        fill(renderer, x: frame.x, y: frame.y, width: frame.width, height: frame.height, color: .panel)
+        stroke(renderer, frame: frame, color: .gold)
+
+        drawText("CODEXITMA", x: frame.x + 18, y: frame.y + 18, color: .gold, renderer: renderer)
+        drawText(scene.visualTheme.displayName.uppercased(), x: frame.x + 210, y: frame.y + 18, color: .bright, renderer: renderer)
+        drawWrappedText(scene.adventureSummary.uppercased(), x: frame.x + 18, y: frame.y + 42, width: 82, color: .bright, renderer: renderer)
+
+        drawText("ADVENTURES", x: frame.x + 18, y: frame.y + 104, color: .gold, renderer: renderer)
+        var y = frame.y + 124
+        for (index, entry) in scene.availableAdventures.enumerated() {
+            let selected = index == normalizedIndex(scene.selectedAdventureIndex, count: scene.availableAdventures.count)
+            let prefix = selected ? ">" : " "
+            drawText("\(prefix) \(entry.title.uppercased())", x: frame.x + 18, y: y, color: selected ? .gold : .bright, renderer: renderer)
+            y += 14
+            drawWrappedText(entry.summary.uppercased(), x: frame.x + 36, y: y, width: 72, color: .dim, renderer: renderer)
+            y += 24
+        }
+
+        drawText("A/D SELECT  N CREATE  L LOAD", x: frame.x + 18, y: frame.y + frame.height - 42, color: .bright, renderer: renderer)
+        drawText("T STYLE  X QUIT", x: frame.x + 18, y: frame.y + frame.height - 26, color: .bright, renderer: renderer)
+    }
+
+    private static func renderCharacterCreationScreen(_ scene: GraphicsSceneSnapshot, with renderer: OpaquePointer) {
+        let frame = SDLRect(x: 56, y: 54, width: windowWidth - 112, height: windowHeight - 108)
+        fill(renderer, x: frame.x, y: frame.y, width: frame.width, height: frame.height, color: .panel)
+        stroke(renderer, frame: frame, color: .gold)
+
+        drawText("CREATE HERO", x: frame.x + 18, y: frame.y + 18, color: .gold, renderer: renderer)
+        drawText(scene.adventureTitle.uppercased(), x: frame.x + 190, y: frame.y + 18, color: .bright, renderer: renderer)
+
+        var y = frame.y + 66
+        for (index, hero) in scene.heroOptions.enumerated() {
+            let selected = index == normalizedIndex(scene.selectedHeroIndex, count: scene.heroOptions.count)
+            let prefix = selected ? ">" : " "
+            drawText("\(prefix) \(hero.displayName.uppercased())", x: frame.x + 18, y: y, color: selected ? .gold : .bright, renderer: renderer)
+            y += 14
+            drawWrappedText(hero.summary.uppercased(), x: frame.x + 36, y: y, width: 74, color: .dim, renderer: renderer)
+            y += 24
+        }
+
+        drawText("TRAITS", x: frame.x + 18, y: frame.y + 238, color: .gold, renderer: renderer)
+        drawText(scene.selectedHeroTraitsPrimary.uppercased(), x: frame.x + 18, y: frame.y + 258, color: .bright, renderer: renderer)
+        drawText(scene.selectedHeroTraitsSecondary.uppercased(), x: frame.x + 18, y: frame.y + 274, color: .bright, renderer: renderer)
+
+        let skills = scene.selectedHeroSkills.joined(separator: ", ")
+        drawText("SKILLS", x: frame.x + 18, y: frame.y + 306, color: .gold, renderer: renderer)
+        drawWrappedText(skills.uppercased(), x: frame.x + 18, y: frame.y + 324, width: 78, color: .bright, renderer: renderer)
+
+        drawText("A/D CLASS  E BEGIN  Q BACK", x: frame.x + 18, y: frame.y + frame.height - 42, color: .bright, renderer: renderer)
+        drawText("T STYLE", x: frame.x + 18, y: frame.y + frame.height - 26, color: .bright, renderer: renderer)
+    }
+
+    private static func renderEndingScreen(_ scene: GraphicsSceneSnapshot, with renderer: OpaquePointer) {
+        let frame = SDLRect(x: 72, y: 88, width: windowWidth - 144, height: windowHeight - 176)
+        fill(renderer, x: frame.x, y: frame.y, width: frame.width, height: frame.height, color: .panel)
+        stroke(renderer, frame: frame, color: .gold)
+
+        drawText("THE BEACON BURNS AGAIN", x: frame.x + 18, y: frame.y + 22, color: .gold, renderer: renderer)
+        var y = frame.y + 62
+        for line in scene.messages.suffix(8) {
+            drawWrappedText(line.uppercased(), x: frame.x + 18, y: y, width: 78, color: .bright, renderer: renderer)
+            y += 30
+        }
+        drawText("X OR Q TO EXIT", x: frame.x + 18, y: frame.y + frame.height - 28, color: .bright, renderer: renderer)
+    }
+
     private static func renderHeader(_ scene: GraphicsSceneSnapshot, boardFrame: SDLRect, with renderer: OpaquePointer) {
         let titleRect = SDLRect(x: boardFrame.x, y: 10, width: boardFrame.width, height: 14)
         drawText(scene.adventureTitle.uppercased(), x: titleRect.x + 4, y: titleRect.y, color: .gold, renderer: renderer)
@@ -193,6 +251,24 @@ enum SDLGraphicsLauncher {
     }
 
     private static func renderSidebar(_ scene: GraphicsSceneSnapshot, frame: SDLRect, with renderer: OpaquePointer) {
+        switch scene.mode {
+        case .inventory:
+            renderInventorySidebar(scene, frame: frame, with: renderer)
+            return
+        case .shop:
+            renderShopSidebar(scene, frame: frame, with: renderer)
+            return
+        case .dialogue:
+            renderDialogueSidebar(scene, frame: frame, with: renderer)
+            return
+        default:
+            break
+        }
+
+        renderStatusSidebar(scene, frame: frame, with: renderer)
+    }
+
+    private static func renderStatusSidebar(_ scene: GraphicsSceneSnapshot, frame: SDLRect, with renderer: OpaquePointer) {
         var y = frame.y + 10
         let lineHeight = 12
 
@@ -237,6 +313,77 @@ enum SDLGraphicsLauncher {
         drawText("WASD MOVE  E ACT  I BAG", x: frame.x + 10, y: y, color: .bright, renderer: renderer)
         y += lineHeight
         drawText("Q BACK  X QUIT  T STYLE", x: frame.x + 10, y: y, color: .bright, renderer: renderer)
+    }
+
+    private static func renderDialogueSidebar(_ scene: GraphicsSceneSnapshot, frame: SDLRect, with renderer: OpaquePointer) {
+        var y = frame.y + 10
+        drawText("DIALOGUE", x: frame.x + 10, y: y, color: .gold, renderer: renderer)
+        y += 16
+        if let speaker = scene.currentDialogueSpeaker {
+            drawText(speaker.uppercased(), x: frame.x + 10, y: y, color: .bright, renderer: renderer)
+            y += 16
+        }
+        for line in scene.currentDialogueLines {
+            y = drawWrappedText(line.uppercased(), x: frame.x + 10, y: y, width: 30, color: .bright, renderer: renderer)
+            y += 6
+        }
+        y += 10
+        drawText("E OR Q TO CLOSE", x: frame.x + 10, y: y, color: .bright, renderer: renderer)
+    }
+
+    private static func renderInventorySidebar(_ scene: GraphicsSceneSnapshot, frame: SDLRect, with renderer: OpaquePointer) {
+        var y = frame.y + 10
+        drawText("PACK", x: frame.x + 10, y: y, color: .gold, renderer: renderer)
+        y += 16
+        drawText("CAP \(scene.player.inventory.count)/\(scene.player.inventoryCapacity())", x: frame.x + 10, y: y, color: .bright, renderer: renderer)
+        y += 18
+
+        let visibleEntries = visibleInventoryEntries(scene)
+        for entry in visibleEntries {
+            let prefix = entry.isSelected ? ">" : " "
+            let suffix = entry.isEquipped ? " [EQ]" : ""
+            drawText("\(prefix) \(entry.name.uppercased())\(suffix)", x: frame.x + 10, y: y, color: entry.isSelected ? .gold : .bright, renderer: renderer)
+            y += 14
+        }
+
+        if let detail = scene.inventoryDetail {
+            y += 10
+            drawText("DETAIL", x: frame.x + 10, y: y, color: .gold, renderer: renderer)
+            y += 16
+            y = drawWrappedText(detail.uppercased(), x: frame.x + 10, y: y, width: 30, color: .bright, renderer: renderer)
+        }
+
+        drawText("W/S MOVE  E USE  R DROP", x: frame.x + 10, y: frame.y + frame.height - 42, color: .bright, renderer: renderer)
+        drawText("Q CLOSE", x: frame.x + 10, y: frame.y + frame.height - 26, color: .bright, renderer: renderer)
+    }
+
+    private static func renderShopSidebar(_ scene: GraphicsSceneSnapshot, frame: SDLRect, with renderer: OpaquePointer) {
+        var y = frame.y + 10
+        drawText((scene.shopTitle ?? "MERCHANT").uppercased(), x: frame.x + 10, y: y, color: .gold, renderer: renderer)
+        y += 16
+        for line in scene.shopLines {
+            y = drawWrappedText(line.uppercased(), x: frame.x + 10, y: y, width: 30, color: .dim, renderer: renderer)
+            y += 4
+        }
+        y += 8
+
+        for offer in visibleShopOffers(scene) {
+            let prefix = offer.isSelected ? ">" : " "
+            let soldTag = offer.soldOut ? " SOLD" : ""
+            drawText("\(prefix) \(offer.label.uppercased()) \(offer.price)M\(soldTag)", x: frame.x + 10, y: y, color: offer.isSelected ? .gold : .bright, renderer: renderer)
+            y += 14
+            y = drawWrappedText(offer.blurb.uppercased(), x: frame.x + 22, y: y, width: 28, color: .dim, renderer: renderer)
+            y += 4
+        }
+
+        if let detail = scene.shopDetail {
+            y += 8
+            drawText("DETAIL", x: frame.x + 10, y: y, color: .gold, renderer: renderer)
+            y += 16
+            y = drawWrappedText(detail.uppercased(), x: frame.x + 10, y: y, width: 30, color: .bright, renderer: renderer)
+        }
+
+        drawText("W/S MOVE  E BUY  Q LEAVE", x: frame.x + 10, y: frame.y + frame.height - 28, color: .bright, renderer: renderer)
     }
 
     private static func renderBoard(_ board: MapBoardSnapshot, frame: SDLRect, with renderer: OpaquePointer) {
@@ -406,6 +553,23 @@ enum SDLGraphicsLauncher {
         }
     }
 
+    @discardableResult
+    private static func drawWrappedText(
+        _ text: String,
+        x: Int,
+        y: Int,
+        width: Int,
+        color: SDLColor,
+        renderer: OpaquePointer
+    ) -> Int {
+        var nextY = y
+        for line in wrap(text, width: width) {
+            drawText(line, x: x, y: nextY, color: color, renderer: renderer)
+            nextY += 14
+        }
+        return nextY
+    }
+
     private static func fill(_ renderer: OpaquePointer, x: Int, y: Int, width: Int, height: Int, color: SDLColor) {
         guard width > 0, height > 0 else { return }
         var rect = SDL_FRect(x: Float(x), y: Float(y), w: Float(width), h: Float(height))
@@ -439,6 +603,31 @@ enum SDLGraphicsLauncher {
             lines.append(current)
         }
         return lines
+    }
+
+    private static func normalizedIndex(_ index: Int, count: Int) -> Int {
+        guard count > 0 else { return 0 }
+        return (index % count + count) % count
+    }
+
+    private static func visibleInventoryEntries(_ scene: GraphicsSceneSnapshot) -> ArraySlice<InventoryEntrySnapshot> {
+        guard scene.inventoryEntries.count > 8 else {
+            return scene.inventoryEntries[...]
+        }
+        let center = max(0, min(scene.inventorySelectionIndex, scene.inventoryEntries.count - 1))
+        let start = max(0, min(center - 3, scene.inventoryEntries.count - 8))
+        let end = min(scene.inventoryEntries.count, start + 8)
+        return scene.inventoryEntries[start..<end]
+    }
+
+    private static func visibleShopOffers(_ scene: GraphicsSceneSnapshot) -> ArraySlice<ShopOfferSnapshot> {
+        guard scene.shopOffers.count > 6 else {
+            return scene.shopOffers[...]
+        }
+        let center = max(0, min(scene.shopSelectionIndex, scene.shopOffers.count - 1))
+        let start = max(0, min(center - 2, scene.shopOffers.count - 6))
+        let end = min(scene.shopOffers.count, start + 6)
+        return scene.shopOffers[start..<end]
     }
 
     private static func sdlError() -> String {

@@ -64,3 +64,34 @@ enum GraphicsBackend: String, Equatable {
         }
     }
 }
+
+enum GameSoundCue {
+    case introMusic
+    case walk
+    case attack
+    case useItem
+    case menuConfirm
+}
+
+@MainActor
+protocol GameSoundPlayback {
+    func play(_ cue: GameSoundCue)
+}
+
+@MainActor
+final class SilentGameSoundEngine: GameSoundPlayback {
+    static let shared = SilentGameSoundEngine()
+
+    func play(_ cue: GameSoundCue) {
+        _ = cue
+    }
+}
+
+@MainActor
+func defaultGraphicsSoundEngine() -> any GameSoundPlayback {
+#if canImport(AVFoundation)
+    AppleIISoundEngine.shared
+#else
+    SilentGameSoundEngine.shared
+#endif
+}

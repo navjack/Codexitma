@@ -52,6 +52,9 @@
 - Added a backend-neutral `GraphicsSceneSnapshot` layer so the active map board and depth-ray data can be built once from `GameState` and then consumed by multiple graphical frontends.
 - Refactored the native `MapBoardView` to consume the shared scene snapshot for its active board/depth rendering path instead of pulling those visible cells directly from `GameState`.
 - Replaced the SDL stub with a real SDL3 window, input loop, and low-resolution renderer: `--sdl` now launches, drives the shared `GameEngine`, renders a top-down board, and shows a minimal depth view when `Depth 3D` is active.
+- Extracted a shared `SharedGameSession` runtime so the native AppKit frontend and the SDL frontend now use the same command handling, theme persistence, sound cue rules, and depth-control remapping.
+- Expanded the scene snapshot to include mode-specific UI data (adventure selection, hero selection, dialogue, inventory, and shop state) so parity work does not require SDL to peek back into SwiftUI-only state.
+- Upgraded the SDL frontend from an exploration-only viewer into a mode-aware frontend that now renders title, character creation, dialogue, inventory, shop, and ending states using the same shared session/snapshot pipeline.
 
 ## Current Notes
 
@@ -71,6 +74,7 @@
 - The SDL branch is intentionally local-only for now; do not push it until the renderer is stable enough that missing AppKit parity will not confuse the public repo.
 - The SDL frontend currently links against the locally installed `sdl3` Homebrew package and emits a linker warning because the Homebrew bottle was built for a newer host SDK than the package's declared macOS target.
 - The shared scene snapshot is now the correct seam for future renderer work; continue moving rendering decisions out of SwiftUI views and into snapshot-to-pixels adapters.
+- The intended product split is now explicit: native AppKit stays the preferred macOS frontend, while SDL is the parity/cross-platform path that should eventually become the real Windows/Linux graphics frontend.
 
 ## Next Build Targets
 
@@ -81,3 +85,4 @@
 - Build a full scripted playthrough using the bridge so progression can be regression-tested end to end.
 - Expand the external pack format so third-party adventures can define custom quest flags and bespoke item tables, not just reuse the built-in systems.
 - Continue the SDL branch by adding real low-res bitmap font rendering, proper sprite-pattern drawing, and layout scaling based on live window size instead of the current fixed frame.
+- Keep pushing SDL toward native feature parity on macOS before attempting the first real Linux/Win64 build path.
