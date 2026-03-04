@@ -179,3 +179,9 @@
 - Added a cached floor projection model in native Depth3D (per frame geometry/facing/FOV key) so floor strip rays and row-distance math are reused instead of recomputed each frame.
 - Added depth-aware floor contact dimming in both native and SDL: each floor strip now references the nearest wall ray distance (`zBuffer`) and darkens near wall-contact depth to reduce detached/peter-panning shadow edges at oblique angles.
 - Reduced native floor strip density cap and lowered excess floor band expansion to recover performance while keeping the new shadow-attachment behavior.
+- Added SDL parity for depth-light debugging: `F10` now toggles an in-view debug lighting overlay (ambient/min/max/avg + map preview with torches/walls/player) with status-line feedback.
+- Switched SDL framebuffer capture from BMP to PNG (`F12`) to match native output and simplify screenshot workflows.
+- Extended automation parser with coordinate warp directives (`warp/goto/teleport/tp`) in all supported forms (`x:y`, `x:y:facing`, `map:x:y`, `map:x:y:facing`) and added parser tests for coordinate + facing cases.
+- Normalized warp-facing semantics to cardinal directions (`n/s/e/w`) rather than WASD movement aliases so scripted camera setup for lighting repros is less ambiguous.
+- Fixed automation tokenizer handling for full-line `# ...` comments in script files and added regression coverage; reusable checkpoint scripts can now include descriptive headers safely.
+- Added `scripts/lighting_checkpoints_ashes.txt` as a deterministic coordinate baseline for lighting/shadow repro runs.

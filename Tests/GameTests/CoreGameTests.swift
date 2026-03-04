@@ -83,6 +83,25 @@ import Testing
     #expect(try AutomationCommandParser.parse("drop") == .game(.dropInventoryItem))
 }
 
+@Test func automationParsersRecognizeCoordinateWarpCommands() async throws {
+    #expect(
+        try AutomationCommandParser.parse("warp:10:12")
+            == .warp(mapID: nil, position: Position(x: 10, y: 12), facing: nil)
+    )
+    #expect(
+        try AutomationCommandParser.parse("warp:10:12:n")
+            == .warp(mapID: nil, position: Position(x: 10, y: 12), facing: .up)
+    )
+    #expect(
+        try AutomationCommandParser.parse("warp:merrow_village:9:6")
+            == .warp(mapID: "merrow_village", position: Position(x: 9, y: 6), facing: nil)
+    )
+    #expect(
+        try AutomationCommandParser.parse("tp:merrow_village:9:6:w")
+            == .warp(mapID: "merrow_village", position: Position(x: 9, y: 6), facing: .left)
+    )
+}
+
 @Test func launchOptionsRemainGraphicsOnlyEvenWithLegacyTerminalFlag() async throws {
     let defaultOptions = try LaunchOptions.parse(arguments: ["Game"])
     #expect(defaultOptions.target == .interactive)

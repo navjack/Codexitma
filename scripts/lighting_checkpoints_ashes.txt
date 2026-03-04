@@ -1,0 +1,20 @@
+# Ashes of Merrow lighting repro script (headless automation).
+# Run with:
+#   ./Codexitma --script-file ./scripts/lighting_checkpoints_ashes.txt --step-json
+#
+# Notes:
+# - This is intended to lock deterministic trouble spots by coordinate.
+# - Use the same coordinates in native/SDL interactive runs for screenshot capture.
+
+new
+e
+
+# Merrow village: internal-wall shadow contact case (west-facing).
+warp:merrow_village:12:5:w
+state
+warp:merrow_village:10:5:w
+state
+
+# Merrow village: adjacent step to compare edge stability.
+warp:merrow_village:8:5:w
+state

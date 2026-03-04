@@ -42,6 +42,25 @@ Supported command tokens:
 - `quit` / `x`
 - `state`
 - `reset`
+- `warp:<x>:<y>`
+- `warp:<x>:<y>:<facing>`
+- `warp:<mapID>:<x>:<y>`
+- `warp:<mapID>:<x>:<y>:<facing>`
+  - aliases: `goto`, `teleport`, `tp`
+  - facings: `n/u/up`, `s/down`, `w/l/left`, `e/r/right`
+
+Coordinate warp examples:
+
+```sh
+./Codexitma --script "new,e,warp:merrow_village:10:5:w,state"
+./Codexitma --script "new,e,warp:merrow_village:12:5:e,state" --step-json
+```
+
+Lighting checkpoint baseline script:
+
+```sh
+./Codexitma --script-file ./scripts/lighting_checkpoints_ashes.txt --step-json
+```
 
 ## Bridge Mode
 

@@ -93,6 +93,7 @@ enum AutomationDirective: Equatable {
     case game(ActionCommand)
     case snapshot
     case reset
+    case warp(mapID: String?, position: Position, facing: Direction?)
 }
 
 enum AutomationTokenizer {
@@ -100,8 +101,12 @@ enum AutomationTokenizer {
         raw
             .components(separatedBy: .newlines)
             .flatMap { line -> [String] in
-                let trimmed = line.split(separator: "#", maxSplits: 1).first.map(String.init) ?? ""
-                return trimmed.split(whereSeparator: { $0 == "," || $0 == " " || $0 == "\t" }).map(String.init)
+                let normalized = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !normalized.hasPrefix("#") else {
+                    return []
+                }
+                let content = line.split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? ""
+                return content.split(whereSeparator: { $0 == "," || $0 == " " || $0 == "\t" }).map(String.init)
             }
             .filter { !$0.isEmpty }
     }
@@ -109,7 +114,11 @@ enum AutomationTokenizer {
 
 enum AutomationCommandParser {
     static func parse(_ token: String) throws -> AutomationDirective {
-        let normalized = token.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let warp = try parseWarpDirective(token: trimmed) {
+            return warp
+        }
+        let normalized = trimmed.lowercased()
         switch normalized {
         case "state", "snapshot":
             return .snapshot
@@ -149,6 +158,52 @@ enum AutomationCommandParser {
             return .game(.quit)
         default:
             throw AutomationError.invalidCommand(token)
+        }
+    }
+
+    private static func parseWarpDirective(token: String) throws -> AutomationDirective? {
+        let parts = token.split(separator: ":").map(String.init)
+        guard let verb = parts.first?.lowercased(),
+              ["warp", "goto", "teleport", "tp"].contains(verb) else {
+            return nil
+        }
+
+        switch parts.count {
+        case 3:
+            guard let x = Int(parts[1]), let y = Int(parts[2]) else {
+                throw AutomationError.invalidCommand(token)
+            }
+            return .warp(mapID: nil, position: Position(x: x, y: y), facing: nil)
+        case 4:
+            if let x = Int(parts[1]), let y = Int(parts[2]), let facing = direction(from: parts[3]) {
+                return .warp(mapID: nil, position: Position(x: x, y: y), facing: facing)
+            }
+            guard let x = Int(parts[2]), let y = Int(parts[3]) else {
+                throw AutomationError.invalidCommand(token)
+            }
+            return .warp(mapID: parts[1], position: Position(x: x, y: y), facing: nil)
+        case 5:
+            guard let x = Int(parts[2]), let y = Int(parts[3]), let facing = direction(from: parts[4]) else {
+                throw AutomationError.invalidCommand(token)
+            }
+            return .warp(mapID: parts[1], position: Position(x: x, y: y), facing: facing)
+        default:
+            throw AutomationError.invalidCommand(token)
+        }
+    }
+
+    private static func direction(from token: String) -> Direction? {
+        switch token.lowercased() {
+        case "up", "north", "n", "u":
+            return .up
+        case "down", "south", "s":
+            return .down
+        case "left", "west", "w", "l":
+            return .left
+        case "right", "east", "e", "r":
+            return .right
+        default:
+            return nil
         }
     }
 }
@@ -273,12 +328,41 @@ final class AutomationSession {
         case .reset:
             engine = GameEngine(library: library, saveRepository: saveRepository)
             emit(token: token, snapshot: AutomationSnapshot.from(state: engine.state))
+        case .warp(let mapID, let position, let facing):
+            try warpPlayer(mapID: mapID, position: position, facing: facing, token: token)
+            emit(token: token, snapshot: AutomationSnapshot.from(state: engine.state))
         case .game(let command):
             engine.handle(command)
             if emitSnapshot {
                 emit(token: token, snapshot: AutomationSnapshot.from(state: engine.state))
             }
         }
+    }
+
+    private func warpPlayer(mapID: String?, position: Position, facing: Direction?, token: String) throws {
+        let targetMapID = mapID ?? engine.state.player.currentMapID
+        guard let map = engine.state.world.maps[targetMapID] else {
+            throw AutomationError.invalidCommand("\(token) (unknown map \(targetMapID))")
+        }
+        guard position.y >= 0, position.y < map.lines.count else {
+            throw AutomationError.invalidCommand("\(token) (y out of bounds)")
+        }
+        let row = Array(map.lines[position.y])
+        guard position.x >= 0, position.x < row.count else {
+            throw AutomationError.invalidCommand("\(token) (x out of bounds)")
+        }
+
+        engine.state.player.currentMapID = targetMapID
+        engine.state.player.position = position
+        engine.state.player.lastSaveMapID = targetMapID
+        engine.state.player.lastSavePosition = position
+        if let facing {
+            engine.state.player.facing = facing
+        }
+        engine.state.mode = .exploration
+        engine.state.currentDialogue = nil
+        engine.state.clearShopPanel()
+        engine.state.log("Automation warped to \(targetMapID) @ \(position.x),\(position.y).")
     }
 
     private func emit(token: String, snapshot: AutomationSnapshot) {

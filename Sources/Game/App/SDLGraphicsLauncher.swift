@@ -88,6 +88,7 @@ enum SDLGraphicsLauncher {
         var showingEditorPrompt = false
         var editorSession: AdventureEditorSession?
         var pendingScreenshotLabel: String?
+        var showDebugLightingOverlay = false
         var statusLine: String?
         var statusLineExpiry: UInt64 = 0
 
@@ -107,6 +108,12 @@ enum SDLGraphicsLauncher {
                     }
                     if event.key.key == SDLK_F12 {
                         pendingScreenshotLabel = screenshotLabel(session: session, editorSession: editorSession)
+                        continue
+                    }
+                    if event.key.key == SDLK_F10 {
+                        showDebugLightingOverlay.toggle()
+                        statusLine = showDebugLightingOverlay ? "DEBUG LIGHT ON" : "DEBUG LIGHT OFF"
+                        statusLineExpiry = SDL_GetTicks() + 2200
                         continue
                     }
                     if handleEditorKey(
@@ -148,6 +155,7 @@ enum SDLGraphicsLauncher {
                 renderScene(
                     scene,
                     editorPromptLines: showingEditorPrompt ? session.editorConfirmationLines() : nil,
+                    showDebugLightingOverlay: showDebugLightingOverlay,
                     statusLine: statusLine,
                     with: renderer
                 )
@@ -354,9 +362,9 @@ enum SDLGraphicsLauncher {
         defer { SDL_DestroySurface(surface) }
 
         do {
-            let url = try ScreenshotSupport.makeScreenshotURL(prefix: "sdl", label: label, fileExtension: "bmp")
+            let url = try ScreenshotSupport.makeScreenshotURL(prefix: "sdl", label: label, fileExtension: "png")
             let saved = url.path.withCString { pointer in
-                SDL_SaveBMP(surface, pointer)
+                SDL_SavePNG(surface, pointer)
             }
             if saved {
                 return "SHOT SAVED \(url.lastPathComponent.uppercased())"
@@ -370,6 +378,7 @@ enum SDLGraphicsLauncher {
     private static func renderScene(
         _ scene: GraphicsSceneSnapshot,
         editorPromptLines: [String]?,
+        showDebugLightingOverlay: Bool,
         statusLine: String?,
         with renderer: OpaquePointer
     ) {
@@ -403,7 +412,13 @@ enum SDLGraphicsLauncher {
         let panelFrame = viewport.panelFrame
 
         if scene.visualTheme == .depth3D, let depth = scene.depth, scene.mode == .exploration {
-            renderDepth(depth, scene: scene, frame: boardFrame, with: renderer)
+            renderDepth(
+                depth,
+                scene: scene,
+                frame: boardFrame,
+                showDebugLightingOverlay: showDebugLightingOverlay,
+                with: renderer
+            )
         } else {
             renderBoard(scene, frame: boardFrame, with: renderer)
         }
@@ -500,7 +515,7 @@ enum SDLGraphicsLauncher {
         }
 
         drawText("A/D SELECT  N CREATE  L LOAD", x: frame.x + 18, y: frame.y + frame.height - 42, color: .bright, renderer: renderer)
-        drawText("M EDIT  T STYLE  F12 SHOT", x: frame.x + 18, y: frame.y + frame.height - 26, color: .bright, renderer: renderer)
+        drawText("M EDIT  T STYLE  F10 DBG  F12 SHOT", x: frame.x + 18, y: frame.y + frame.height - 26, color: .bright, renderer: renderer)
         drawText("X QUIT", x: frame.x + 18, y: frame.y + frame.height - 12, color: .bright, renderer: renderer)
     }
 
@@ -626,7 +641,7 @@ enum SDLGraphicsLauncher {
         y += lineHeight
         drawText("Q BACK  M EDIT  X QUIT", x: frame.x + 10, y: y, color: .bright, renderer: renderer)
         y += lineHeight
-        drawText("T STYLE  F12 SHOT", x: frame.x + 10, y: y, color: .bright, renderer: renderer)
+        drawText("T STYLE  F10 DBG  F12 SHOT", x: frame.x + 10, y: y, color: .bright, renderer: renderer)
     }
 
     private static func renderDialogueSidebar(_ scene: GraphicsSceneSnapshot, frame: SDLRect, with renderer: OpaquePointer) {
@@ -644,7 +659,7 @@ enum SDLGraphicsLauncher {
         y += 10
         drawText("E OR Q TO CLOSE", x: frame.x + 10, y: y, color: .bright, renderer: renderer)
         y += 14
-        drawText("M EDIT  F12 SHOT", x: frame.x + 10, y: y, color: .bright, renderer: renderer)
+        drawText("M EDIT  F10 DBG  F12 SHOT", x: frame.x + 10, y: y, color: .bright, renderer: renderer)
     }
 
     private static func renderInventorySidebar(_ scene: GraphicsSceneSnapshot, frame: SDLRect, with renderer: OpaquePointer) {
@@ -670,7 +685,7 @@ enum SDLGraphicsLauncher {
         }
 
         drawText("W/S MOVE  E USE  R DROP", x: frame.x + 10, y: frame.y + frame.height - 42, color: .bright, renderer: renderer)
-        drawText("Q CLOSE  M EDIT  F12 SHOT", x: frame.x + 10, y: frame.y + frame.height - 26, color: .bright, renderer: renderer)
+        drawText("Q CLOSE  M EDIT  F10 DBG  F12 SHOT", x: frame.x + 10, y: frame.y + frame.height - 26, color: .bright, renderer: renderer)
     }
 
     private static func renderShopSidebar(_ scene: GraphicsSceneSnapshot, frame: SDLRect, with renderer: OpaquePointer) {
@@ -700,7 +715,7 @@ enum SDLGraphicsLauncher {
         }
 
         drawText("W/S MOVE  E BUY  Q LEAVE", x: frame.x + 10, y: frame.y + frame.height - 42, color: .bright, renderer: renderer)
-        drawText("M EDIT  F12 SHOT", x: frame.x + 10, y: frame.y + frame.height - 26, color: .bright, renderer: renderer)
+        drawText("M EDIT  F10 DBG  F12 SHOT", x: frame.x + 10, y: frame.y + frame.height - 26, color: .bright, renderer: renderer)
     }
 
     private static func renderEditorPrompt(
@@ -904,7 +919,7 @@ enum SDLGraphicsLauncher {
             drawText("R/F TOOL  C TAB", x: frame.x + 10, y: frame.y + frame.height - 42, color: .bright, renderer: renderer)
             drawText("Z/V MAP  K SAVE  P CHECK", x: frame.x + 10, y: frame.y + frame.height - 28, color: .bright, renderer: renderer)
         }
-        drawText("N NEW  Q/M/X RETURN  F12 SHOT", x: frame.x + 10, y: frame.y + frame.height - 14, color: .editorAccent, renderer: renderer)
+        drawText("N NEW  Q/M/X RETURN  F10 DBG  F12 SHOT", x: frame.x + 10, y: frame.y + frame.height - 14, color: .editorAccent, renderer: renderer)
     }
 
     private static func renderBoard(_ scene: GraphicsSceneSnapshot, frame: SDLRect, with renderer: OpaquePointer) {
@@ -982,6 +997,7 @@ enum SDLGraphicsLauncher {
         _ depth: DepthSceneSnapshot,
         scene: GraphicsSceneSnapshot,
         frame: SDLRect,
+        showDebugLightingOverlay: Bool,
         with renderer: OpaquePointer
     ) {
         let depthTheme = boardTheme(for: scene)
@@ -1250,6 +1266,109 @@ enum SDLGraphicsLauncher {
         fill(renderer, x: cx, y: cy - 10, width: 2, height: 20, color: .bright)
         drawText("VIEW \(scene.player.facing.shortLabel)", x: frame.x + 10, y: frame.y + 10, color: .gold, renderer: renderer)
         drawText("RANGE \(Int(depth.maxDistance.rounded()))", x: frame.x + 10, y: frame.y + 24, color: .bright, renderer: renderer)
+        if showDebugLightingOverlay {
+            renderDepthDebugOverlay(depth: depth, scene: scene, frame: frame, with: renderer)
+        }
+    }
+
+    private static func renderDepthDebugOverlay(
+        depth: DepthSceneSnapshot,
+        scene: GraphicsSceneSnapshot,
+        frame: SDLRect,
+        with renderer: OpaquePointer
+    ) {
+        let panelWidth = min(210, max(148, frame.width / 3))
+        let panelHeight = min(170, max(124, frame.height / 2))
+        let panel = SDLRect(
+            x: frame.x + frame.width - panelWidth - 8,
+            y: frame.y + 8,
+            width: panelWidth,
+            height: panelHeight
+        )
+        fill(renderer, x: panel.x, y: panel.y, width: panel.width, height: panel.height, color: .overlay)
+        stroke(renderer, frame: panel, color: .gold)
+
+        let levels = depth.tileLighting.values.flatMap { $0 }
+        let minimum = levels.min() ?? depth.tileLighting.ambient
+        let maximum = levels.max() ?? depth.tileLighting.ambient
+        let average = levels.isEmpty ? depth.tileLighting.ambient : (levels.reduce(0, +) / Double(levels.count))
+
+        drawText("DEBUG LIGHT", x: panel.x + 8, y: panel.y + 8, color: .gold, renderer: renderer)
+        drawText("A \(lightString(depth.tileLighting.ambient))", x: panel.x + 8, y: panel.y + 22, color: .bright, renderer: renderer)
+        drawText("N \(lightString(minimum)) X \(lightString(maximum))", x: panel.x + 8, y: panel.y + 36, color: .bright, renderer: renderer)
+        drawText("M \(lightString(average))", x: panel.x + 8, y: panel.y + 50, color: .bright, renderer: renderer)
+        drawText("P \(scene.player.position.x),\(scene.player.position.y) \(scene.player.facing.shortLabel)", x: panel.x + 8, y: panel.y + 64, color: .dim, renderer: renderer)
+
+        let mapArea = SDLRect(
+            x: panel.x + 8,
+            y: panel.y + 80,
+            width: panel.width - 16,
+            height: panel.height - 88
+        )
+        fill(renderer, x: mapArea.x, y: mapArea.y, width: mapArea.width, height: mapArea.height, color: .void.withAlpha(130))
+        stroke(renderer, frame: mapArea, color: .bright.withAlpha(80))
+
+        guard scene.board.width > 0, scene.board.height > 0 else { return }
+        let cellSize = max(2, min(mapArea.width / scene.board.width, mapArea.height / scene.board.height))
+        let drawWidth = scene.board.width * cellSize
+        let drawHeight = scene.board.height * cellSize
+        let originX = mapArea.x + ((mapArea.width - drawWidth) / 2)
+        let originY = mapArea.y + ((mapArea.height - drawHeight) / 2)
+
+        for row in scene.board.rows {
+            for cell in row {
+                let x = originX + (cell.position.x * cellSize)
+                let y = originY + (cell.position.y * cellSize)
+                let level = depth.tileLighting.level(at: cell.position)
+                let normalized = max(0.0, min(1.0, (level - depth.tileLighting.ambient) * 1.8 + 0.26))
+                var color = SDLColor(
+                    r: UInt8(max(0, min(255, Int(20 + (normalized * 210))))),
+                    g: UInt8(max(0, min(255, Int(18 + (normalized * 176))))),
+                    b: UInt8(max(0, min(255, Int(22 + (normalized * 140))))),
+                    a: 255
+                )
+                if !cell.tile.walkable {
+                    color = SDLColor(
+                        r: UInt8(max(0, min(255, Int(18 + (normalized * 90))))),
+                        g: UInt8(max(0, min(255, Int(18 + (normalized * 74))))),
+                        b: UInt8(max(0, min(255, Int(20 + (normalized * 60))))),
+                        a: 255
+                    )
+                }
+                fill(renderer, x: x, y: y, width: cellSize, height: cellSize, color: color)
+
+                if cell.feature == .torchFloor || cell.feature == .torchWall {
+                    let dot = max(1, cellSize / 2)
+                    fill(
+                        renderer,
+                        x: x + max(0, (cellSize - dot) / 2),
+                        y: y + max(0, (cellSize - dot) / 2),
+                        width: dot,
+                        height: dot,
+                        color: .gold
+                    )
+                }
+                if !cell.tile.walkable {
+                    stroke(renderer, frame: SDLRect(x: x, y: y, width: cellSize, height: cellSize), color: .shadow.withAlpha(150))
+                }
+            }
+        }
+
+        let playerX = originX + (scene.player.position.x * cellSize)
+        let playerY = originY + (scene.player.position.y * cellSize)
+        let inset = max(0, cellSize / 4)
+        fill(
+            renderer,
+            x: playerX + inset,
+            y: playerY + inset,
+            width: max(1, cellSize - (inset * 2)),
+            height: max(1, cellSize - (inset * 2)),
+            color: .water
+        )
+    }
+
+    private static func lightString(_ value: Double) -> String {
+        String(format: "%.2f", value)
     }
 
     private static func depthFloorProjection(
