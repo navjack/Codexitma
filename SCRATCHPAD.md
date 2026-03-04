@@ -153,3 +153,6 @@
 - Added depth lightmap caching in the snapshot builder (static map light field + player-lantern composite cache) to keep the new lighting pass cheap when no relevant light inputs changed.
 - Increased depth-light fidelity from per-tile sampling to an 8x subdivided light field with bilinear world-position sampling, then projected that into a per-band/per-column floor-light buffer so the ground plane reacts to torches and lanterns instead of staying mostly flat.
 - Tuned light strength/falloff to be less subtle: torchs and lantern now have larger radii and stronger intensity, and both native + SDL depth backdrops now blend local floor glow/shadow patches from the cached floor-light buffer.
+- Pulled in an external CC0 tileset for Depth3D texturing (`PUNY DUNGEON | 16x16 dungeon tilemap` by cpz) under `Sources/Game/ContentData/DepthTextures/`, with source/license metadata tracked in `PUNY_DUNGEON_LICENSE.txt`.
+- Upgraded native Depth3D wall rendering to use real texture-mapped wall slices (ray hit `u` coordinate per column) instead of flat color bands, then applied lighting/fog as post overlays.
+- Replaced the native floor's patchy light rectangles with perspective-sampled textured floor strips plus bilinear floor-light interpolation, reducing block-grid artifacts in torch-lit scenes.

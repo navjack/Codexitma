@@ -3,6 +3,100 @@ import AppKit
 import Foundation
 import SwiftUI
 
+private struct DepthTextureAtlas {
+    let image: Image
+    let cgImage: CGImage
+    let textureWidth: CGFloat
+    let textureHeight: CGFloat
+    let tileSize: CGFloat
+    let columns: Int
+
+    func tileRect(id: Int) -> CGRect {
+        let column = id % columns
+        let row = id / columns
+        return CGRect(
+            x: CGFloat(column) * tileSize,
+            y: CGFloat(row) * tileSize,
+            width: tileSize,
+            height: tileSize
+        )
+    }
+
+    func wallRect(for tileType: TileType) -> CGRect {
+        switch tileType {
+        case .wall:
+            return tileRect(id: 0)
+        case .doorLocked:
+            return tileRect(id: 27)
+        case .doorOpen:
+            return tileRect(id: 29)
+        case .water:
+            return tileRect(id: 78)
+        case .brush:
+            return tileRect(id: 60)
+        case .shrine:
+            return tileRect(id: 82)
+        case .stairs:
+            return tileRect(id: 26)
+        case .beacon:
+            return tileRect(id: 86)
+        case .floor:
+            return tileRect(id: 4)
+        }
+    }
+
+    var floorRect: CGRect {
+        tileRect(id: 4)
+    }
+
+    func wallSlice(for tileType: TileType, u: Double) -> CGImage? {
+        let rect = wallRect(for: tileType)
+        let clampedU = max(0.0, min(0.999, u))
+        let x = Int(rect.minX + floor(CGFloat(clampedU) * rect.width))
+        let y = Int(rect.minY)
+        let crop = CGRect(x: x, y: y, width: 1, height: Int(rect.height))
+        return cgImage.cropping(to: crop)
+    }
+
+    func floorPixel(u: CGFloat, v: CGFloat) -> CGImage? {
+        let rect = floorRect
+        let clampedU = max(0.0, min(0.999, u))
+        let clampedV = max(0.0, min(0.999, v))
+        let x = Int(rect.minX + floor(clampedU * rect.width))
+        let y = Int(rect.minY + floor(clampedV * rect.height))
+        let crop = CGRect(x: x, y: y, width: 1, height: 1)
+        return cgImage.cropping(to: crop)
+    }
+
+    static func load(bundle: Bundle = GameResourceBundle.current) -> DepthTextureAtlas? {
+        guard let url = bundle.url(
+            forResource: "punyworld-dungeon-tileset",
+            withExtension: "png",
+            subdirectory: "ContentData/DepthTextures"
+        ) else {
+            return nil
+        }
+        guard let nsImage = NSImage(contentsOf: url),
+              let cgImage = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return nil
+        }
+
+        let textureWidth = CGFloat(cgImage.width)
+        let textureHeight = CGFloat(cgImage.height)
+        let tileSize: CGFloat = 16
+        let columns = Int(textureWidth / tileSize)
+
+        return DepthTextureAtlas(
+            image: Image(decorative: cgImage, scale: 1.0),
+            cgImage: cgImage,
+            textureWidth: textureWidth,
+            textureHeight: textureHeight,
+            tileSize: tileSize,
+            columns: columns
+        )
+    }
+}
+
 struct MapBoardView: View {
     let state: GameState
     let scene: GraphicsSceneSnapshot
@@ -10,6 +104,7 @@ struct MapBoardView: View {
     let visualTheme: GraphicsVisualTheme
 
     private let cell: CGFloat = 14
+    private static let depthTextureAtlas = DepthTextureAtlas.load()
 
     var body: some View {
         if visualTheme == .depth3D {
@@ -151,11 +246,9 @@ struct MapBoardView: View {
         let stripeStrength: Double
         let floorBands: Int
         let floorLighting = scene.depth?.floorLighting
-        let lightingColumns = floorLighting?.columns ?? 0
-        let lightingBands = floorLighting?.bands ?? 0
-        let lightingColumnWidth = lightingColumns > 0
-            ? (size.width / CGFloat(lightingColumns))
-            : 0
+        let depthTextureAtlas = Self.depthTextureAtlas
+        let facing = scene.depth?.facing ?? scene.player.facing
+        let fieldOfView = scene.depth?.fieldOfView ?? depthFieldOfView
         switch theme.pattern {
         case .brick:
             stripeStrength = 0.08
@@ -230,41 +323,25 @@ struct MapBoardView: View {
             let stripe = band.isMultiple(of: 2)
                 ? theme.roomHighlight.opacity(stripeStrength)
                 : Color.black.opacity(max(0.03, stripeStrength - 0.02))
+            if let depthTextureAtlas {
+                drawTexturedFloorBand(
+                    into: &context,
+                    rect: rect,
+                    atlas: depthTextureAtlas,
+                    floorLighting: floorLighting,
+                    theme: theme,
+                    horizon: horizon,
+                    canvasSize: size,
+                    fieldOfView: fieldOfView,
+                    facing: facing,
+                    floorBands: floorBands,
+                    bandIndex: band
+                )
+            } else {
+                context.fill(Path(rect), with: .color(theme.floor.opacity(shade)))
+            }
             context.fill(Path(rect), with: .color(theme.floor.opacity(shade)))
             context.fill(Path(rect.insetBy(dx: 0, dy: 0)), with: .color(stripe))
-
-            if let floorLighting,
-               lightingColumns > 0,
-               lightingBands > 0 {
-                let mappedBand = min(
-                    lightingBands - 1,
-                    Int((Double(band) + 0.5) / Double(floorBands) * Double(lightingBands))
-                )
-                for lightColumn in 0..<lightingColumns {
-                    let level = floorLighting.level(column: lightColumn, band: mappedBand)
-                    let lift = max(0.0, level - floorLighting.ambient)
-                    let dim = max(0.0, floorLighting.ambient - level)
-                    if lift <= 0.01, dim <= 0.01 {
-                        continue
-                    }
-
-                    let x = CGFloat(lightColumn) * lightingColumnWidth
-                    let patch = CGRect(
-                        x: x,
-                        y: rect.minY,
-                        width: max(1, lightingColumnWidth + 1),
-                        height: rect.height
-                    )
-                    if lift > 0.01 {
-                        let glow = theme.roomHighlight.opacity(min(0.44, 0.06 + (lift * 0.58)))
-                        context.fill(Path(patch), with: .color(glow))
-                    }
-                    if dim > 0.01 {
-                        let shadow = Color.black.opacity(min(0.22, 0.05 + (dim * 0.34)))
-                        context.fill(Path(patch), with: .color(shadow))
-                    }
-                }
-            }
 
             if band > 0 {
                 let line = Path(CGRect(x: 0, y: y0, width: size.width, height: 1))
@@ -299,6 +376,89 @@ struct MapBoardView: View {
         )
     }
 
+    private func drawTexturedFloorBand(
+        into context: inout GraphicsContext,
+        rect: CGRect,
+        atlas: DepthTextureAtlas,
+        floorLighting: DepthFloorLightingSnapshot?,
+        theme: RegionTheme,
+        horizon: CGFloat,
+        canvasSize: CGSize,
+        fieldOfView: Double,
+        facing: Direction,
+        floorBands: Int,
+        bandIndex: Int
+    ) {
+        let forward = facingUnitVector(for: facing)
+        let right = rightUnitVector(for: facing)
+        let planeScale = tan(fieldOfView * 0.5)
+        let leftRay = (x: forward.x - (right.x * planeScale), y: forward.y - (right.y * planeScale))
+        let rightRay = (x: forward.x + (right.x * planeScale), y: forward.y + (right.y * planeScale))
+
+        let playerX = Double(scene.player.position.x) + 0.5
+        let playerY = Double(scene.player.position.y) + 0.5
+        let rowScreenY = max(horizon + 1, rect.midY)
+        let rowDepth = max(1.0, Double(rowScreenY - horizon))
+        let posZ = Double(canvasSize.height) * 0.50
+        let rowDistance = posZ / rowDepth
+
+        let stripCount = max(96, Int(canvasSize.width / 2.0))
+        let bandNorm = (Double(bandIndex) + 0.5) / Double(max(1, floorBands))
+
+        context.withCGContext { cgContext in
+            cgContext.interpolationQuality = .none
+            for strip in 0..<stripCount {
+                let xNorm = (Double(strip) + 0.5) / Double(stripCount)
+                let rayX = leftRay.x + ((rightRay.x - leftRay.x) * xNorm)
+                let rayY = leftRay.y + ((rightRay.y - leftRay.y) * xNorm)
+                let worldX = playerX + (rowDistance * rayX)
+                let worldY = playerY + (rowDistance * rayY)
+                let u = fract(worldX)
+                let v = fract(worldY)
+
+                let x0 = rect.minX + (CGFloat(strip) / CGFloat(stripCount)) * rect.width
+                let x1 = rect.minX + (CGFloat(strip + 1) / CGFloat(stripCount)) * rect.width
+                let stripe = CGRect(
+                    x: x0,
+                    y: rect.minY,
+                    width: max(1, x1 - x0),
+                    height: rect.height
+                )
+                if let pixel = atlas.floorPixel(u: u, v: v) {
+                    cgContext.draw(pixel, in: stripe)
+                }
+            }
+        }
+
+        if let floorLighting {
+            for strip in 0..<stripCount {
+                let xNorm = (Double(strip) + 0.5) / Double(stripCount)
+                let x0 = rect.minX + (CGFloat(strip) / CGFloat(stripCount)) * rect.width
+                let x1 = rect.minX + (CGFloat(strip + 1) / CGFloat(stripCount)) * rect.width
+                let stripe = CGRect(
+                    x: x0,
+                    y: rect.minY,
+                    width: max(1, x1 - x0),
+                    height: rect.height
+                )
+                let light = floorLighting.interpolatedLevel(
+                    xNormalized: xNorm,
+                    yNormalized: bandNorm
+                )
+                let lift = max(0.0, light - floorLighting.ambient)
+                let dim = max(0.0, floorLighting.ambient - light)
+                if lift > 0.01 {
+                    let glow = theme.roomHighlight.opacity(min(0.44, 0.05 + (lift * 0.60)))
+                    context.fill(Path(stripe), with: .color(glow))
+                }
+                if dim > 0.01 {
+                    let shadow = Color.black.opacity(min(0.24, 0.04 + (dim * 0.38)))
+                    context.fill(Path(stripe), with: .color(shadow))
+                }
+            }
+        }
+    }
+
     private func drawDepthWalls(
         into context: inout GraphicsContext,
         size: CGSize,
@@ -309,6 +469,7 @@ struct MapBoardView: View {
 
         let horizon = size.height * 0.5
         let columnWidth = size.width / CGFloat(samples.count)
+        let depthTextureAtlas = Self.depthTextureAtlas
 
         for sample in samples where sample.didHit {
             let distance = max(0.14, sample.correctedDistance)
@@ -324,8 +485,27 @@ struct MapBoardView: View {
             let axisShade = sample.hitAxis == .vertical ? 0.78 : 0.92
             let distanceShade = max(0.20, 1.0 - ((sample.correctedDistance / sample.maxDistance) * 0.76))
             let lightShade = max(0.18, min(1.0, sample.lightLevel))
-            let wallColor = frontWallColor(for: sample.hitTile, theme: theme).opacity(distanceShade * axisShade * lightShade)
-            context.fill(Path(rect), with: .color(wallColor))
+            if let depthTextureAtlas {
+                context.withCGContext { cgContext in
+                    cgContext.interpolationQuality = .none
+                    if let slice = depthTextureAtlas.wallSlice(for: sample.hitTile.type, u: sample.textureU) {
+                        cgContext.draw(slice, in: rect)
+                    }
+                }
+                let tint = frontWallColor(for: sample.hitTile, theme: theme).opacity(0.20)
+                context.fill(Path(rect), with: .color(tint))
+            } else {
+                let wallColor = frontWallColor(for: sample.hitTile, theme: theme).opacity(distanceShade * axisShade * lightShade)
+                context.fill(Path(rect), with: .color(wallColor))
+            }
+
+            let darkPass = 1.0 - (distanceShade * axisShade * lightShade)
+            if darkPass > 0.02 {
+                context.fill(
+                    Path(rect),
+                    with: .color(Color.black.opacity(min(0.82, max(0.0, darkPass * 0.88))))
+                )
+            }
 
             if lightShade < 0.65 {
                 let darkness = (0.65 - lightShade) * 0.55
@@ -1034,6 +1214,36 @@ struct MapBoardView: View {
         }
 
         return slices
+    }
+
+    private func facingUnitVector(for direction: Direction) -> (x: Double, y: Double) {
+        switch direction {
+        case .up:
+            return (0, -1)
+        case .down:
+            return (0, 1)
+        case .left:
+            return (-1, 0)
+        case .right:
+            return (1, 0)
+        }
+    }
+
+    private func rightUnitVector(for direction: Direction) -> (x: Double, y: Double) {
+        switch direction {
+        case .up:
+            return (1, 0)
+        case .down:
+            return (-1, 0)
+        case .left:
+            return (0, -1)
+        case .right:
+            return (0, 1)
+        }
+    }
+
+    private func fract(_ value: Double) -> CGFloat {
+        CGFloat(value - floor(value))
     }
 
     private func advancedPosition(from start: Position, direction: Direction, steps: Int) -> Position {

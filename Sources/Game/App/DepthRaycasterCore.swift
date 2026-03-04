@@ -20,6 +20,7 @@ struct DepthRaySample {
     let hitPosition: Position?
     let hitTile: Tile
     let hitAxis: DepthHitAxis
+    let textureU: Double
     let lightLevel: Double
 }
 
@@ -124,12 +125,27 @@ struct DepthRaycaster {
                 hitPosition: nil,
                 hitTile: hitTile,
                 hitAxis: .none,
+                textureU: 0.0,
                 lightLevel: 1.0
             )
         }
 
         let hitPosition = Position(x: mapX, y: mapY)
         let lightLevel = max(0.05, min(1.0, lightAt(hitPosition)))
+        let wallCoordinate: Double
+        switch hitAxis {
+        case .vertical:
+            wallCoordinate = originY + (rawDistance * rayY)
+        case .horizontal, .none:
+            wallCoordinate = originX + (rawDistance * rayX)
+        }
+        var textureU = wallCoordinate - floor(wallCoordinate)
+        if hitAxis == .vertical, rayX > 0 {
+            textureU = 1.0 - textureU
+        }
+        if hitAxis == .horizontal, rayY < 0 {
+            textureU = 1.0 - textureU
+        }
         let corrected = max(0.05, rawDistance * cos(angle - baseAngle))
         return DepthRaySample(
             column: column,
@@ -140,6 +156,7 @@ struct DepthRaycaster {
             hitPosition: hitPosition,
             hitTile: hitTile,
             hitAxis: hitAxis,
+            textureU: max(0.0, min(0.999, textureU)),
             lightLevel: lightLevel
         )
     }

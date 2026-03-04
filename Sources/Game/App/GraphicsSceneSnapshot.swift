@@ -98,6 +98,25 @@ struct DepthFloorLightingSnapshot {
         }
         return values[band][column]
     }
+
+    func interpolatedLevel(xNormalized: Double, yNormalized: Double) -> Double {
+        guard !values.isEmpty, columns > 0, bands > 0 else {
+            return ambient
+        }
+
+        let x = max(0.0, min(1.0, xNormalized)) * Double(max(0, columns - 1))
+        let y = max(0.0, min(1.0, yNormalized)) * Double(max(0, bands - 1))
+        let x0 = Int(floor(x))
+        let y0 = Int(floor(y))
+        let x1 = min(columns - 1, x0 + 1)
+        let y1 = min(bands - 1, y0 + 1)
+        let tx = x - Double(x0)
+        let ty = y - Double(y0)
+
+        let top = (level(column: x0, band: y0) * (1.0 - tx)) + (level(column: x1, band: y0) * tx)
+        let bottom = (level(column: x0, band: y1) * (1.0 - tx)) + (level(column: x1, band: y1) * tx)
+        return max(0.0, min(1.0, (top * (1.0 - ty)) + (bottom * ty)))
+    }
 }
 
 struct DepthSceneSnapshot {
