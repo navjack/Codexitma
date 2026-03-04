@@ -195,6 +195,8 @@ enum GraphicsSceneSnapshotBuilder {
         let position: Position
         let intensity: Double
         let radius: Double
+        let blockedTransmission: Double
+        let shadowStrength: Double
     }
 
     private struct DepthLightField {
@@ -789,7 +791,9 @@ enum GraphicsSceneSnapshotBuilder {
         return DepthLightSource(
             position: player.position,
             intensity: 0.46 + (lanternStrength * 0.40),
-            radius: 4.0 + (lanternStrength * 3.6)
+            radius: 4.0 + (lanternStrength * 3.6),
+            blockedTransmission: 0.14 + (lanternStrength * 0.08),
+            shadowStrength: 0.10 + (lanternStrength * 0.08)
         )
     }
 
@@ -880,10 +884,17 @@ enum GraphicsSceneSnapshotBuilder {
                     x: Int(floor(worldX)),
                     y: Int(floor(worldY))
                 )
-                if !hasLightLineOfSight(from: source.position, to: targetTile, board: board) {
-                    contribution *= 0.34
+                let blocked = !hasLightLineOfSight(from: source.position, to: targetTile, board: board)
+                if blocked {
+                    contribution *= source.blockedTransmission
                 }
-                values[sampleY][sampleX] = max(0.03, min(1.0, values[sampleY][sampleX] + contribution))
+                var next = values[sampleY][sampleX]
+                if blocked {
+                    next -= source.shadowStrength * attenuation
+                }
+                next += contribution
+                let minimum = max(0.01, field.ambient * 0.10)
+                values[sampleY][sampleX] = max(minimum, min(1.0, next))
             }
         }
     }
@@ -906,7 +917,9 @@ enum GraphicsSceneSnapshotBuilder {
                     DepthLightSource(
                         position: interactable.position,
                         intensity: 0.22,
-                        radius: 2.6
+                        radius: 2.6,
+                        blockedTransmission: 0.18,
+                        shadowStrength: 0.06
                     )
                 )
             }
@@ -918,33 +931,87 @@ enum GraphicsSceneSnapshotBuilder {
     private static func depthLightSource(for cell: BoardCellSnapshot) -> DepthLightSource? {
         switch cell.feature {
         case .beacon:
-            return DepthLightSource(position: cell.position, intensity: 0.90, radius: 8.2)
+            return DepthLightSource(
+                position: cell.position,
+                intensity: 0.90,
+                radius: 8.2,
+                blockedTransmission: 0.34,
+                shadowStrength: 0.03
+            )
         case .shrine:
-            return DepthLightSource(position: cell.position, intensity: 0.58, radius: 5.2)
+            return DepthLightSource(
+                position: cell.position,
+                intensity: 0.58,
+                radius: 5.2,
+                blockedTransmission: 0.28,
+                shadowStrength: 0.05
+            )
         case .switchLit:
-            return DepthLightSource(position: cell.position, intensity: 0.38, radius: 3.8)
+            return DepthLightSource(
+                position: cell.position,
+                intensity: 0.38,
+                radius: 3.8,
+                blockedTransmission: 0.22,
+                shadowStrength: 0.08
+            )
         case .torchFloor:
-            return DepthLightSource(position: cell.position, intensity: 0.72, radius: 5.2)
+            return DepthLightSource(
+                position: cell.position,
+                intensity: 0.72,
+                radius: 5.2,
+                blockedTransmission: 0.04,
+                shadowStrength: 0.34
+            )
         case .torchWall:
-            return DepthLightSource(position: cell.position, intensity: 0.64, radius: 4.7)
+            return DepthLightSource(
+                position: cell.position,
+                intensity: 0.64,
+                radius: 4.7,
+                blockedTransmission: 0.03,
+                shadowStrength: 0.38
+            )
         case .gate:
-            return DepthLightSource(position: cell.position, intensity: 0.16, radius: 2.1)
+            return DepthLightSource(
+                position: cell.position,
+                intensity: 0.16,
+                radius: 2.1,
+                blockedTransmission: 0.20,
+                shadowStrength: 0.04
+            )
         case .none, .chest, .bed, .plateUp, .plateDown, .switchIdle:
             break
         }
 
         switch cell.tile.type {
         case .doorOpen:
-            return DepthLightSource(position: cell.position, intensity: 0.30, radius: 3.2)
+            return DepthLightSource(
+                position: cell.position,
+                intensity: 0.30,
+                radius: 3.2,
+                blockedTransmission: 0.12,
+                shadowStrength: 0.12
+            )
         case .beacon:
-            return DepthLightSource(position: cell.position, intensity: 0.74, radius: 6.8)
+            return DepthLightSource(
+                position: cell.position,
+                intensity: 0.74,
+                radius: 6.8,
+                blockedTransmission: 0.32,
+                shadowStrength: 0.03
+            )
         default:
             break
         }
 
         switch cell.occupant {
         case .boss:
-            return DepthLightSource(position: cell.position, intensity: 0.28, radius: 3.3)
+            return DepthLightSource(
+                position: cell.position,
+                intensity: 0.28,
+                radius: 3.3,
+                blockedTransmission: 0.20,
+                shadowStrength: 0.09
+            )
         case .none, .player, .npc, .enemy:
             return nil
         }

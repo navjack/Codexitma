@@ -158,3 +158,5 @@
 - Replaced the native floor's patchy light rectangles with perspective-sampled textured floor strips plus bilinear floor-light interpolation, reducing block-grid artifacts in torch-lit scenes.
 - Fixed a Depth3D texture loading regression: SwiftPM flattens processed `ContentData` resources in `Game_Game.bundle`, so the texture loader now checks root resource paths before subdirectory fallbacks.
 - Reduced masking overlays in textured native Depth3D (lighter tint/stripe overlays and no synthetic vertical wall stripe pass when textured walls are active) so texture detail remains visible.
+- Added explicit torch-style occlusion shadows in the depth light field: each light now has blocked transmission and shadow strength parameters, and blocked rays can actively darken samples behind walls instead of only dimming additive light.
+- Tuned light source profiles so torches cast the strongest occlusion shadows, while shrine/beacon/boss lights remain softer and mostly volumetric.
