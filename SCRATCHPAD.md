@@ -70,6 +70,7 @@
 - Added platform guards around the native AppKit frontend files, made the terminal/sound/runtime helpers compile without hard `Darwin` or `AVFoundation` assumptions, and added a first Windows GitHub Actions SDL build lane that installs Swift plus the SDL3 VC SDK on a Windows runner.
 - The first Windows CI run proved the workflow path is live; it failed at Swift installation, and the branch is now pointed at the available Swift 6.3 Windows development snapshot (`2026-02-27-a`) instead of the missing 6.3 release installer.
 - The next Windows failure was real progress: the 6.3 snapshot installed and reached `swift build`, then died because the MSVC CRT libraries were not on the linker path while compiling the manifest. The workflow now explicitly loads the Visual Studio developer environment before building.
+- The next Windows failure after that was a Swift frontend crash during optimization of `GameApp.runTerminal()`. Since the Windows target is SDL-first, `runTerminal()` is now stubbed out on Windows so that code path does not participate in the Win64 build.
 
 ## Current Notes
 

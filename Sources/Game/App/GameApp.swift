@@ -14,6 +14,9 @@ struct GameApp {
     }
 
     func runTerminal() throws {
+#if os(Windows)
+        PlatformRuntimeSupport.writeError("Codexitma terminal mode is not currently supported on Windows. Use the SDL graphics path instead.\n")
+#else
         let engine = GameEngine(library: library, saveRepository: saves)
         renderer.prepare()
         defer { renderer.restore() }
@@ -35,6 +38,7 @@ struct GameApp {
         }
 
         renderer.render(renderer.makeShutdownFrame(message: "The embers dim. Farewell, wanderer."))
+#endif
     }
 
     func runGraphics(playtestAdventureID: AdventureID? = nil, backend: GraphicsBackend = .native) throws {
