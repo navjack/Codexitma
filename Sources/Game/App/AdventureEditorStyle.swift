@@ -1,3 +1,4 @@
+#if canImport(AppKit)
 import AppKit
 import Foundation
 import SwiftUI
@@ -125,3 +126,4 @@ let editorInteractablePalette: [EditorInteractableChoice] = [
         color: Color(red: 0.28, green: 0.74, blue: 0.90)
     ),
 ]
+#endif

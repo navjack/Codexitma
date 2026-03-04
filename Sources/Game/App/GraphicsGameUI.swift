@@ -1,3 +1,4 @@
+#if canImport(AppKit)
 import AppKit
 import Foundation
 import SwiftUI
@@ -764,3 +765,4 @@ struct GameRootView: View {
         showingEditorConfirm = true
     }
 }
+#endif

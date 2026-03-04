@@ -1,4 +1,6 @@
+#if canImport(AVFoundation)
 import AVFoundation
+#endif
 import Foundation
 
 final class GraphicsPreferenceStore: @unchecked Sendable {
@@ -58,6 +60,7 @@ private extension GameSoundCue {
     }
 }
 
+#if canImport(AVFoundation)
 @MainActor
 final class AppleIISoundEngine: GameSoundPlayback {
     static let shared = AppleIISoundEngine()
@@ -125,3 +128,4 @@ final class AppleIISoundEngine: GameSoundPlayback {
         return buffer
     }
 }
+#endif

@@ -1,4 +1,3 @@
-import CoreGraphics
 import Foundation
 
 enum MapOccupant {
@@ -264,7 +263,7 @@ enum GraphicsSceneSnapshotBuilder {
     }
 
     private static func makeDepthScene(from state: GameState, board: MapBoardSnapshot) -> DepthSceneSnapshot {
-        let origin = CGPoint(
+        let origin = DepthPoint(
             x: Double(state.player.position.x) + 0.5,
             y: Double(state.player.position.y) + 0.5
         )

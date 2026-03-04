@@ -66,6 +66,8 @@
 - Extended the SDL editor past map work: the non-spatial content tabs now have cycle-based in-window editing for dialogue, quest stages, encounters, shops, NPCs, and enemies instead of being view-only dead ends.
 - Installed the local Windows cross-toolchain pieces `mingw-w64` and `zig`, and verified `x86_64-w64-mingw32-gcc` can emit a real x86_64 PE executable. The remaining missing piece for actual Swift-to-Windows builds is still a Windows Swift SDK bundle.
 - Kept the native macOS path intact while starting the portability cleanup: `GameApp` now only calls the native launcher/editor on platforms that have them, and shared editor files no longer import AppKit/SwiftUI when they do not actually need those frameworks.
+- Split the shared depth math out of the native SwiftUI renderer: `DepthRaycaster` and its sample types no longer depend on `CGPoint` or `CoreGraphics`, and the AppKit-only depth presentation types are fenced back into the native layer.
+- Added platform guards around the native AppKit frontend files, made the terminal/sound/runtime helpers compile without hard `Darwin` or `AVFoundation` assumptions, and added a first Windows GitHub Actions SDL build lane that installs Swift plus the SDL3 VC SDK on a Windows runner.
 
 ## Current Notes
 
@@ -90,7 +92,7 @@
 - The SDL branch now has a real in-window editor shell, but it is still a focused first pass: the spatial map workflow is there, while the richer non-spatial content panels from the native editor are not fully ported yet.
 - The SDL branch now covers both spatial and non-spatial editor workflows, but it still uses cycle-based editing rather than true text entry for authored content fields.
 - The next SDL/editor move should add proper text entry for authored strings in the SDL editor so those tabs are not limited to curated template cycles.
-- The next portability move should be a real target/source split: keep the native AppKit/SwiftUI frontend as a macOS-only path, and isolate the SDL/frontend-shared code so a Windows runner can build without compiling the native files at all.
+- The codebase now has a first compile-surface split via platform fences; the next portability move is validating the Windows runner and, if it still hits package-graph issues, tightening that into a stricter target-level split.
 
 ## Next Build Targets
 
@@ -102,4 +104,4 @@
 - Expand the external pack format so third-party adventures can define custom quest flags and bespoke item tables, not just reuse the built-in systems.
 - Continue the SDL branch by adding real low-res bitmap font rendering, proper sprite-pattern drawing, and layout scaling based on live window size instead of the current fixed frame.
 - Keep pushing SDL toward native feature parity on macOS before attempting the first real Linux/Win64 build path.
-- The next SDL parity pass should focus on denser tile-surface art, fewer hardcoded spacing constants, and then the first real platform split for Windows/Linux builds.
+- The next SDL parity pass should focus on denser tile-surface art, fewer hardcoded spacing constants, and then fixing any real Windows-runner fallout from the new CI lane.

@@ -1,3 +1,4 @@
+#if canImport(AppKit)
 import AppKit
 import Foundation
 import SwiftUI
@@ -257,3 +258,4 @@ struct RegionTheme {
     let roomShadow: Color
     let pattern: ChamberPattern
 }
+#endif

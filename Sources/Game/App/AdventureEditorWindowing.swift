@@ -1,3 +1,4 @@
+#if canImport(AppKit)
 import AppKit
 import Foundation
 import SwiftUI
@@ -100,3 +101,4 @@ private final class AdventureEditorWindowController: NSObject, NSWindowDelegate 
         return window
     }
 }
+#endif

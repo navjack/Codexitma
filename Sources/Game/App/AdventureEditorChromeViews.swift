@@ -1,3 +1,4 @@
+#if canImport(AppKit)
 import Foundation
 import SwiftUI
 
@@ -300,3 +301,4 @@ private struct EditorLabeledField: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
+#endif

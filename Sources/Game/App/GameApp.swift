@@ -73,7 +73,7 @@ struct GameApp {
             AdventureEditorLauncher.run(library: library)
 #else
             _ = library
-            fputs("Codexitma editor mode is currently only available in the native macOS frontend.\n", stderr)
+            PlatformRuntimeSupport.writeError("Codexitma editor mode is currently only available in the native macOS frontend.\n")
 #endif
         }
     }

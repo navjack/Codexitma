@@ -1,3 +1,4 @@
+#if canImport(AppKit)
 import AppKit
 import Foundation
 import SwiftUI
@@ -128,3 +129,4 @@ final class GraphicsAppDelegate: NSObject, NSApplicationDelegate {
         true
     }
 }
+#endif

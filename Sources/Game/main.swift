@@ -22,6 +22,6 @@ do {
         try app.runBridge()
     }
 } catch {
-    fputs("Codexitma failed to start: \(error)\n", stderr)
-    exit(1)
+    PlatformRuntimeSupport.writeError("Codexitma failed to start: \(error)\n")
+    PlatformRuntimeSupport.exitFailure()
 }

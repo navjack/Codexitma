@@ -1,4 +1,6 @@
+#if canImport(Darwin)
 import Darwin
+#endif
 import Foundation
 
 enum InputMode {
@@ -42,11 +44,14 @@ struct InputParser {
 }
 
 final class InputReader {
+#if canImport(Darwin)
     private var originalTermios = termios()
+#endif
     private(set) var mode: InputMode = .line
     private var rawActive = false
 
     func beginCapture() throws {
+#if canImport(Darwin)
         guard isatty(STDIN_FILENO) == 1 else { return }
         guard tcgetattr(STDIN_FILENO, &originalTermios) == 0 else {
             throw InputError.terminalSetupFailed
@@ -60,12 +65,17 @@ final class InputReader {
         }
         rawActive = true
         mode = .raw
+#else
+        mode = .line
+#endif
     }
 
     func endCapture() {
+#if canImport(Darwin)
         guard rawActive else { return }
         var restore = originalTermios
         _ = tcsetattr(STDIN_FILENO, TCSAFLUSH, &restore)
+#endif
         rawActive = false
         mode = .line
     }
@@ -80,6 +90,7 @@ final class InputReader {
     }
 
     private func readRawCommand() -> ActionCommand? {
+#if canImport(Darwin)
         var buffer = [UInt8](repeating: 0, count: 3)
         let count = read(STDIN_FILENO, &buffer, 1)
         guard count > 0 else { return nil }
@@ -89,6 +100,9 @@ final class InputReader {
             return InputParser.parse(bytes: Array(buffer.prefix(total)))
         }
         return InputParser.parse(bytes: [buffer[0]])
+#else
+        return nil
+#endif
     }
 
     private func readLineCommand(gameMode: GameMode) -> ActionCommand? {

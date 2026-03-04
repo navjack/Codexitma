@@ -201,7 +201,7 @@ import Testing
     ]
 
     let caster = DepthRaycaster(
-        origin: CGPoint(x: 2.5, y: 1.5),
+        origin: DepthPoint(x: 2.5, y: 1.5),
         facing: .right
     ) { position in
         guard position.y >= 0,

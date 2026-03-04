@@ -1,4 +1,6 @@
+#if canImport(Darwin)
 import Darwin
+#endif
 import Foundation
 
 final class TerminalRenderer {
@@ -8,20 +10,24 @@ final class TerminalRenderer {
     let useColor: Bool
 
     init() {
+#if canImport(Darwin)
         isInteractive = isatty(STDOUT_FILENO) == 1
+#else
+        isInteractive = false
+#endif
         useColor = ProcessInfo.processInfo.environment["TERM"] != "dumb"
     }
 
     func prepare() {
         guard isInteractive else { return }
         print("\u{001B}[?25l\u{001B}[2J", terminator: "")
-        fflush(stdout)
+        flushOutput()
     }
 
     func restore() {
         guard isInteractive else { return }
         print("\u{001B}[0m\u{001B}[?25h", terminator: "")
-        fflush(stdout)
+        flushOutput()
     }
 
     func makeFrame(for state: GameState) -> ScreenBuffer {
@@ -50,7 +56,7 @@ final class TerminalRenderer {
         } else {
             print(output)
         }
-        fflush(stdout)
+        flushOutput()
     }
 
     func renderString(_ buffer: ScreenBuffer) -> String {
@@ -285,5 +291,11 @@ final class TerminalRenderer {
         case .npc:
             return nil
         }
+    }
+
+    private func flushOutput() {
+#if canImport(Darwin)
+        fflush(stdout)
+#endif
     }
 }
