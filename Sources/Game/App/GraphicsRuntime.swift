@@ -2,57 +2,6 @@ import AppKit
 import Foundation
 import SwiftUI
 
-enum LaunchMode: Equatable {
-    case graphics
-    case terminal
-
-    static func parse(arguments: [String]) -> LaunchMode {
-        if arguments.contains("--terminal") {
-            return .terminal
-        }
-        return .graphics
-    }
-}
-
-enum GraphicsVisualTheme: String, CaseIterable, Equatable {
-    case gemstone
-    case ultima
-    case depth3D
-
-    var displayName: String {
-        switch self {
-        case .gemstone:
-            return "Gemstone"
-        case .ultima:
-            return "Ultima"
-        case .depth3D:
-            return "Depth 3D"
-        }
-    }
-
-    var summary: String {
-        switch self {
-        case .gemstone:
-            return "Bright chamber borders, black void framing, and chunkier sprites."
-        case .ultima:
-            return "Cleaner overworld boards with flatter tiles and a stricter classic field look."
-        case .depth3D:
-            return "A first-person pseudo-3D dungeon view that reads the same live map."
-        }
-    }
-
-    func next() -> GraphicsVisualTheme {
-        switch self {
-        case .gemstone:
-            return .ultima
-        case .ultima:
-            return .depth3D
-        case .depth3D:
-            return .gemstone
-        }
-    }
-}
-
 @MainActor
 final class GameSessionController: ObservableObject {
     @Published private(set) var state: GameState
@@ -104,6 +53,10 @@ final class GameSessionController: ObservableObject {
     func selectVisualTheme(_ theme: GraphicsVisualTheme) {
         visualTheme = theme
         preferenceStore.saveTheme(theme)
+    }
+
+    var sceneSnapshot: GraphicsSceneSnapshot {
+        GraphicsSceneSnapshotBuilder.build(state: state, visualTheme: visualTheme)
     }
 
     func canOpenEditorFromCurrentMode() -> Bool {

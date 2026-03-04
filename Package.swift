@@ -9,8 +9,17 @@ let package = Package(
         .macOS(.v14),
     ],
     targets: [
+        .systemLibrary(
+            name: "CSDL3",
+            pkgConfig: "sdl3",
+            providers: [
+                .brew(["sdl3"]),
+                .apt(["libsdl3-dev"]),
+            ]
+        ),
         .executableTarget(
             name: "Game",
+            dependencies: ["CSDL3"],
             resources: [
                 .process("ContentData"),
             ]

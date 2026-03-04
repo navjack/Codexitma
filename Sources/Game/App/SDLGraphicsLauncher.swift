@@ -1,40 +1,515 @@
+import CSDL3
 import Foundation
 
-enum GraphicsBackend: String, Equatable {
-    case native
-    case sdl
-
-    var displayName: String {
-        switch self {
-        case .native:
-            return "Native"
-        case .sdl:
-            return "SDL"
-        }
-    }
-}
-
 enum GraphicsBackendError: Error, CustomStringConvertible {
-    case sdlUnavailable
+    case sdlInitializationFailed(String)
+    case sdlWindowCreationFailed(String)
+    case sdlRendererCreationFailed(String)
 
     var description: String {
         switch self {
-        case .sdlUnavailable:
-            return """
-            The SDL graphics backend is not linked yet on this branch.
-            The cross-platform seam is in progress, but the native AppKit renderer is still the only working graphical frontend.
-            """
+        case .sdlInitializationFailed(let message):
+            return "SDL initialization failed: \(message)"
+        case .sdlWindowCreationFailed(let message):
+            return "SDL window creation failed: \(message)"
+        case .sdlRendererCreationFailed(let message):
+            return "SDL renderer creation failed: \(message)"
         }
     }
 }
 
 @MainActor
 enum SDLGraphicsLauncher {
+    private static let windowWidth = 1280
+    private static let windowHeight = 800
+    private static let resizableWindowFlag: SDL_WindowFlags = 0x20
+
     static func run(
-        library _: GameContentLibrary,
-        saveRepository _: SaveRepository,
-        playtestAdventureID _: AdventureID? = nil
+        library: GameContentLibrary,
+        saveRepository: SaveRepository,
+        playtestAdventureID: AdventureID? = nil
     ) throws {
-        throw GraphicsBackendError.sdlUnavailable
+        guard SDL_Init(SDL_INIT_VIDEO) else {
+            throw GraphicsBackendError.sdlInitializationFailed(sdlError())
+        }
+        defer { SDL_Quit() }
+
+        let window = SDL_CreateWindow(
+            "Codexitma (SDL)",
+            Int32(windowWidth),
+            Int32(windowHeight),
+            resizableWindowFlag
+        )
+        guard let window else {
+            throw GraphicsBackendError.sdlWindowCreationFailed(sdlError())
+        }
+        defer { SDL_DestroyWindow(window) }
+
+        let renderer = SDL_CreateRenderer(window, nil)
+        guard let renderer else {
+            throw GraphicsBackendError.sdlRendererCreationFailed(sdlError())
+        }
+        defer { SDL_DestroyRenderer(renderer) }
+
+        let engine = GameEngine(library: library, saveRepository: saveRepository)
+        if let playtestAdventureID {
+            engine.beginPlaytest(for: playtestAdventureID)
+        }
+
+        let preferences = GraphicsPreferenceStore.shared
+        var visualTheme = preferences.loadTheme()
+        var running = true
+
+        while running {
+            var event = SDL_Event()
+            while SDL_PollEvent(&event) {
+                if event.type == SDL_EVENT_QUIT.rawValue {
+                    running = false
+                } else if event.type == SDL_EVENT_KEY_DOWN.rawValue {
+                    if event.key.repeat {
+                        continue
+                    }
+                    if handleKey(
+                        key: event.key.key,
+                        engine: engine,
+                        visualTheme: &visualTheme,
+                        preferences: preferences
+                    ) {
+                        running = false
+                    }
+                }
+            }
+
+            if engine.shouldQuit {
+                running = false
+            }
+
+            let scene = GraphicsSceneSnapshotBuilder.build(state: engine.state, visualTheme: visualTheme)
+            renderScene(scene, with: renderer)
+            _ = SDL_RenderPresent(renderer)
+            SDL_Delay(16)
+        }
+    }
+
+    private static func handleKey(
+        key: SDL_Keycode,
+        engine: GameEngine,
+        visualTheme: inout GraphicsVisualTheme,
+        preferences: GraphicsPreferenceStore
+    ) -> Bool {
+        switch key {
+        case SDLK_T:
+            visualTheme = visualTheme.next()
+            preferences.saveTheme(visualTheme)
+            return false
+        case SDLK_X:
+            engine.handle(.quit)
+            return engine.shouldQuit
+        default:
+            break
+        }
+
+        guard let command = actionCommand(for: key) else {
+            return false
+        }
+        engine.handle(resolved(command: command, theme: visualTheme, state: engine.state))
+        return engine.shouldQuit
+    }
+
+    private static func actionCommand(for key: SDL_Keycode) -> ActionCommand? {
+        switch key {
+        case SDLK_UP, SDLK_W:
+            return .move(.up)
+        case SDLK_DOWN, SDLK_S:
+            return .move(.down)
+        case SDLK_LEFT, SDLK_A:
+            return .move(.left)
+        case SDLK_RIGHT, SDLK_D:
+            return .move(.right)
+        case SDLK_SPACE, SDLK_E, SDLK_RETURN:
+            return .interact
+        case SDLK_I:
+            return .openInventory
+        case SDLK_R:
+            return .dropInventoryItem
+        case SDLK_J, SDLK_H:
+            return .help
+        case SDLK_K:
+            return .save
+        case SDLK_L:
+            return .load
+        case SDLK_N:
+            return .newGame
+        case SDLK_Q, SDLK_ESCAPE:
+            return .cancel
+        default:
+            return nil
+        }
+    }
+
+    private static func resolved(command: ActionCommand, theme: GraphicsVisualTheme, state: GameState) -> ActionCommand {
+        guard theme == .depth3D, state.mode == .exploration else {
+            return command
+        }
+
+        switch command {
+        case .move(.up):
+            return .move(state.player.facing)
+        case .move(.down):
+            return .moveBackward
+        case .move(.left):
+            return .turnLeft
+        case .move(.right):
+            return .turnRight
+        default:
+            return command
+        }
+    }
+
+    private static func renderScene(_ scene: GraphicsSceneSnapshot, with renderer: OpaquePointer) {
+        fill(renderer, x: 0, y: 0, width: windowWidth, height: windowHeight, color: .background)
+
+        let boardFrame = SDLRect(x: 28, y: 28, width: 760, height: 704)
+        let panelFrame = SDLRect(x: 812, y: 28, width: 440, height: 704)
+
+        if scene.visualTheme == .depth3D, let depth = scene.depth, scene.mode == .exploration {
+            renderDepth(depth, scene: scene, frame: boardFrame, with: renderer)
+        } else {
+            renderBoard(scene.board, frame: boardFrame, with: renderer)
+        }
+
+        fill(renderer, x: panelFrame.x, y: panelFrame.y, width: panelFrame.width, height: panelFrame.height, color: .panel)
+        stroke(renderer, frame: panelFrame, color: .gold)
+
+        renderSidebar(scene, frame: panelFrame, with: renderer)
+        renderHeader(scene, boardFrame: boardFrame, with: renderer)
+    }
+
+    private static func renderHeader(_ scene: GraphicsSceneSnapshot, boardFrame: SDLRect, with renderer: OpaquePointer) {
+        let titleRect = SDLRect(x: boardFrame.x, y: 10, width: boardFrame.width, height: 14)
+        drawText(scene.adventureTitle.uppercased(), x: titleRect.x + 4, y: titleRect.y, color: .gold, renderer: renderer)
+        drawText(scene.visualTheme.displayName.uppercased(), x: titleRect.x + 220, y: titleRect.y, color: .bright, renderer: renderer)
+        drawText(scene.modeLabel, x: titleRect.x + 360, y: titleRect.y, color: .dim, renderer: renderer)
+    }
+
+    private static func renderSidebar(_ scene: GraphicsSceneSnapshot, frame: SDLRect, with renderer: OpaquePointer) {
+        var y = frame.y + 10
+        let lineHeight = 12
+
+        drawText("MODE \(scene.modeLabel)", x: frame.x + 10, y: y, color: .gold, renderer: renderer)
+        y += lineHeight
+        drawText("MAP \(scene.currentMapID.uppercased())", x: frame.x + 10, y: y, color: .bright, renderer: renderer)
+        y += lineHeight
+        drawText("CLASS \(scene.player.heroClass.displayName.uppercased())", x: frame.x + 10, y: y, color: .bright, renderer: renderer)
+        y += lineHeight
+        drawText("HP \(scene.player.health)/\(scene.player.maxHealth)", x: frame.x + 10, y: y, color: .bright, renderer: renderer)
+        y += lineHeight
+        drawText("ST \(scene.player.stamina)/\(scene.player.maxStamina)", x: frame.x + 10, y: y, color: .bright, renderer: renderer)
+        y += lineHeight
+        drawText("ATK \(scene.player.effectiveAttack())  DEF \(scene.player.effectiveDefense())", x: frame.x + 10, y: y, color: .bright, renderer: renderer)
+        y += lineHeight
+        drawText("LANTERN \(scene.player.effectiveLanternCapacity())", x: frame.x + 10, y: y, color: .bright, renderer: renderer)
+        y += lineHeight
+        drawText("MARKS \(scene.player.marks)", x: frame.x + 10, y: y, color: .bright, renderer: renderer)
+        y += lineHeight
+        drawText("FACING \(scene.player.facing.shortLabel)", x: frame.x + 10, y: y, color: .bright, renderer: renderer)
+        y += lineHeight
+        drawText("BAG \(scene.player.inventory.count)/\(scene.player.inventoryCapacity())", x: frame.x + 10, y: y, color: .bright, renderer: renderer)
+        y += lineHeight * 2
+
+        let objective = QuestSystem.objective(for: scene.quests, flow: scene.questFlow)
+        drawText("GOAL", x: frame.x + 10, y: y, color: .gold, renderer: renderer)
+        y += lineHeight
+        for line in wrap(objective.uppercased(), width: 30).prefix(4) {
+            drawText(line, x: frame.x + 10, y: y, color: .bright, renderer: renderer)
+            y += lineHeight
+        }
+        y += lineHeight
+
+        drawText("LOG", x: frame.x + 10, y: y, color: .gold, renderer: renderer)
+        y += lineHeight
+        for line in scene.messages.suffix(10) {
+            drawText(line.uppercased(), x: frame.x + 10, y: y, color: .dim, renderer: renderer)
+            y += lineHeight
+        }
+        y += lineHeight
+
+        drawText("WASD MOVE  E ACT  I BAG", x: frame.x + 10, y: y, color: .bright, renderer: renderer)
+        y += lineHeight
+        drawText("Q BACK  X QUIT  T STYLE", x: frame.x + 10, y: y, color: .bright, renderer: renderer)
+    }
+
+    private static func renderBoard(_ board: MapBoardSnapshot, frame: SDLRect, with renderer: OpaquePointer) {
+        fill(renderer, x: frame.x, y: frame.y, width: frame.width, height: frame.height, color: .void)
+        stroke(renderer, frame: frame, color: .gold)
+
+        guard board.width > 0, board.height > 0 else { return }
+        let cellWidth = max(6, min((frame.width - 12) / board.width, (frame.height - 12) / board.height))
+        let drawWidth = board.width * cellWidth
+        let drawHeight = board.height * cellWidth
+        let originX = frame.x + ((frame.width - drawWidth) / 2)
+        let originY = frame.y + ((frame.height - drawHeight) / 2)
+
+        for row in board.rows {
+            for cell in row {
+                let x = originX + (cell.position.x * cellWidth)
+                let y = originY + (cell.position.y * cellWidth)
+                fill(renderer, x: x, y: y, width: cellWidth, height: cellWidth, color: tileColor(for: cell.tile.type))
+                if cell.tile.type == .wall {
+                    fill(renderer, x: x, y: y, width: cellWidth, height: max(1, cellWidth / 5), color: .wallShade)
+                }
+                if cell.feature != .none {
+                    let inset = max(1, cellWidth / 4)
+                    fill(renderer, x: x + inset, y: y + inset, width: cellWidth - (inset * 2), height: cellWidth - (inset * 2), color: featureColor(for: cell.feature))
+                }
+                switch cell.occupant {
+                case .none:
+                    break
+                default:
+                    let inset = max(1, cellWidth / 5)
+                    fill(renderer, x: x + inset, y: y + inset, width: cellWidth - (inset * 2), height: cellWidth - (inset * 2), color: occupantColor(for: cell.occupant))
+                }
+                if cellWidth >= 10 {
+                    stroke(renderer, frame: SDLRect(x: x, y: y, width: cellWidth, height: cellWidth), color: .grid)
+                }
+            }
+        }
+    }
+
+    private static func renderDepth(
+        _ depth: DepthSceneSnapshot,
+        scene: GraphicsSceneSnapshot,
+        frame: SDLRect,
+        with renderer: OpaquePointer
+    ) {
+        let horizon = frame.y + (frame.height / 2)
+        fill(renderer, x: frame.x, y: frame.y, width: frame.width, height: frame.height / 2, color: depth.usesSkyBackdrop ? .sky : .ceiling)
+        fill(renderer, x: frame.x, y: horizon, width: frame.width, height: frame.height / 2, color: .floor)
+        stroke(renderer, frame: frame, color: .gold)
+
+        guard !depth.samples.isEmpty else { return }
+        let columnWidth = max(1, frame.width / depth.samples.count)
+        let zBuffer = depth.samples.map(\.correctedDistance)
+
+        for sample in depth.samples where sample.didHit {
+            let distance = max(0.14, sample.correctedDistance)
+            let wallHeight = min(Double(frame.height) * 0.92, (Double(frame.height) * 0.82) / distance)
+            let top = Int(Double(horizon) - (wallHeight * 0.5))
+            let height = max(1, Int(wallHeight))
+            let x = frame.x + (sample.column * columnWidth)
+            let color = shaded(
+                tileColor(for: sample.hitTile.type),
+                intensity: max(0.22, 1.0 - ((sample.correctedDistance / depth.maxDistance) * 0.72))
+            )
+            fill(renderer, x: x, y: top, width: max(1, columnWidth + 1), height: height, color: color)
+        }
+
+        for billboard in depth.billboards.sorted(by: { $0.distance > $1.distance }) {
+            let screenCenter = Int((((billboard.angleOffset / depth.fieldOfView) + 0.5) * Double(frame.width))) + frame.x
+            let projectedHeight = min(
+                Double(frame.height) * 0.88,
+                (Double(frame.height) * billboard.scale) / max(0.16, billboard.distance)
+            )
+            let projectedWidth = max(10.0, projectedHeight * 0.52 * billboard.widthScale)
+            let left = Int(Double(screenCenter) - (projectedWidth / 2.0))
+            let width = max(2, Int(projectedWidth))
+            let top = Int(Double(horizon) - (projectedHeight * 0.5))
+            let height = max(2, Int(projectedHeight))
+            let startSample = max(0, (left - frame.x) / columnWidth)
+            let endSample = min(depth.samples.count - 1, (left - frame.x + width - 1) / columnWidth)
+            if startSample <= endSample {
+                var visible = false
+                for sampleIndex in startSample...endSample where billboard.distance <= (zBuffer[sampleIndex] + 0.06) {
+                    visible = true
+                    break
+                }
+                if !visible {
+                    continue
+                }
+            }
+
+            fill(renderer, x: left, y: top, width: width, height: height, color: billboardColor(for: billboard.kind))
+        }
+
+        let cx = frame.x + (frame.width / 2)
+        let cy = frame.y + (frame.height / 2)
+        fill(renderer, x: cx - 10, y: cy, width: 20, height: 2, color: .bright)
+        fill(renderer, x: cx, y: cy - 10, width: 2, height: 20, color: .bright)
+        drawText("VIEW \(scene.player.facing.shortLabel)", x: frame.x + 10, y: frame.y + 10, color: .gold, renderer: renderer)
+    }
+
+    private static func tileColor(for type: TileType) -> SDLColor {
+        switch type {
+        case .floor: return .ground
+        case .wall: return .wall
+        case .water: return .water
+        case .brush: return .brush
+        case .doorLocked: return .doorLocked
+        case .doorOpen: return .doorOpen
+        case .shrine: return .shrine
+        case .stairs: return .stairs
+        case .beacon: return .beacon
+        }
+    }
+
+    private static func featureColor(for feature: MapFeature) -> SDLColor {
+        switch feature {
+        case .none: return .bright
+        case .chest: return .gold
+        case .bed: return .bright
+        case .plateUp: return .violet
+        case .plateDown: return .dim
+        case .switchIdle: return .blue
+        case .switchLit: return .gold
+        case .shrine: return .violet
+        case .beacon: return .beacon
+        case .gate: return .doorLocked
+        }
+    }
+
+    private static func occupantColor(for occupant: MapOccupant) -> SDLColor {
+        switch occupant {
+        case .none: return .bright
+        case .player: return .bright
+        case .npc: return .blue
+        case .enemy: return .green
+        case .boss: return .violet
+        }
+    }
+
+    private static func billboardColor(for kind: DepthBillboardKind) -> SDLColor {
+        switch kind {
+        case .npc:
+            return .blue
+        case .enemy:
+            return .green
+        case .boss:
+            return .violet
+        case .feature(let feature):
+            return featureColor(for: feature)
+        }
+    }
+
+    private static func shaded(_ color: SDLColor, intensity: Double) -> SDLColor {
+        SDLColor(
+            r: UInt8(max(0, min(255, Int(Double(color.r) * intensity)))),
+            g: UInt8(max(0, min(255, Int(Double(color.g) * intensity)))),
+            b: UInt8(max(0, min(255, Int(Double(color.b) * intensity)))),
+            a: color.a
+        )
+    }
+
+    private static func drawText(_ text: String, x: Int, y: Int, color: SDLColor, renderer: OpaquePointer) {
+        _ = SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a)
+        text.withCString { pointer in
+            _ = SDL_RenderDebugText(renderer, Float(x), Float(y), pointer)
+        }
+    }
+
+    private static func fill(_ renderer: OpaquePointer, x: Int, y: Int, width: Int, height: Int, color: SDLColor) {
+        guard width > 0, height > 0 else { return }
+        var rect = SDL_FRect(x: Float(x), y: Float(y), w: Float(width), h: Float(height))
+        _ = SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a)
+        _ = SDL_RenderFillRect(renderer, &rect)
+    }
+
+    private static func stroke(_ renderer: OpaquePointer, frame: SDLRect, color: SDLColor) {
+        fill(renderer, x: frame.x, y: frame.y, width: frame.width, height: 2, color: color)
+        fill(renderer, x: frame.x, y: frame.y + frame.height - 2, width: frame.width, height: 2, color: color)
+        fill(renderer, x: frame.x, y: frame.y, width: 2, height: frame.height, color: color)
+        fill(renderer, x: frame.x + frame.width - 2, y: frame.y, width: 2, height: frame.height, color: color)
+    }
+
+    private static func wrap(_ text: String, width: Int) -> [String] {
+        guard width > 0 else { return [text] }
+        var lines: [String] = []
+        var current = ""
+
+        for word in text.split(separator: " ") {
+            let candidate = current.isEmpty ? String(word) : "\(current) \(word)"
+            if candidate.count > width, !current.isEmpty {
+                lines.append(current)
+                current = String(word)
+            } else {
+                current = candidate
+            }
+        }
+
+        if !current.isEmpty {
+            lines.append(current)
+        }
+        return lines
+    }
+
+    private static func sdlError() -> String {
+        if let pointer = SDL_GetError() {
+            return String(cString: pointer)
+        }
+        return "unknown error"
+    }
+}
+
+private struct SDLRect {
+    let x: Int
+    let y: Int
+    let width: Int
+    let height: Int
+}
+
+private struct SDLColor {
+    let r: UInt8
+    let g: UInt8
+    let b: UInt8
+    let a: UInt8
+
+    static let background = SDLColor(r: 6, g: 6, b: 8, a: 255)
+    static let panel = SDLColor(r: 18, g: 18, b: 14, a: 255)
+    static let void = SDLColor(r: 0, g: 0, b: 0, a: 255)
+    static let gold = SDLColor(r: 238, g: 140, b: 18, a: 255)
+    static let bright = SDLColor(r: 244, g: 238, b: 214, a: 255)
+    static let dim = SDLColor(r: 170, g: 164, b: 140, a: 255)
+    static let blue = SDLColor(r: 42, g: 132, b: 216, a: 255)
+    static let green = SDLColor(r: 62, g: 180, b: 58, a: 255)
+    static let violet = SDLColor(r: 170, g: 68, b: 198, a: 255)
+    static let ground = SDLColor(r: 56, g: 40, b: 18, a: 255)
+    static let wall = SDLColor(r: 108, g: 104, b: 118, a: 255)
+    static let wallShade = SDLColor(r: 56, g: 52, b: 62, a: 255)
+    static let water = SDLColor(r: 30, g: 88, b: 148, a: 255)
+    static let brush = SDLColor(r: 36, g: 120, b: 36, a: 255)
+    static let doorLocked = SDLColor(r: 170, g: 118, b: 30, a: 255)
+    static let doorOpen = SDLColor(r: 230, g: 210, b: 90, a: 255)
+    static let shrine = SDLColor(r: 144, g: 70, b: 200, a: 255)
+    static let stairs = SDLColor(r: 128, g: 88, b: 44, a: 255)
+    static let beacon = SDLColor(r: 244, g: 226, b: 74, a: 255)
+    static let sky = SDLColor(r: 20, g: 46, b: 82, a: 255)
+    static let ceiling = SDLColor(r: 10, g: 10, b: 16, a: 255)
+    static let floor = SDLColor(r: 24, g: 20, b: 16, a: 255)
+    static let grid = SDLColor(r: 12, g: 12, b: 12, a: 255)
+}
+
+private extension GraphicsSceneSnapshot {
+    var modeLabel: String {
+        switch mode {
+        case .title:
+            return "TITLE"
+        case .characterCreation:
+            return "CREATOR"
+        case .exploration:
+            return "EXPLORE"
+        case .dialogue:
+            return "DIALOGUE"
+        case .inventory:
+            return "PACK"
+        case .shop:
+            return "SHOP"
+        case .combat:
+            return "COMBAT"
+        case .pause:
+            return "PAUSE"
+        case .gameOver:
+            return "GAME OVER"
+        case .ending:
+            return "ENDING"
+        }
     }
 }

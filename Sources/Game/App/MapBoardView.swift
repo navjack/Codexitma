@@ -4,6 +4,7 @@ import SwiftUI
 
 struct MapBoardView: View {
     let state: GameState
+    let scene: GraphicsSceneSnapshot
     let palette: UltimaPalette
     let visualTheme: GraphicsVisualTheme
 
@@ -13,15 +14,15 @@ struct MapBoardView: View {
         if visualTheme == .depth3D {
             firstPersonView(theme: regionTheme)
         } else {
-            topDownView(map: state.world.maps[state.player.currentMapID], theme: regionTheme)
+            topDownView(board: scene.board, theme: regionTheme)
         }
     }
 
-    private func topDownView(map: MapDefinition?, theme: RegionTheme) -> some View {
+    private func topDownView(board: MapBoardSnapshot, theme: RegionTheme) -> some View {
         let boardPadding = visualTheme == .gemstone ? 4.0 : 2.0
         let boardScale = visualTheme == .gemstone ? 2.0 : 1.84
-        let boardWidth = CGFloat(map?.lines.first?.count ?? 0) * cell
-        let boardHeight = CGFloat(map?.lines.count ?? 0) * cell
+        let boardWidth = CGFloat(board.width) * cell
+        let boardHeight = CGFloat(board.height) * cell
 
         return ZStack(alignment: .topLeading) {
             if visualTheme == .gemstone {
@@ -31,18 +32,10 @@ struct MapBoardView: View {
             }
 
             VStack(spacing: 0) {
-                ForEach(Array((map?.lines ?? []).enumerated()), id: \.offset) { y, line in
+                ForEach(Array(board.rows.enumerated()), id: \.offset) { _, row in
                     HStack(spacing: 0) {
-                        ForEach(Array(line.enumerated()), id: \.offset) { x, raw in
-                            LowResTileView(
-                                tile: TileFactory.tile(for: resolved(raw)),
-                                occupant: occupant(at: Position(x: x, y: y)),
-                                feature: feature(at: Position(x: x, y: y)),
-                                palette: palette,
-                                regionTheme: theme,
-                                visualTheme: visualTheme
-                            )
-                            .frame(width: cell, height: cell)
+                        ForEach(row, id: \.position) { cellSnapshot in
+                            tileView(for: cellSnapshot, theme: theme)
                         }
                     }
                 }
@@ -75,16 +68,33 @@ struct MapBoardView: View {
         .drawingGroup(opaque: false)
     }
 
+    private func tileView(for cellSnapshot: BoardCellSnapshot, theme: RegionTheme) -> some View {
+        let tileColor = cellSnapshot.tile
+        let occupant = cellSnapshot.occupant
+        let feature = cellSnapshot.feature
+
+        return LowResTileView(
+            tile: tileColor,
+            occupant: occupant,
+            feature: feature,
+            palette: palette,
+            regionTheme: theme,
+            visualTheme: visualTheme
+        )
+        .frame(width: cell, height: cell)
+    }
+
     private func firstPersonView(theme: RegionTheme) -> some View {
         GeometryReader { proxy in
-            let raySamples = depthRaySamples(columns: 96, maxDistance: 9.0)
+            let depthScene = scene.depth
+            let raySamples = depthScene?.samples ?? []
             ZStack {
                 Canvas { context, canvasSize in
                     drawDepthScene(into: &context, size: canvasSize, samples: raySamples, theme: theme)
                 }
 
                 VStack(alignment: .leading, spacing: 5) {
-                    Text("VIEW \(state.player.facing.shortLabel)")
+                    Text("VIEW \((depthScene?.facing ?? scene.player.facing).shortLabel)")
                         .font(.system(size: 10, weight: .bold, design: .monospaced))
                         .foregroundStyle(palette.lightGold)
                     Text("FIRST-PERSON")
@@ -117,17 +127,6 @@ struct MapBoardView: View {
         .frame(width: 584, height: 356)
     }
 
-    private func depthRaySamples(columns: Int, maxDistance: Double) -> [DepthRaySample] {
-        let origin = CGPoint(
-            x: Double(state.player.position.x) + 0.5,
-            y: Double(state.player.position.y) + 0.5
-        )
-        let caster = DepthRaycaster(origin: origin, facing: state.player.facing, fov: depthFieldOfView) { position in
-            tile(at: position)
-        }
-        return caster.castSamples(columns: columns, maxDistance: maxDistance)
-    }
-
     private func drawDepthScene(
         into context: inout GraphicsContext,
         size: CGSize,
@@ -149,7 +148,7 @@ struct MapBoardView: View {
         let ceilingRect = CGRect(x: 0, y: 0, width: size.width, height: horizon)
         let floorRect = CGRect(x: 0, y: horizon, width: size.width, height: size.height - horizon)
 
-        if usesSkyBackdrop {
+        if scene.depth?.usesSkyBackdrop ?? true {
             context.fill(
                 Path(ceilingRect),
                 with: .linearGradient(
@@ -274,8 +273,7 @@ struct MapBoardView: View {
         guard !samples.isEmpty else { return }
 
         let zBuffer = samples.map(\.correctedDistance)
-        let billboards = depthBillboards(maxDistance: samples.first?.maxDistance ?? 9.0)
-            .sorted { $0.distance > $1.distance }
+        let billboards = scene.depth?.billboards ?? []
         let horizon = size.height * 0.5
         let columnWidth = size.width / CGFloat(samples.count)
 
@@ -285,16 +283,17 @@ struct MapBoardView: View {
                 size.height * 0.88,
                 CGFloat((size.height * billboard.scale) / max(0.16, billboard.distance))
             )
-            let aspect = CGFloat(max(1, billboard.pattern.first?.count ?? 1)) / CGFloat(max(1, billboard.pattern.count))
+            let pattern = depthBillboardPattern(for: billboard.kind)
+            let aspect = CGFloat(max(1, pattern.first?.count ?? 1)) / CGFloat(max(1, pattern.count))
             let projectedWidth = max(10, projectedHeight * aspect * billboard.widthScale)
             let left = screenCenter - (projectedWidth / 2)
             let top = horizon - (projectedHeight * 0.5)
-            let cellWidth = projectedWidth / CGFloat(max(1, billboard.pattern.first?.count ?? 1))
-            let cellHeight = projectedHeight / CGFloat(max(1, billboard.pattern.count))
+            let cellWidth = projectedWidth / CGFloat(max(1, pattern.first?.count ?? 1))
+            let cellHeight = projectedHeight / CGFloat(max(1, pattern.count))
             let shade = max(0.28, 1.0 - ((billboard.distance / billboard.maxDistance) * 0.72))
-            let color = billboard.color.opacity(shade)
+            let color = depthBillboardColor(for: billboard.kind).opacity(shade)
 
-            for patternColumn in 0..<max(1, billboard.pattern.first?.count ?? 1) {
+            for patternColumn in 0..<max(1, pattern.first?.count ?? 1) {
                 let stripeMinX = left + (CGFloat(patternColumn) * cellWidth)
                 let stripeMaxX = stripeMinX + cellWidth
                 let startSample = max(0, Int(floor(stripeMinX / columnWidth)))
@@ -312,7 +311,7 @@ struct MapBoardView: View {
                     continue
                 }
 
-                for patternRow in 0..<billboard.pattern.count where billboard.pattern[patternRow][patternColumn] == 1 {
+                for patternRow in 0..<pattern.count where pattern[patternRow][patternColumn] == 1 {
                     let rect = CGRect(
                         x: stripeMinX,
                         y: top + (CGFloat(patternRow) * cellHeight),
@@ -321,7 +320,7 @@ struct MapBoardView: View {
                     )
                     context.fill(Path(rect), with: .color(color))
 
-                    if patternColumn == 0 || patternColumn == (billboard.pattern.first?.count ?? 1) - 1 {
+                    if patternColumn == 0 || patternColumn == (pattern.first?.count ?? 1) - 1 {
                         let edge = CGRect(x: rect.minX, y: rect.minY, width: 1, height: rect.height)
                         context.fill(Path(edge), with: .color(Color.black.opacity(0.18)))
                     }
@@ -540,6 +539,36 @@ struct MapBoardView: View {
                 0.62,
                 1.05
             )
+        }
+    }
+
+    private func depthBillboardPattern(for kind: DepthBillboardKind) -> [[Int]] {
+        switch kind {
+        case .npc(let id):
+            return firstPersonNPCPattern(for: id)
+        case .enemy(let id):
+            return firstPersonEnemyPattern(for: id)
+        case .boss:
+            return [
+                [1,0,1],
+                [1,1,1],
+                [1,1,1]
+            ]
+        case .feature(let feature):
+            return depthFeatureAppearance(for: feature)?.pattern ?? [[1]]
+        }
+    }
+
+    private func depthBillboardColor(for kind: DepthBillboardKind) -> Color {
+        switch kind {
+        case .npc(let id):
+            return firstPersonNPCColor(for: id)
+        case .enemy(let id):
+            return firstPersonEnemyColor(for: id)
+        case .boss:
+            return palette.accentViolet
+        case .feature(let feature):
+            return depthFeatureAppearance(for: feature)?.color ?? palette.text
         }
     }
 
@@ -1026,7 +1055,7 @@ struct MapBoardView: View {
     }
 
     private var regionTheme: RegionTheme {
-        switch state.player.currentMapID {
+        switch scene.currentMapID {
         case "merrow_village":
             return RegionTheme(
                 floor: Color(red: 0.18, green: 0.11, blue: 0.08),

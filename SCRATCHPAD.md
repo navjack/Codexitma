@@ -47,6 +47,11 @@
 - Completed the second `codex/refactor-modules` pass: `GameEngine` is now split by behavior domain, `AdventureEditorStore` is split into document/canvas/content/helper extensions, and the editor chrome panels were extracted into dedicated SwiftUI subviews to reduce root-view context size.
 - Fixed the in-game editor launch overlay so it renders as a true overlay instead of expanding the game window, and made the spawned editor window explicitly order to the front when opened from a live session.
 - Fixed the editor window close path again: the controller now keeps the editor window alive through `windowWillClose` and only releases its strong references on the next main-queue turn, avoiding a crash when the user closes the editor window mid-session.
+- Started the local-only `codex/sdl-cross-platform` branch and added an explicit graphics backend seam so `Codexitma` can launch either the native AppKit frontend or a new SDL frontend.
+- Switched the branch target to SDL3.4.2 instead of SDL2 because SDL3 is installed locally and is the better long-term base for the cross-platform graphical port.
+- Added a backend-neutral `GraphicsSceneSnapshot` layer so the active map board and depth-ray data can be built once from `GameState` and then consumed by multiple graphical frontends.
+- Refactored the native `MapBoardView` to consume the shared scene snapshot for its active board/depth rendering path instead of pulling those visible cells directly from `GameState`.
+- Replaced the SDL stub with a real SDL3 window, input loop, and low-resolution renderer: `--sdl` now launches, drives the shared `GameEngine`, renders a top-down board, and shows a minimal depth view when `Depth 3D` is active.
 
 ## Current Notes
 
@@ -63,6 +68,9 @@
 - External content packs can now extend the title menu without modifying the app bundle, as long as they follow the expected manifest and JSON file layout.
 - The editor and graphics shells now intentionally use `ViewThatFits` plus scroll-backed fallbacks; keep future panel additions responsive instead of adding more fixed-width rows.
 - The remaining refactor hotspots have shifted to `AdventureEditorStore+Helpers.swift`, `AdventureEditorRootView+Panels.swift`, and `GraphicsGameUI.swift`; future passes should keep extracting by behavior-specific helpers and dedicated subviews instead of rebuilding large mixed-purpose files.
+- The SDL branch is intentionally local-only for now; do not push it until the renderer is stable enough that missing AppKit parity will not confuse the public repo.
+- The SDL frontend currently links against the locally installed `sdl3` Homebrew package and emits a linker warning because the Homebrew bottle was built for a newer host SDK than the package's declared macOS target.
+- The shared scene snapshot is now the correct seam for future renderer work; continue moving rendering decisions out of SwiftUI views and into snapshot-to-pixels adapters.
 
 ## Next Build Targets
 
@@ -72,3 +80,4 @@
 - Add more authored map events, optional treasure loops, and denser region-specific enemy encounters.
 - Build a full scripted playthrough using the bridge so progression can be regression-tested end to end.
 - Expand the external pack format so third-party adventures can define custom quest flags and bespoke item tables, not just reuse the built-in systems.
+- Continue the SDL branch by adding real low-res bitmap font rendering, proper sprite-pattern drawing, and layout scaling based on live window size instead of the current fixed frame.

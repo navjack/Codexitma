@@ -125,6 +125,21 @@ import Testing
     #expect(store.loadTheme() == .depth3D)
 }
 
+@Test func graphicsSceneSnapshotBuildsBoardAndDepthViewData() async throws {
+    let library = try ContentLoader().load()
+    let saveURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString).appendingPathExtension("json")
+    let engine = GameEngine(library: library, saveRepository: SaveRepository(fileURL: saveURL))
+
+    let topDown = GraphicsSceneSnapshotBuilder.build(state: engine.state, visualTheme: .gemstone)
+    #expect(topDown.board.width > 0)
+    #expect(topDown.board.height > 0)
+    #expect(topDown.depth == nil)
+
+    let depth = GraphicsSceneSnapshotBuilder.build(state: engine.state, visualTheme: .depth3D)
+    #expect(depth.depth != nil)
+    #expect((depth.depth?.samples.count ?? 0) == 96)
+}
+
 @Test func depthRaycasterMeasuresCenterWallDistance() async throws {
     let map = [
         "#####",

@@ -318,7 +318,12 @@ struct GameRootView: View {
     private var primaryWorldColumn: some View {
         VStack(alignment: .leading, spacing: 10) {
             PixelPanel(title: mapPanelTitle, palette: palette) {
-                MapBoardView(state: session.state, palette: palette, visualTheme: session.visualTheme)
+                MapBoardView(
+                    state: session.state,
+                    scene: session.sceneSnapshot,
+                    palette: palette,
+                    visualTheme: session.visualTheme
+                )
             }
 
             PixelPanel(title: "LOG", palette: palette) {

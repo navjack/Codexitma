@@ -2,42 +2,6 @@ import AppKit
 import Foundation
 import SwiftUI
 
-enum MapOccupant {
-    case none
-    case player
-    case npc(String)
-    case enemy(String)
-    case boss(String)
-}
-
-enum MapFeature {
-    case none
-    case chest
-    case bed
-    case plateUp
-    case plateDown
-    case switchIdle
-    case switchLit
-    case shrine
-    case beacon
-    case gate
-
-    var debugName: String {
-        switch self {
-        case .none: return "none"
-        case .chest: return "chest"
-        case .bed: return "bed"
-        case .plateUp: return "plate_up"
-        case .plateDown: return "plate_down"
-        case .switchIdle: return "switch_idle"
-        case .switchLit: return "switch_lit"
-        case .shrine: return "shrine"
-        case .beacon: return "beacon"
-        case .gate: return "gate"
-        }
-    }
-}
-
 struct CorridorSlice {
     let depth: Int
     let frontTile: Tile

@@ -19,20 +19,25 @@ This branch now has a real graphics backend seam:
 - `native`
   - the existing AppKit + SwiftUI frontend
 - `sdl`
-  - a new launch path reserved for the upcoming SDL frontend
+  - a live SDL3 frontend on this branch
 
-The `--sdl` flag is now parsed and routed through the app, but the SDL renderer is still a stub. The branch is not pretending the SDL frontend exists yet; it is reserving the runtime shape we will fill in next.
+The `--sdl` flag is now a working launch path:
+
+- it opens a real SDL3 window
+- it drives the shared `GameEngine`
+- it renders a low-resolution top-down board view
+- it renders a minimal `Depth 3D` raycast view when that visual theme is active
+- it uses the same backend-neutral `GraphicsSceneSnapshot` data that now also feeds the native map renderer
+
+This is still an early renderer, not feature parity. It is enough to prove the cross-platform direction and to keep iterating on a real SDL path instead of a stub.
 
 ## Immediate Next Steps
 
-1. Move more graphics runtime logic behind backend-neutral interfaces.
-2. Extract a render-friendly scene snapshot from `GameState` so SDL does not depend on SwiftUI views.
-3. Add an SDL window, software framebuffer, input translation, and a present loop.
-4. Bring over the existing visual themes in stages:
-   - Ultima first
-   - Gemstone second
-   - Depth 3D last
-5. Revisit sound after rendering/input are stable.
+1. Move more graphics runtime logic behind backend-neutral interfaces so SDL no longer depends on the remaining AppKit-only presentation helpers.
+2. Replace the current SDL debug-text HUD with a proper low-res bitmap text pass so the SDL frontend has a fully controlled visual style.
+3. Make the SDL frontend responsive to live window size instead of using the current fixed-layout frame math.
+4. Add proper sprite-pattern rendering for SDL billboards instead of the current solid-color rectangle approximation.
+5. Revisit sound after rendering/input are stable, ideally via an SDL-backed audio path instead of AVFoundation.
 
 ## Constraints
 
