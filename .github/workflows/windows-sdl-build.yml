@@ -85,6 +85,30 @@ jobs:
               Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $dist $_.Name) -Recurse -Force
             }
 
+          Get-ChildItem -Path $releaseDir -Filter "*.dll" -File |
+            ForEach-Object {
+              Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $dist $_.Name) -Force
+            }
+
+          $targetInfo = swiftc -print-target-info | ConvertFrom-Json
+          $runtimeDirs = @()
+          if ($targetInfo.paths.runtimeLibraryPaths) {
+            $runtimeDirs += $targetInfo.paths.runtimeLibraryPaths
+          }
+          if ($targetInfo.paths.runtimeResourcePath) {
+            $runtimeDirs += $targetInfo.paths.runtimeResourcePath
+          }
+
+          $runtimeDirs |
+            Where-Object { $_ -and (Test-Path $_) } |
+            Select-Object -Unique |
+            ForEach-Object {
+              Get-ChildItem -Path $_ -Filter "*.dll" -File -ErrorAction SilentlyContinue |
+                ForEach-Object {
+                  Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $dist $_.Name) -Force
+                }
+            }
+
           $sdlDllCandidates = @(
             (Join-Path $env:SDL3_ROOT "lib\x64\SDL3.dll"),
             (Join-Path $env:SDL3_ROOT "bin\x64\SDL3.dll")

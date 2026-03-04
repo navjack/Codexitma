@@ -108,3 +108,4 @@
 - Continue the SDL branch by adding real low-res bitmap font rendering, proper sprite-pattern drawing, and layout scaling based on live window size instead of the current fixed frame.
 - Keep pushing SDL toward native feature parity on macOS before attempting the first real Linux/Win64 build path.
 - The next SDL parity pass should focus on denser tile-surface art, fewer hardcoded spacing constants, and then fixing any real Windows-runner fallout from the new CI lane.
+- Local CrossOver testing on macOS proved the first successful Windows artifact was still incomplete: the EXE imports Swift runtime DLLs (`swiftCore.dll`, `Foundation.dll`, etc.), so the Windows CI packaging step now needs to bundle runtime DLLs from both the release folder and `swiftc -print-target-info` runtime paths.
