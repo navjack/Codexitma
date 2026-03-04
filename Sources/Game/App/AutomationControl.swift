@@ -131,6 +131,7 @@ struct AutomationSnapshot: Codable {
     let mode: String
     let mapID: String
     let mapName: String
+    let facing: String
     let position: Position
     let health: Int
     let maxHealth: Int
@@ -155,6 +156,7 @@ struct AutomationSnapshot: Codable {
             mode: String(describing: state.mode),
             mapID: state.player.currentMapID,
             mapName: state.world.maps[state.player.currentMapID]?.name ?? state.player.currentMapID,
+            facing: state.player.facing.rawValue,
             position: state.player.position,
             health: state.player.health,
             maxHealth: state.player.maxHealth,

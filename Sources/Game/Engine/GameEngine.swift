@@ -243,6 +243,7 @@ final class GameEngine {
 
     private func movePlayer(_ direction: Direction) {
         guard let map = state.world.maps[state.player.currentMapID] else { return }
+        state.player.facing = direction
         let target = state.player.position + direction.delta
 
         if let enemyIndex = currentEnemyIndex(at: target) {

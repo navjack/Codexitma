@@ -17,6 +17,7 @@ enum LaunchMode: Equatable {
 enum GraphicsVisualTheme: String, CaseIterable, Equatable {
     case gemstone
     case ultima
+    case depth3D
 
     var displayName: String {
         switch self {
@@ -24,6 +25,8 @@ enum GraphicsVisualTheme: String, CaseIterable, Equatable {
             return "Gemstone"
         case .ultima:
             return "Ultima"
+        case .depth3D:
+            return "Depth 3D"
         }
     }
 
@@ -33,6 +36,8 @@ enum GraphicsVisualTheme: String, CaseIterable, Equatable {
             return "Bright chamber borders, black void framing, and chunkier sprites."
         case .ultima:
             return "Cleaner overworld boards with flatter tiles and a stricter classic field look."
+        case .depth3D:
+            return "A first-person pseudo-3D dungeon view that reads the same live map."
         }
     }
 
@@ -41,6 +46,8 @@ enum GraphicsVisualTheme: String, CaseIterable, Equatable {
         case .gemstone:
             return .ultima
         case .ultima:
+            return .depth3D
+        case .depth3D:
             return .gemstone
         }
     }
@@ -204,7 +211,7 @@ struct GameRootView: View {
     var body: some View {
         ZStack {
             palette.background.ignoresSafeArea()
-            PixelStars(color: session.visualTheme == .gemstone ? palette.accentBlue : palette.accentGreen).ignoresSafeArea()
+            PixelStars(color: starfieldColor).ignoresSafeArea()
             PixelKeyCapture(
                 onCommand: { session.send($0) },
                 onThemeToggle: { session.cycleVisualTheme() }
@@ -565,7 +572,7 @@ struct GameRootView: View {
     private var inputPanel: some View {
         PixelPanel(title: "INPUT", palette: palette) {
             VStack(alignment: .leading, spacing: 5) {
-                Text(session.state.mode == .shop || session.state.mode == .inventory ? "ARROWS/WASD BROWSE" : "ARROWS/WASD MOVE")
+                Text(movementHintLine)
                     .font(.system(size: 10, weight: .regular, design: .monospaced))
                     .foregroundStyle(palette.text)
                 Text(inputPrimaryLine)
@@ -717,6 +724,29 @@ struct GameRootView: View {
             return "\(currentMapName.uppercased()) CHAMBER"
         case .ultima:
             return "\(currentMapName.uppercased()) OVERWORLD"
+        case .depth3D:
+            return "\(currentMapName.uppercased()) DEPTH"
+        }
+    }
+
+    private var movementHintLine: String {
+        if session.state.mode == .shop || session.state.mode == .inventory {
+            return "ARROWS/WASD BROWSE"
+        }
+        if session.visualTheme == .depth3D {
+            return "ARROWS/WASD MOVE + FACE"
+        }
+        return "ARROWS/WASD MOVE"
+    }
+
+    private var starfieldColor: Color {
+        switch session.visualTheme {
+        case .gemstone:
+            return palette.accentBlue
+        case .ultima:
+            return palette.accentGreen
+        case .depth3D:
+            return palette.accentViolet
         }
     }
 
@@ -785,8 +815,14 @@ private struct MapBoardView: View {
     private let cell: CGFloat = 14
 
     var body: some View {
-        let map = state.world.maps[state.player.currentMapID]
-        let theme = regionTheme
+        if visualTheme == .depth3D {
+            firstPersonView(theme: regionTheme)
+        } else {
+            topDownView(map: state.world.maps[state.player.currentMapID], theme: regionTheme)
+        }
+    }
+
+    private func topDownView(map: MapDefinition?, theme: RegionTheme) -> some View {
         let boardPadding = visualTheme == .gemstone ? 4.0 : 2.0
         let boardScale = visualTheme == .gemstone ? 2.0 : 1.84
         let boardWidth = CGFloat(map?.lines.first?.count ?? 0) * cell
@@ -842,6 +878,451 @@ private struct MapBoardView: View {
         )
         .clipped()
         .drawingGroup(opaque: false)
+    }
+
+    private func firstPersonView(theme: RegionTheme) -> some View {
+        GeometryReader { proxy in
+            let slices = corridorSlices()
+            let size = proxy.size
+            ZStack {
+                Rectangle()
+                    .fill(Color.black)
+
+                VStack(spacing: 0) {
+                    Rectangle()
+                        .fill(theme.roomShadow.opacity(0.55))
+                    Rectangle()
+                        .fill(theme.floor.opacity(0.22))
+                }
+
+                if slices.isEmpty {
+                    Rectangle()
+                        .fill(frontWallColor(for: TileFactory.tile(for: "#"), theme: theme))
+                        .frame(width: size.width * 0.28, height: size.height * 0.28)
+                }
+
+                ForEach(Array(slices.reversed()), id: \.depth) { slice in
+                    corridorLayer(for: slice, in: size, theme: theme)
+                }
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("VIEW \(state.player.facing.shortLabel)")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundStyle(palette.lightGold)
+                    Text("FIRST-PERSON")
+                        .font(.system(size: 10, weight: .regular, design: .monospaced))
+                        .foregroundStyle(palette.text.opacity(0.86))
+                    Text("VIEW TURNS WITH LAST STEP")
+                        .font(.system(size: 9, weight: .regular, design: .monospaced))
+                        .foregroundStyle(palette.text.opacity(0.76))
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .padding(12)
+
+                CrosshairView(color: palette.text.opacity(0.65))
+                    .frame(width: 26, height: 26)
+            }
+            .overlay(
+                Rectangle()
+                    .stroke(theme.roomHighlight.opacity(0.65), lineWidth: 2)
+                    .padding(4)
+            )
+            .overlay(
+                Rectangle()
+                    .stroke(theme.roomBorder, lineWidth: 4)
+            )
+            .drawingGroup(opaque: false)
+        }
+        .frame(width: 584, height: 356)
+    }
+
+    private func corridorLayer(for slice: CorridorSlice, in size: CGSize, theme: RegionTheme) -> some View {
+        let near = perspectiveFrame(depth: slice.depth, in: size)
+        let far = perspectiveFrame(depth: slice.depth + 1, in: size)
+
+        return ZStack {
+            quad(
+                near.bottomLeft,
+                near.bottomRight,
+                far.bottomRight,
+                far.bottomLeft
+            )
+            .fill(theme.floor.opacity(0.24 + (Double(slice.depth) * 0.08)))
+
+            quad(
+                near.topLeft,
+                near.topRight,
+                far.topRight,
+                far.topLeft
+            )
+            .fill(Color.white.opacity(0.015 + (Double(slice.depth) * 0.01)))
+
+            if slice.leftBlocked {
+                quad(
+                    near.topLeft,
+                    far.topLeft,
+                    far.bottomLeft,
+                    near.bottomLeft
+                )
+                .fill(sideWallColor(for: slice.leftTile, theme: theme, brightness: 0.90 - (Double(slice.depth) * 0.12)))
+            } else {
+                corridorGuide(from: near.topLeft, to: far.topLeft, intensity: 0.32)
+                corridorGuide(from: near.bottomLeft, to: far.bottomLeft, intensity: 0.22)
+            }
+
+            if slice.rightBlocked {
+                quad(
+                    near.topRight,
+                    far.topRight,
+                    far.bottomRight,
+                    near.bottomRight
+                )
+                .fill(sideWallColor(for: slice.rightTile, theme: theme, brightness: 1.0 - (Double(slice.depth) * 0.12)))
+            } else {
+                corridorGuide(from: near.topRight, to: far.topRight, intensity: 0.32)
+                corridorGuide(from: near.bottomRight, to: far.bottomRight, intensity: 0.22)
+            }
+
+            if slice.frontBlocked {
+                Rectangle()
+                    .fill(frontWallColor(for: slice.frontTile, theme: theme))
+                    .frame(width: far.width, height: far.height)
+                    .position(x: far.center.x, y: far.center.y)
+                    .overlay(
+                        Rectangle()
+                            .stroke(theme.roomHighlight.opacity(0.48), lineWidth: 2)
+                            .frame(width: far.width, height: far.height)
+                            .position(x: far.center.x, y: far.center.y)
+                    )
+            } else {
+                Rectangle()
+                    .stroke(theme.roomHighlight.opacity(0.18), lineWidth: 1)
+                    .frame(width: far.width, height: far.height)
+                    .position(x: far.center.x, y: far.center.y)
+            }
+
+            if let feature = firstPersonFeature(for: slice.feature, theme: theme, in: far) {
+                feature
+            }
+
+            if let sprite = firstPersonOccupant(for: slice.occupant, in: far) {
+                sprite
+            }
+        }
+    }
+
+    private func firstPersonFeature(for feature: MapFeature, theme: RegionTheme, in frame: PerspectiveFrame) -> AnyView? {
+        let color: Color
+        let pattern: [[Int]]
+
+        switch feature {
+        case .none:
+            return nil
+        case .chest:
+            color = palette.lightGold
+            pattern = [
+                [1,1,1],
+                [1,0,1]
+            ]
+        case .bed:
+            color = palette.text
+            pattern = [
+                [1,1,1],
+                [1,0,0]
+            ]
+        case .plateUp:
+            color = palette.accentViolet
+            pattern = [
+                [1,1],
+                [1,1]
+            ]
+        case .plateDown:
+            color = palette.text.opacity(0.65)
+            pattern = [
+                [1,1]
+            ]
+        case .switchIdle:
+            color = palette.accentBlue
+            pattern = [
+                [0,1,0],
+                [1,1,1],
+                [0,1,0]
+            ]
+        case .switchLit:
+            color = palette.lightGold
+            pattern = [
+                [1,1,1],
+                [1,1,1],
+                [1,1,1]
+            ]
+        case .shrine:
+            color = theme.shrine
+            pattern = [
+                [0,1,0],
+                [1,1,1],
+                [0,1,0]
+            ]
+        case .beacon:
+            color = theme.beacon
+            pattern = [
+                [0,1,0],
+                [1,1,1],
+                [1,1,1]
+            ]
+        case .gate:
+            color = theme.doorLocked
+            pattern = [
+                [1,0,1],
+                [1,0,1],
+                [1,1,1]
+            ]
+        }
+
+        let spriteHeight = max(12, frame.height * 0.34)
+        let spriteWidth = max(12, frame.width * 0.18)
+        let view = PixelSprite(color: color, pattern: pattern)
+            .frame(width: spriteWidth, height: spriteHeight)
+            .position(x: frame.center.x, y: frame.bottomLeft.y - (spriteHeight * 0.55))
+        return AnyView(view)
+    }
+
+    private func firstPersonOccupant(for occupant: MapOccupant, in frame: PerspectiveFrame) -> AnyView? {
+        let color: Color
+        let pattern: [[Int]]
+
+        switch occupant {
+        case .none:
+            return nil
+        case .player:
+            color = palette.text
+            pattern = [
+                [0,1,0],
+                [1,1,1],
+                [1,0,1]
+            ]
+        case .npc(let id):
+            color = firstPersonNPCColor(for: id)
+            pattern = firstPersonNPCPattern(for: id)
+        case .enemy(let id):
+            color = firstPersonEnemyColor(for: id)
+            pattern = firstPersonEnemyPattern(for: id)
+        case .boss:
+            color = palette.accentViolet
+            pattern = [
+                [1,0,1],
+                [1,1,1],
+                [1,1,1]
+            ]
+        }
+
+        let spriteHeight = max(18, frame.height * 0.62)
+        let spriteWidth = max(18, frame.width * 0.34)
+        let view = ZStack {
+            PixelSprite(color: Color.black.opacity(0.42), pattern: pattern)
+                .offset(x: spriteWidth * 0.04, y: spriteHeight * 0.04)
+            PixelSprite(color: color, pattern: pattern)
+        }
+        .frame(width: spriteWidth, height: spriteHeight)
+        .position(x: frame.center.x, y: frame.bottomLeft.y - (spriteHeight * 0.38))
+        return AnyView(view)
+    }
+
+    private func corridorGuide(from start: CGPoint, to end: CGPoint, intensity: Double) -> some View {
+        Path { path in
+            path.move(to: start)
+            path.addLine(to: end)
+        }
+        .stroke(palette.text.opacity(intensity), lineWidth: 1)
+    }
+
+    private func perspectiveFrame(depth: Int, in size: CGSize) -> PerspectiveFrame {
+        let factors: [CGFloat] = [0.04, 0.14, 0.26, 0.36, 0.44]
+        let safeDepth = max(0, min(depth, factors.count - 1))
+        let inset = min(size.width, size.height) * factors[safeDepth]
+        let horizontal = inset * 1.22
+        let vertical = inset * 0.82
+        let left = horizontal
+        let right = size.width - horizontal
+        let top = vertical
+        let bottom = size.height - vertical
+        return PerspectiveFrame(
+            topLeft: CGPoint(x: left, y: top),
+            topRight: CGPoint(x: right, y: top),
+            bottomLeft: CGPoint(x: left, y: bottom),
+            bottomRight: CGPoint(x: right, y: bottom)
+        )
+    }
+
+    private func quad(_ a: CGPoint, _ b: CGPoint, _ c: CGPoint, _ d: CGPoint) -> Path {
+        Path { path in
+            path.move(to: a)
+            path.addLine(to: b)
+            path.addLine(to: c)
+            path.addLine(to: d)
+            path.closeSubpath()
+        }
+    }
+
+    private func corridorSlices(maxDepth: Int = 4) -> [CorridorSlice] {
+        var slices: [CorridorSlice] = []
+        guard state.world.maps[state.player.currentMapID] != nil else { return slices }
+
+        for depth in 0..<maxDepth {
+            let frontPosition = advancedPosition(from: state.player.position, direction: state.player.facing, steps: depth + 1)
+            let frontTile = tile(at: frontPosition)
+            let leftTile = tile(at: advancedPosition(from: frontPosition, direction: state.player.facing.leftTurn, steps: 1))
+            let rightTile = tile(at: advancedPosition(from: frontPosition, direction: state.player.facing.rightTurn, steps: 1))
+            let slice = CorridorSlice(
+                depth: depth,
+                frontTile: frontTile,
+                leftTile: leftTile,
+                rightTile: rightTile,
+                leftBlocked: !leftTile.walkable,
+                rightBlocked: !rightTile.walkable,
+                frontBlocked: !frontTile.walkable,
+                occupant: occupant(at: frontPosition),
+                feature: feature(at: frontPosition)
+            )
+            slices.append(slice)
+            if slice.frontBlocked {
+                break
+            }
+        }
+
+        return slices
+    }
+
+    private func advancedPosition(from start: Position, direction: Direction, steps: Int) -> Position {
+        Position(
+            x: start.x + (direction.delta.x * steps),
+            y: start.y + (direction.delta.y * steps)
+        )
+    }
+
+    private func tile(at position: Position) -> Tile {
+        guard let map = state.world.maps[state.player.currentMapID],
+              position.y >= 0,
+              position.y < map.lines.count,
+              position.x >= 0,
+              position.x < map.lines[position.y].count else {
+            return TileFactory.tile(for: "#")
+        }
+
+        let raw = Array(map.lines[position.y])[position.x]
+        return TileFactory.tile(for: resolved(raw))
+    }
+
+    private func sideWallColor(for tile: Tile, theme: RegionTheme, brightness: Double) -> Color {
+        frontWallColor(for: tile, theme: theme).opacity(max(0.28, brightness))
+    }
+
+    private func frontWallColor(for tile: Tile, theme: RegionTheme) -> Color {
+        switch tile.type {
+        case .floor:
+            return theme.floor
+        case .wall:
+            return theme.wall
+        case .water:
+            return theme.water
+        case .brush:
+            return theme.brush
+        case .doorLocked:
+            return theme.doorLocked
+        case .doorOpen:
+            return theme.doorOpen
+        case .shrine:
+            return theme.shrine
+        case .stairs:
+            return theme.stairs
+        case .beacon:
+            return theme.beacon
+        }
+    }
+
+    private func firstPersonNPCPattern(for id: String) -> [[Int]] {
+        switch id {
+        case "elder":
+            return [
+                [0,1,0],
+                [1,1,1],
+                [1,0,1]
+            ]
+        case "field_scout":
+            return [
+                [1,0,1],
+                [0,1,0],
+                [0,1,0]
+            ]
+        case "orchard_guide":
+            return [
+                [0,1,0],
+                [1,1,0],
+                [0,1,1]
+            ]
+        default:
+            return [
+                [0,1,0],
+                [1,1,1],
+                [0,1,0]
+            ]
+        }
+    }
+
+    private func firstPersonNPCColor(for id: String) -> Color {
+        switch id {
+        case "elder":
+            return palette.accentBlue
+        case "field_scout":
+            return palette.text
+        case "orchard_guide":
+            return palette.accentGreen
+        case "barrow_scholar":
+            return palette.accentViolet
+        default:
+            return palette.lightGold
+        }
+    }
+
+    private func firstPersonEnemyPattern(for id: String) -> [[Int]] {
+        if id.hasPrefix("crow") {
+            return [
+                [1,0,1],
+                [1,1,1],
+                [0,1,0]
+            ]
+        }
+        if id.hasPrefix("hound") {
+            return [
+                [1,1,0],
+                [1,1,1],
+                [0,1,1]
+            ]
+        }
+        if id.hasPrefix("wraith") {
+            return [
+                [0,1,0],
+                [1,1,1],
+                [1,1,1]
+            ]
+        }
+        return [
+            [1,1,1],
+            [1,0,1],
+            [1,1,1]
+        ]
+    }
+
+    private func firstPersonEnemyColor(for id: String) -> Color {
+        if id.hasPrefix("crow") {
+            return palette.titleGold
+        }
+        if id.hasPrefix("hound") {
+            return palette.accentGreen
+        }
+        if id.hasPrefix("wraith") {
+            return palette.accentViolet
+        }
+        return palette.titleGold
     }
 
     private func resolved(_ raw: Character) -> Character {
@@ -1027,6 +1508,56 @@ private enum MapFeature {
     case shrine
     case beacon
     case gate
+}
+
+private struct CorridorSlice {
+    let depth: Int
+    let frontTile: Tile
+    let leftTile: Tile
+    let rightTile: Tile
+    let leftBlocked: Bool
+    let rightBlocked: Bool
+    let frontBlocked: Bool
+    let occupant: MapOccupant
+    let feature: MapFeature
+}
+
+private struct PerspectiveFrame {
+    let topLeft: CGPoint
+    let topRight: CGPoint
+    let bottomLeft: CGPoint
+    let bottomRight: CGPoint
+
+    var width: CGFloat {
+        topRight.x - topLeft.x
+    }
+
+    var height: CGFloat {
+        bottomLeft.y - topLeft.y
+    }
+
+    var center: CGPoint {
+        CGPoint(x: (topLeft.x + topRight.x) / 2, y: (topLeft.y + bottomLeft.y) / 2)
+    }
+}
+
+private struct CrosshairView: View {
+    let color: Color
+
+    var body: some View {
+        GeometryReader { proxy in
+            let midX = proxy.size.width / 2
+            let midY = proxy.size.height / 2
+
+            Path { path in
+                path.move(to: CGPoint(x: midX - 8, y: midY))
+                path.addLine(to: CGPoint(x: midX + 8, y: midY))
+                path.move(to: CGPoint(x: midX, y: midY - 8))
+                path.addLine(to: CGPoint(x: midX, y: midY + 8))
+            }
+            .stroke(color, lineWidth: 1.5)
+        }
+    }
 }
 
 private struct LowResTileView: View {

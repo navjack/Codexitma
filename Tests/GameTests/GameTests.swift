@@ -102,7 +102,8 @@ import Testing
 
 @Test func graphicsVisualThemeCyclesBetweenModes() async throws {
     #expect(GraphicsVisualTheme.gemstone.next() == .ultima)
-    #expect(GraphicsVisualTheme.ultima.next() == .gemstone)
+    #expect(GraphicsVisualTheme.ultima.next() == .depth3D)
+    #expect(GraphicsVisualTheme.depth3D.next() == .gemstone)
 }
 
 @Test func graphicsThemePreferenceRoundTrips() async throws {
@@ -114,8 +115,20 @@ import Testing
 
     let store = GraphicsPreferenceStore(defaults: defaults)
     #expect(store.loadTheme() == .gemstone)
-    store.saveTheme(.ultima)
-    #expect(store.loadTheme() == .ultima)
+    store.saveTheme(.depth3D)
+    #expect(store.loadTheme() == .depth3D)
+}
+
+@Test func movementUpdatesPlayerFacing() async throws {
+    let library = try ContentLoader().load()
+    let saveURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString).appendingPathExtension("json")
+    let engine = GameEngine(library: library, saveRepository: SaveRepository(fileURL: saveURL))
+
+    engine.handle(.newGame)
+    engine.handle(.confirm)
+    engine.handle(.move(.left))
+
+    #expect(engine.state.player.facing == .left)
 }
 
 @Test func contentLoaderLoadsAdventureLibrary() async throws {
