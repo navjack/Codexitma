@@ -74,8 +74,7 @@ enum SDLGraphicsLauncher {
                     }
                     if handleEditorKey(
                         key: event.key.key,
-                        editorSession: &editorSession,
-                        gameSession: session
+                        editorSession: &editorSession
                     ) {
                         running = false
                     }
@@ -153,8 +152,7 @@ enum SDLGraphicsLauncher {
 
     private static func handleEditorKey(
         key: SDL_Keycode,
-        editorSession: inout AdventureEditorSession?,
-        gameSession: SharedGameSession
+        editorSession: inout AdventureEditorSession?
     ) -> Bool {
         guard let activeEditor = editorSession else {
             return false
@@ -187,11 +185,8 @@ enum SDLGraphicsLauncher {
             activeEditor.store.saveCurrentPack()
         case SDLK_N:
             activeEditor.createBlankAdventure()
-        case SDLK_Q, SDLK_ESCAPE, SDLK_M:
+        case SDLK_Q, SDLK_ESCAPE, SDLK_M, SDLK_X:
             editorSession = nil
-        case SDLK_X:
-            gameSession.send(.quit)
-            return gameSession.state.shouldQuit
         default:
             break
         }
@@ -309,26 +304,51 @@ enum SDLGraphicsLauncher {
     private static func renderAdventureEditor(_ editorSession: AdventureEditorSession, with renderer: OpaquePointer) {
         let editor = editorSession.sceneSnapshot
         let viewport = currentViewport(for: renderer)
-        fill(renderer, x: 0, y: 0, width: viewport.width, height: viewport.height, color: .background)
+        fill(renderer, x: 0, y: 0, width: viewport.width, height: viewport.height, color: .editorBackdrop)
 
         let boardFrame = viewport.boardFrame
         let panelFrame = viewport.panelFrame
         let theme = editorBoardTheme()
+        let bannerHeight = max(26, min(40, viewport.contentFrame.height / 8))
+
+        fill(
+            renderer,
+            x: viewport.contentFrame.x,
+            y: viewport.contentFrame.y,
+            width: viewport.contentFrame.width,
+            height: bannerHeight,
+            color: .editorPanel
+        )
+        stroke(
+            renderer,
+            frame: SDLRect(
+                x: viewport.contentFrame.x,
+                y: viewport.contentFrame.y,
+                width: viewport.contentFrame.width,
+                height: bannerHeight
+            ),
+            color: .editorAccent
+        )
 
         fill(renderer, x: boardFrame.x, y: boardFrame.y, width: boardFrame.width, height: boardFrame.height, color: theme.frameBackground)
+        if viewport.stacked == false {
+            fill(renderer, x: boardFrame.x + 6, y: boardFrame.y + 6, width: boardFrame.width, height: boardFrame.height, color: .shadow)
+        }
         stroke(renderer, frame: boardFrame, color: theme.outerBorder)
         let contentFrame = boardFrame.insetBy(dx: theme.contentInset, dy: theme.contentInset)
         fill(renderer, x: contentFrame.x, y: contentFrame.y, width: contentFrame.width, height: contentFrame.height, color: theme.boardBackground)
 
         renderEditorBoard(editor, session: editorSession, frame: boardFrame, theme: theme, with: renderer)
 
-        fill(renderer, x: panelFrame.x, y: panelFrame.y, width: panelFrame.width, height: panelFrame.height, color: .panel)
-        stroke(renderer, frame: panelFrame, color: .gold)
+        fill(renderer, x: panelFrame.x, y: panelFrame.y, width: panelFrame.width, height: panelFrame.height, color: .editorPanel)
+        stroke(renderer, frame: panelFrame, color: .editorAccent)
 
         renderEditorSidebar(editor, frame: panelFrame, with: renderer)
-        drawText("ADVENTURE EDITOR", x: viewport.headerFrame.x + 4, y: viewport.headerFrame.y, color: .gold, renderer: renderer)
-        drawText(editor.title.uppercased(), x: viewport.headerFrame.x + min(220, max(120, viewport.headerFrame.width / 3)), y: viewport.headerFrame.y, color: .bright, renderer: renderer)
-        drawText(editor.currentMapID.uppercased(), x: viewport.headerFrame.x + min(430, max(250, (viewport.headerFrame.width * 2) / 3)), y: viewport.headerFrame.y, color: .dim, renderer: renderer)
+        drawText("EDITOR MODE", x: viewport.headerFrame.x + 4, y: viewport.headerFrame.y, color: .editorAccent, renderer: renderer)
+        drawText("GAME VIEW PAUSED", x: viewport.headerFrame.x + 120, y: viewport.headerFrame.y, color: .bright, renderer: renderer)
+        drawText(editor.title.uppercased(), x: viewport.contentFrame.x + 10, y: viewport.contentFrame.y + 8, color: .bright, renderer: renderer)
+        drawText(editor.currentMapName.uppercased(), x: viewport.contentFrame.x + min(260, max(120, viewport.contentFrame.width / 3)), y: viewport.contentFrame.y + 8, color: .editorAccent, renderer: renderer)
+        drawText("MAP \(editor.currentMapID.uppercased())", x: viewport.contentFrame.x + min(470, max(240, (viewport.contentFrame.width * 2) / 3)), y: viewport.contentFrame.y + 8, color: .dim, renderer: renderer)
     }
 
     private static func renderTitleScreen(_ scene: GraphicsSceneSnapshot, viewport: SDLViewport, with renderer: OpaquePointer) {
@@ -690,14 +710,14 @@ enum SDLGraphicsLauncher {
             y += lineHeight
         }
 
-        drawText("STATUS", x: frame.x + 10, y: y, color: .gold, renderer: renderer)
+        drawText("STATUS", x: frame.x + 10, y: y, color: .editorAccent, renderer: renderer)
         y += lineHeight
         y = drawWrappedText(editor.statusLine.uppercased(), x: frame.x + 10, y: y, width: 30, color: .bright, renderer: renderer)
 
         drawText("WASD MOVE  E APPLY", x: frame.x + 10, y: frame.y + frame.height - 56, color: .bright, renderer: renderer)
         drawText("R/F TOOL  C TAB", x: frame.x + 10, y: frame.y + frame.height - 42, color: .bright, renderer: renderer)
         drawText("Z/V MAP  K SAVE  P CHECK", x: frame.x + 10, y: frame.y + frame.height - 28, color: .bright, renderer: renderer)
-        drawText("N NEW  Q EXIT  X QUIT", x: frame.x + 10, y: frame.y + frame.height - 14, color: .bright, renderer: renderer)
+        drawText("N NEW  Q/M/X RETURN", x: frame.x + 10, y: frame.y + frame.height - 14, color: .editorAccent, renderer: renderer)
     }
 
     private static func renderBoard(_ scene: GraphicsSceneSnapshot, frame: SDLRect, with renderer: OpaquePointer) {
@@ -1392,22 +1412,22 @@ enum SDLGraphicsLauncher {
 
     private static func editorBoardTheme() -> SDLBoardTheme {
         SDLBoardTheme(
-            frameBackground: .void,
-            boardBackground: .void,
-            outerBorder: .gold,
+            frameBackground: .editorPanel,
+            boardBackground: .editorBoard,
+            outerBorder: .editorAccent,
             innerBorder: .bright.withAlpha(120),
-            grid: .grid,
+            grid: .editorGrid,
             innerInset: 4,
             contentInset: 8,
-            floor: floorBaseColor(for: .brick, variant: .gemstone),
-            wall: .wall,
-            water: .water,
-            brush: .brush,
-            doorLocked: .doorLocked,
-            doorOpen: .doorOpen,
-            shrine: .shrine,
-            stairs: .stairs,
-            beacon: .beacon
+            floor: .editorFloor,
+            wall: SDLColor(r: 92, g: 108, b: 136, a: 255),
+            water: SDLColor(r: 36, g: 112, b: 168, a: 255),
+            brush: SDLColor(r: 54, g: 146, b: 78, a: 255),
+            doorLocked: SDLColor(r: 198, g: 126, b: 54, a: 255),
+            doorOpen: SDLColor(r: 230, g: 200, b: 104, a: 255),
+            shrine: SDLColor(r: 168, g: 96, b: 214, a: 255),
+            stairs: SDLColor(r: 152, g: 118, b: 84, a: 255),
+            beacon: SDLColor(r: 118, g: 220, b: 228, a: 255)
         )
     }
 
@@ -1651,6 +1671,12 @@ private struct SDLColor {
     static let grid = SDLColor(r: 12, g: 12, b: 12, a: 255)
     static let shadow = SDLColor(r: 0, g: 0, b: 0, a: 120)
     static let overlay = SDLColor(r: 0, g: 0, b: 0, a: 188)
+    static let editorBackdrop = SDLColor(r: 8, g: 18, b: 30, a: 255)
+    static let editorPanel = SDLColor(r: 12, g: 28, b: 40, a: 255)
+    static let editorBoard = SDLColor(r: 10, g: 22, b: 30, a: 255)
+    static let editorFloor = SDLColor(r: 26, g: 54, b: 64, a: 255)
+    static let editorGrid = SDLColor(r: 18, g: 60, b: 76, a: 255)
+    static let editorAccent = SDLColor(r: 98, g: 228, b: 230, a: 255)
 
     func withAlpha(_ alpha: UInt8) -> SDLColor {
         SDLColor(r: r, g: g, b: b, a: alpha)

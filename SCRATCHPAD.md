@@ -62,6 +62,7 @@
 - Added a shared-session regression test for editor targeting so the SDL/editor integration keeps using the selected adventure on title screens and the active adventure during a live run.
 - Added a backend-neutral `AdventureEditorSession` snapshot layer and moved editor canvas overlay colors out of `AdventureEditorStore`, so the editor state is less tied to SwiftUI and easier to drive from an eventual SDL-native editor.
 - Replaced the SDL branch's editor fallback with a first SDL-native in-window editor shell: the `M` prompt now opens an SDL editor mode with cursor movement, tool application, validation, saving, map cycling, and return-to-game flow.
+- Tightened the SDL editor UX after live testing: the editor now has clearly distinct blue/cyan chrome instead of blending into the gameplay HUD, and `X` exits editor mode back to the game instead of quitting the application.
 
 ## Current Notes
 
