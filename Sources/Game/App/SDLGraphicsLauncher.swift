@@ -1,8 +1,5 @@
 import CSDL3
 import Foundation
-#if os(macOS)
-import AppKit
-#endif
 
 enum GraphicsBackendError: Error, CustomStringConvertible {
     case sdlInitializationFailed(String)
@@ -64,6 +61,7 @@ enum SDLGraphicsLauncher {
         )
         var running = true
         var showingEditorPrompt = false
+        var editorSession: AdventureEditorSession?
 
         while running {
             var event = SDL_Event()
@@ -74,12 +72,23 @@ enum SDLGraphicsLauncher {
                     if event.key.repeat {
                         continue
                     }
+                    if handleEditorKey(
+                        key: event.key.key,
+                        editorSession: &editorSession,
+                        gameSession: session
+                    ) {
+                        running = false
+                    }
+                    if editorSession != nil {
+                        continue
+                    }
                     if showingEditorPrompt {
                         if handleEditorPromptKey(
                             key: event.key.key,
                             showingEditorPrompt: &showingEditorPrompt,
                             library: library,
-                            session: session
+                            session: session,
+                            editorSession: &editorSession
                         ) {
                             running = false
                         }
@@ -99,12 +108,16 @@ enum SDLGraphicsLauncher {
                 running = false
             }
 
-            let scene = session.sceneSnapshot
-            renderScene(
-                scene,
-                editorPromptLines: showingEditorPrompt ? session.editorConfirmationLines() : nil,
-                with: renderer
-            )
+            if let editorSession {
+                renderAdventureEditor(editorSession, with: renderer)
+            } else {
+                let scene = session.sceneSnapshot
+                renderScene(
+                    scene,
+                    editorPromptLines: showingEditorPrompt ? session.editorConfirmationLines() : nil,
+                    with: renderer
+                )
+            }
             _ = SDL_RenderPresent(renderer)
             SDL_Delay(16)
         }
@@ -138,16 +151,68 @@ enum SDLGraphicsLauncher {
         return session.state.shouldQuit
     }
 
+    private static func handleEditorKey(
+        key: SDL_Keycode,
+        editorSession: inout AdventureEditorSession?,
+        gameSession: SharedGameSession
+    ) -> Bool {
+        guard let activeEditor = editorSession else {
+            return false
+        }
+
+        switch key {
+        case SDLK_UP, SDLK_W:
+            activeEditor.moveCursor(.up)
+        case SDLK_DOWN, SDLK_S:
+            activeEditor.moveCursor(.down)
+        case SDLK_LEFT, SDLK_A:
+            activeEditor.moveCursor(.left)
+        case SDLK_RIGHT, SDLK_D:
+            activeEditor.moveCursor(.right)
+        case SDLK_E, SDLK_RETURN, SDLK_SPACE:
+            activeEditor.applyCurrentTool()
+        case SDLK_R:
+            activeEditor.cycleTool()
+        case SDLK_F:
+            activeEditor.cycleTool(step: -1)
+        case SDLK_C:
+            activeEditor.cycleContentTab()
+        case SDLK_Z:
+            activeEditor.cycleMap(step: -1)
+        case SDLK_V:
+            activeEditor.cycleMap(step: 1)
+        case SDLK_P:
+            _ = activeEditor.store.validateCurrentPack()
+        case SDLK_K:
+            activeEditor.store.saveCurrentPack()
+        case SDLK_N:
+            activeEditor.createBlankAdventure()
+        case SDLK_Q, SDLK_ESCAPE, SDLK_M:
+            editorSession = nil
+        case SDLK_X:
+            gameSession.send(.quit)
+            return gameSession.state.shouldQuit
+        default:
+            break
+        }
+
+        return false
+    }
+
     private static func handleEditorPromptKey(
         key: SDL_Keycode,
         showingEditorPrompt: inout Bool,
         library: GameContentLibrary,
-        session: SharedGameSession
+        session: SharedGameSession,
+        editorSession: inout AdventureEditorSession?
     ) -> Bool {
         switch key {
         case SDLK_E, SDLK_RETURN, SDLK_SPACE:
             showingEditorPrompt = false
-            presentEditor(library: library, adventureID: session.editorTargetAdventureID())
+            editorSession = AdventureEditorSession(
+                library: library,
+                initialAdventureID: session.editorTargetAdventureID()
+            )
             return false
         case SDLK_Q, SDLK_ESCAPE, SDLK_M:
             showingEditorPrompt = false
@@ -239,6 +304,31 @@ enum SDLGraphicsLauncher {
         if let editorPromptLines {
             renderEditorPrompt(lines: editorPromptLines, viewport: viewport, with: renderer)
         }
+    }
+
+    private static func renderAdventureEditor(_ editorSession: AdventureEditorSession, with renderer: OpaquePointer) {
+        let editor = editorSession.sceneSnapshot
+        let viewport = currentViewport(for: renderer)
+        fill(renderer, x: 0, y: 0, width: viewport.width, height: viewport.height, color: .background)
+
+        let boardFrame = viewport.boardFrame
+        let panelFrame = viewport.panelFrame
+        let theme = editorBoardTheme()
+
+        fill(renderer, x: boardFrame.x, y: boardFrame.y, width: boardFrame.width, height: boardFrame.height, color: theme.frameBackground)
+        stroke(renderer, frame: boardFrame, color: theme.outerBorder)
+        let contentFrame = boardFrame.insetBy(dx: theme.contentInset, dy: theme.contentInset)
+        fill(renderer, x: contentFrame.x, y: contentFrame.y, width: contentFrame.width, height: contentFrame.height, color: theme.boardBackground)
+
+        renderEditorBoard(editor, session: editorSession, frame: boardFrame, theme: theme, with: renderer)
+
+        fill(renderer, x: panelFrame.x, y: panelFrame.y, width: panelFrame.width, height: panelFrame.height, color: .panel)
+        stroke(renderer, frame: panelFrame, color: .gold)
+
+        renderEditorSidebar(editor, frame: panelFrame, with: renderer)
+        drawText("ADVENTURE EDITOR", x: viewport.headerFrame.x + 4, y: viewport.headerFrame.y, color: .gold, renderer: renderer)
+        drawText(editor.title.uppercased(), x: viewport.headerFrame.x + min(220, max(120, viewport.headerFrame.width / 3)), y: viewport.headerFrame.y, color: .bright, renderer: renderer)
+        drawText(editor.currentMapID.uppercased(), x: viewport.headerFrame.x + min(430, max(250, (viewport.headerFrame.width * 2) / 3)), y: viewport.headerFrame.y, color: .dim, renderer: renderer)
     }
 
     private static func renderTitleScreen(_ scene: GraphicsSceneSnapshot, viewport: SDLViewport, with renderer: OpaquePointer) {
@@ -489,6 +579,127 @@ enum SDLGraphicsLauncher {
         drawText("E OPEN  Q STAY", x: panel.x + 16, y: y, color: .bright, renderer: renderer)
     }
 
+    private static func renderEditorBoard(
+        _ editor: AdventureEditorSceneSnapshot,
+        session: AdventureEditorSession,
+        frame: SDLRect,
+        theme: SDLBoardTheme,
+        with renderer: OpaquePointer
+    ) {
+        guard editor.mapLines.isEmpty == false else { return }
+        let height = editor.mapLines.count
+        let width = editor.mapLines.first?.count ?? 0
+        guard width > 0 else { return }
+
+        let contentFrame = frame.insetBy(dx: theme.contentInset, dy: theme.contentInset)
+        let cellWidth = max(8, min(contentFrame.width / width, contentFrame.height / height))
+        let drawWidth = width * cellWidth
+        let drawHeight = height * cellWidth
+        let originX = contentFrame.x + ((contentFrame.width - drawWidth) / 2)
+        let originY = contentFrame.y + ((contentFrame.height - drawHeight) / 2)
+
+        for (rowIndex, line) in editor.mapLines.enumerated() {
+            for (columnIndex, glyph) in Array(line).enumerated() {
+                let x = originX + (columnIndex * cellWidth)
+                let y = originY + (rowIndex * cellWidth)
+                let tile = TileFactory.tile(for: glyph)
+                fill(renderer, x: x, y: y, width: cellWidth, height: cellWidth, color: tileColor(for: tile.type, theme: theme))
+                if cellWidth >= 10 {
+                    stroke(renderer, frame: SDLRect(x: x, y: y, width: cellWidth, height: cellWidth), color: theme.grid)
+                }
+            }
+        }
+        for rowIndex in 0..<height {
+            let line = Array(editor.mapLines[rowIndex])
+            for columnIndex in 0..<min(width, line.count) {
+                let position = Position(x: columnIndex, y: rowIndex)
+                if let overlay = session.store.overlay(atX: position.x, y: position.y) {
+                    let x = originX + (columnIndex * cellWidth)
+                    let y = originY + (rowIndex * cellWidth)
+                    let inset = max(1, cellWidth / 6)
+                    fill(
+                        renderer,
+                        x: x + inset,
+                        y: y + inset,
+                        width: max(2, cellWidth - (inset * 2)),
+                        height: max(2, cellWidth - (inset * 2)),
+                        color: editorOverlayColor(for: overlay.style)
+                    )
+                    if let glyph = overlay.glyph.first {
+                        drawGlyph(
+                            glyph,
+                            x: x + max(1, (cellWidth / 2) - 2),
+                            y: y + max(1, (cellWidth / 2) - 3),
+                            color: editorOverlayTextColor(for: overlay.style),
+                            scale: max(1, min(2, cellWidth / 8)),
+                            renderer: renderer
+                        )
+                    }
+                }
+            }
+        }
+
+        let cursorX = originX + (editor.cursor.x * cellWidth)
+        let cursorY = originY + (editor.cursor.y * cellWidth)
+        stroke(renderer, frame: SDLRect(x: cursorX, y: cursorY, width: cellWidth, height: cellWidth), color: .bright)
+        let inner = SDLRect(
+            x: cursorX + 2,
+            y: cursorY + 2,
+            width: max(2, cellWidth - 4),
+            height: max(2, cellWidth - 4)
+        )
+        stroke(renderer, frame: inner, color: .gold)
+    }
+
+    private static func renderEditorSidebar(
+        _ editor: AdventureEditorSceneSnapshot,
+        frame: SDLRect,
+        with renderer: OpaquePointer
+    ) {
+        var y = frame.y + 10
+        let lineHeight = 12
+
+        drawText("PACK \(editor.folderName.uppercased())", x: frame.x + 10, y: y, color: .gold, renderer: renderer)
+        y += lineHeight
+        drawText("MAP \(editor.currentMapName.uppercased())", x: frame.x + 10, y: y, color: .bright, renderer: renderer)
+        y += lineHeight
+        drawText("CURSOR \(editor.cursor.x),\(editor.cursor.y)", x: frame.x + 10, y: y, color: .bright, renderer: renderer)
+        y += lineHeight
+        drawText("TOOL \(editor.selectedTool.shortLabel)", x: frame.x + 10, y: y, color: .bright, renderer: renderer)
+        y += lineHeight
+        drawText("TAB \(editor.selectedContentTab.shortLabel)", x: frame.x + 10, y: y, color: .bright, renderer: renderer)
+        y += lineHeight
+        drawText("GLYPH \(String(editor.selectedGlyph))", x: frame.x + 10, y: y, color: .bright, renderer: renderer)
+        y += lineHeight * 2
+
+        drawText("SELECTION", x: frame.x + 10, y: y, color: .gold, renderer: renderer)
+        y += lineHeight
+        for line in editor.selectionSummaryLines.prefix(4) {
+            drawText(line.uppercased(), x: frame.x + 10, y: y, color: .bright, renderer: renderer)
+            y += lineHeight
+        }
+        y += lineHeight
+
+        if editor.validationMessages.isEmpty == false {
+            drawText("VALIDATION", x: frame.x + 10, y: y, color: .gold, renderer: renderer)
+            y += lineHeight
+            for line in editor.validationMessages.prefix(4) {
+                y = drawWrappedText(line.uppercased(), x: frame.x + 10, y: y, width: 30, color: .dim, renderer: renderer)
+                y += 2
+            }
+            y += lineHeight
+        }
+
+        drawText("STATUS", x: frame.x + 10, y: y, color: .gold, renderer: renderer)
+        y += lineHeight
+        y = drawWrappedText(editor.statusLine.uppercased(), x: frame.x + 10, y: y, width: 30, color: .bright, renderer: renderer)
+
+        drawText("WASD MOVE  E APPLY", x: frame.x + 10, y: frame.y + frame.height - 56, color: .bright, renderer: renderer)
+        drawText("R/F TOOL  C TAB", x: frame.x + 10, y: frame.y + frame.height - 42, color: .bright, renderer: renderer)
+        drawText("Z/V MAP  K SAVE  P CHECK", x: frame.x + 10, y: frame.y + frame.height - 28, color: .bright, renderer: renderer)
+        drawText("N NEW  Q EXIT  X QUIT", x: frame.x + 10, y: frame.y + frame.height - 14, color: .bright, renderer: renderer)
+    }
+
     private static func renderBoard(_ scene: GraphicsSceneSnapshot, frame: SDLRect, with renderer: OpaquePointer) {
         let board = scene.board
         let theme = boardTheme(for: scene)
@@ -668,6 +879,74 @@ enum SDLGraphicsLauncher {
         case .npc: return .blue
         case .enemy: return .green
         case .boss: return .violet
+        }
+    }
+
+    private static func color(for ansi: ANSIColor) -> SDLColor {
+        switch ansi {
+        case .black:
+            return .void
+        case .red:
+            return SDLColor(r: 220, g: 56, b: 40, a: 255)
+        case .green:
+            return .green
+        case .yellow:
+            return .gold
+        case .blue:
+            return .blue
+        case .magenta:
+            return .violet
+        case .cyan:
+            return SDLColor(r: 52, g: 196, b: 214, a: 255)
+        case .white:
+            return .bright
+        case .brightBlack:
+            return .dim
+        case .reset:
+            return .bright
+        }
+    }
+
+    private static func color(for kind: InteractableKind) -> SDLColor {
+        switch kind {
+        case .npc:
+            return .gold
+        case .shrine:
+            return .violet
+        case .chest:
+            return .doorLocked
+        case .bed:
+            return .wallShade
+        case .gate:
+            return .doorLocked
+        case .beacon:
+            return .beacon
+        case .plate:
+            return .bright
+        case .switchRune:
+            return .blue
+        }
+    }
+
+    private static func editorOverlayColor(for style: EditorCanvasOverlayStyle) -> SDLColor {
+        switch style {
+        case .ansi(let ansi):
+            return color(for: ansi)
+        case .interactable(let kind):
+            return color(for: kind)
+        case .portal:
+            return .gold
+        case .spawn:
+            return .bright
+        }
+    }
+
+    private static func editorOverlayTextColor(for style: EditorCanvasOverlayStyle) -> SDLColor {
+        switch style {
+        case .ansi(.black), .ansi(.blue), .ansi(.magenta), .ansi(.brightBlack):
+            return .bright
+        case .ansi, .interactable, .portal, .spawn:
+            return .background
         }
     }
 
@@ -1111,6 +1390,27 @@ enum SDLGraphicsLauncher {
         }
     }
 
+    private static func editorBoardTheme() -> SDLBoardTheme {
+        SDLBoardTheme(
+            frameBackground: .void,
+            boardBackground: .void,
+            outerBorder: .gold,
+            innerBorder: .bright.withAlpha(120),
+            grid: .grid,
+            innerInset: 4,
+            contentInset: 8,
+            floor: floorBaseColor(for: .brick, variant: .gemstone),
+            wall: .wall,
+            water: .water,
+            brush: .brush,
+            doorLocked: .doorLocked,
+            doorOpen: .doorOpen,
+            shrine: .shrine,
+            stairs: .stairs,
+            beacon: .beacon
+        )
+    }
+
     private static func boardTheme(for scene: GraphicsSceneSnapshot) -> SDLBoardTheme {
         let pattern = floorPattern(for: scene.currentMapID)
         switch scene.visualTheme {
@@ -1251,18 +1551,6 @@ enum SDLGraphicsLauncher {
             panelFrame: SDLRect(x: margin, y: panelY, width: contentWidth, height: panelHeight),
             stacked: true
         )
-    }
-
-    private static func presentEditor(library: GameContentLibrary, adventureID: AdventureID) {
-#if os(macOS)
-        let app = NSApplication.shared
-        app.setActivationPolicy(.regular)
-        AdventureEditorLauncher.present(library: library, initialAdventureID: adventureID)
-        app.activate(ignoringOtherApps: true)
-#else
-        _ = library
-        _ = adventureID
-#endif
     }
 
     private static func sdlError() -> String {

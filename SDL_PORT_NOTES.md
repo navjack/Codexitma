@@ -38,10 +38,10 @@ The `--sdl` flag is now a working launch path:
 - it now uses a real built-in low-resolution bitmap text pass instead of SDL debug text
 - it now renders patterned top-down sprites and patterned depth billboards instead of only flat solid rectangles
 - it now lays itself out from the live SDL render size instead of assuming the initial window size forever
-- on macOS, it now exposes the built-in adventure editor from the SDL frontend as well, using the same `M` confirmation flow as the native frontend
+- it now opens a first SDL-native in-window editor shell from the same `M` confirmation flow, so map editing, tool application, validation, and pack saves no longer depend on AppKit
 - the editor now has a backend-neutral `AdventureEditorSession` seam and renderer-neutral canvas overlay data, so the eventual SDL-native editor path no longer depends on SwiftUI colors inside editor state
 
-This is still an early renderer, not feature parity. It is enough to prove the cross-platform direction and to keep iterating on a real SDL path instead of a stub.
+This is still an early renderer, not feature parity. The SDL editor shell is a functional first cut for map/cursor/tool workflow, not yet a full replacement for the richer native SwiftUI editor panels.
 
 ## Immediate Next Steps
 
