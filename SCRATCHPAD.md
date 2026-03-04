@@ -46,6 +46,7 @@
 - Started `codex/refactor-modules` and split the largest monolithic source files into smaller, logical Swift files: model types, graphics runtime, map renderer support, editor runtime/store/content/style, and the test suite now live in separate modules instead of a few giant files.
 - Completed the second `codex/refactor-modules` pass: `GameEngine` is now split by behavior domain, `AdventureEditorStore` is split into document/canvas/content/helper extensions, and the editor chrome panels were extracted into dedicated SwiftUI subviews to reduce root-view context size.
 - Fixed the in-game editor launch overlay so it renders as a true overlay instead of expanding the game window, and made the spawned editor window explicitly order to the front when opened from a live session.
+- Fixed the editor window close path again: the controller now keeps the editor window alive through `windowWillClose` and only releases its strong references on the next main-queue turn, avoiding a crash when the user closes the editor window mid-session.
 
 ## Current Notes
 

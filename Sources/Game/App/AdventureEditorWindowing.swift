@@ -42,7 +42,7 @@ private final class AdventureEditorWindowController: NSObject, NSWindowDelegate 
     private let store: AdventureEditorStore
     private let onClose: (AdventureEditorWindowController) -> Void
     private var window: NSWindow?
-    private var hasScheduledClose = false
+    private var hasCompletedClose = false
 
     init(
         library: GameContentLibrary,
@@ -66,13 +66,19 @@ private final class AdventureEditorWindowController: NSObject, NSWindowDelegate 
     }
 
     func windowWillClose(_ notification: Notification) {
-        guard hasScheduledClose == false else {
+        guard hasCompletedClose == false else {
             return
         }
-        hasScheduledClose = true
-        window?.delegate = nil
-        window = nil
+        hasCompletedClose = true
+        let closingWindow = window
         DispatchQueue.main.async { [self] in
+            closingWindow?.delegate = nil
+            closingWindow?.contentView = nil
+            if window === closingWindow {
+                window = nil
+            } else {
+                window = nil
+            }
             onClose(self)
         }
     }
@@ -86,6 +92,7 @@ private final class AdventureEditorWindowController: NSObject, NSWindowDelegate 
         )
         window.title = "Codexitma Adventure Editor"
         window.backgroundColor = .black
+        window.isReleasedWhenClosed = false
         window.contentMinSize = NSSize(width: 1024, height: 680)
         window.delegate = self
         window.center()
