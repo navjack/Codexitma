@@ -203,9 +203,11 @@ This includes:
 
 External adventure packs are loaded from:
 
-```text
-~/Library/Application Support/Codexitma/Adventures
-```
+- macOS:
+  - `~/Library/Application Support/Codexitma/Adventures`
+- Windows (portable default):
+  - `<folder next to Codexitma.exe>/CodexitmaData/Adventures`
+  - if that folder is not writable, fallback is `%APPDATA%\\Codexitma\\Adventures`
 
 Each pack lives in its own folder and provides the same JSON-driven content structure.
 
@@ -213,9 +215,11 @@ If an external pack uses the same adventure `id` as a bundled adventure, it over
 
 Graphics tile/sprite palettes and map theme overrides can also be modded without recompiling Swift by creating:
 
-```text
-~/Library/Application Support/Codexitma/graphics_assets.json
-```
+- macOS:
+  - `~/Library/Application Support/Codexitma/graphics_assets.json`
+- Windows:
+  - `<folder next to Codexitma.exe>/CodexitmaData/graphics_assets.json`
+  - fallback: `%APPDATA%\\Codexitma\\graphics_assets.json`
 
 An example schema and default pack lives at:
 

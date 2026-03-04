@@ -7,20 +7,32 @@ enum SaveError: Error {
 
 final class SaveRepository: @unchecked Sendable {
     let fileURL: URL
-    let legacyFileURL: URL?
+    let legacyFileURLs: [URL]
 
     init(fileManager: FileManager = .default) {
-        let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? URL(fileURLWithPath: NSTemporaryDirectory())
-        let folder = appSupport.appendingPathComponent("Codexitma", isDirectory: true)
-        self.fileURL = folder.appendingPathComponent("savegame.json")
-        let legacyFolder = appSupport.appendingPathComponent("AshesOfMerrow", isDirectory: true)
-        self.legacyFileURL = legacyFolder.appendingPathComponent("savegame.json")
+        let dataRoot = CodexitmaPaths.dataRoot(fileManager: fileManager)
+        self.fileURL = dataRoot.appendingPathComponent("savegame.json")
+
+        let appSupportRoot = CodexitmaPaths.appSupportRoot(fileManager: fileManager)
+        let legacyCodexitma = appSupportRoot.appendingPathComponent("savegame.json")
+        let legacyAshes = appSupportRoot
+            .deletingLastPathComponent()
+            .appendingPathComponent("AshesOfMerrow", isDirectory: true)
+            .appendingPathComponent("savegame.json")
+
+        var legacy: [URL] = []
+        if legacyCodexitma != self.fileURL {
+            legacy.append(legacyCodexitma)
+        }
+        if legacyAshes != self.fileURL {
+            legacy.append(legacyAshes)
+        }
+        self.legacyFileURLs = legacy
     }
 
     init(fileURL: URL) {
         self.fileURL = fileURL
-        self.legacyFileURL = nil
+        self.legacyFileURLs = []
     }
 
     func save(_ save: SaveGame) throws {
@@ -37,8 +49,8 @@ final class SaveRepository: @unchecked Sendable {
         let sourceURL: URL
         if FileManager.default.fileExists(atPath: fileURL.path) {
             sourceURL = fileURL
-        } else if let legacyFileURL, FileManager.default.fileExists(atPath: legacyFileURL.path) {
-            sourceURL = legacyFileURL
+        } else if let legacyURL = legacyFileURLs.first(where: { FileManager.default.fileExists(atPath: $0.path) }) {
+            sourceURL = legacyURL
         } else {
             throw SaveError.notFound
         }

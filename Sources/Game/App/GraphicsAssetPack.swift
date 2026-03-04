@@ -259,16 +259,18 @@ enum GraphicsAssetCatalog {
 
     private static func defaultExternalURL() -> URL? {
         let manager = FileManager.default
-        guard let appSupport = manager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
-            return nil
-        }
+        let dataRoot = CodexitmaPaths.dataRoot(fileManager: manager)
+        let appSupportRoot = CodexitmaPaths.appSupportRoot(fileManager: manager)
 
         let candidates = [
-            appSupport
-                .appendingPathComponent("Codexitma", isDirectory: true)
+            dataRoot
                 .appendingPathComponent("graphics_assets.json", isDirectory: false),
-            appSupport
-                .appendingPathComponent("Codexitma", isDirectory: true)
+            dataRoot
+                .appendingPathComponent("Graphics", isDirectory: true)
+                .appendingPathComponent("graphics_assets.json", isDirectory: false),
+            appSupportRoot
+                .appendingPathComponent("graphics_assets.json", isDirectory: false),
+            appSupportRoot
                 .appendingPathComponent("Graphics", isDirectory: true)
                 .appendingPathComponent("graphics_assets.json", isDirectory: false),
         ]

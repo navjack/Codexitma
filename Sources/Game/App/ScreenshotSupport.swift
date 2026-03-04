@@ -23,20 +23,8 @@ enum ScreenshotSupport {
 
     private static func screenshotsDirectory() throws -> URL {
         let manager = FileManager.default
-        let base: URL
-        if let appSupport = manager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
-            base = appSupport
-        } else {
-            let home = manager.homeDirectoryForCurrentUser.standardizedFileURL
-            if home.path.isEmpty {
-                base = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-            } else {
-                base = home.appendingPathComponent(".codexitma", isDirectory: true)
-            }
-        }
-
-        let screenshots = base
-            .appendingPathComponent("Codexitma", isDirectory: true)
+        let baseRoot = CodexitmaPaths.dataRoot(fileManager: manager)
+        let screenshots = baseRoot
             .appendingPathComponent("Screenshots", isDirectory: true)
         try manager.createDirectory(at: screenshots, withIntermediateDirectories: true)
         return screenshots

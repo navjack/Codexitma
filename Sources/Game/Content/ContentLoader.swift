@@ -268,10 +268,7 @@ struct ContentLoader {
         if let externalRootURL {
             return externalRootURL
         }
-        let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? URL(fileURLWithPath: NSTemporaryDirectory())
-        return appSupport
-            .appendingPathComponent("Codexitma", isDirectory: true)
+        return CodexitmaPaths.dataRoot(fileManager: fileManager)
             .appendingPathComponent("Adventures", isDirectory: true)
     }
 

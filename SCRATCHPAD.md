@@ -138,3 +138,4 @@
   - feature sprite patterns + colors
 - Kept all existing hardcoded visuals as fallback so missing override fields do not break rendering.
 - Documented graphics-asset mod path in README (`~/Library/Application Support/Codexitma/graphics_assets.json`).
+- Switched Windows data storage to a portable EXE-relative root (`CodexitmaData`) for saves, adventures, screenshots, theme prefs, and graphics-asset overrides, with automatic fallback to `%APPDATA%\\Codexitma` when EXE-local storage is not writable.
