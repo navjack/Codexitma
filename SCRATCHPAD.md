@@ -112,3 +112,4 @@
 
 - Windows SDL crash under Wine traced to Foundation UserDefaults in GraphicsPreferenceStore.loadTheme(); switched Windows theme persistence to a simple JSON file under Application Support while keeping macOS on UserDefaults.
 - The SDL cross-platform branch is ready to merge: `windows-builds/` is now ignored locally, and the Windows SDL workflow is set to run from `main` pushes (plus manual dispatch) rather than PR branch updates.
+- `main` now also has a dedicated macOS packaging workflow so GitHub can produce fresh app/CLI zips on each `main` push; future public releases can pull both Win64 and macOS artifacts directly from Actions.

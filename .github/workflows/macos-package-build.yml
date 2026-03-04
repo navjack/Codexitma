@@ -1,0 +1,31 @@
+name: macOS Package Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  macos-package:
+    runs-on: macos-14
+
+    steps:
+      - name: Check Out Repository
+        uses: actions/checkout@v4
+
+      - name: Install SDL3
+        run: brew install sdl3
+
+      - name: Package macOS Builds
+        env:
+          RELEASE_VERSION: ci-${{ github.run_number }}
+        run: ./scripts/package_release.sh "$RELEASE_VERSION"
+
+      - name: Upload macOS Package Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Codexitma-macOS-packages
+          path: |
+            dist/ci-${{ github.run_number }}/Codexitma-macOS-app.zip
+            dist/ci-${{ github.run_number }}/Codexitma-macOS-cli.zip
