@@ -374,7 +374,7 @@ struct EquipmentLoadout: Codable, Equatable {
 typealias NPCID = String
 typealias EnemyID = String
 
-enum AIKind: String, Codable {
+enum AIKind: String, Codable, CaseIterable {
     case idle
     case stalk
     case guardian

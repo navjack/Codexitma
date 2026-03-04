@@ -158,6 +158,38 @@ enum SDLGraphicsLauncher {
             return false
         }
 
+        if activeEditor.showsDocumentPanel {
+            switch key {
+            case SDLK_UP, SDLK_W:
+                activeEditor.movePanelSelection(step: -1)
+            case SDLK_DOWN, SDLK_S:
+                activeEditor.movePanelSelection(step: 1)
+            case SDLK_LEFT, SDLK_A:
+                activeEditor.adjustSelectedField(step: -1)
+            case SDLK_RIGHT, SDLK_D:
+                activeEditor.adjustSelectedField(step: 1)
+            case SDLK_E, SDLK_RETURN, SDLK_SPACE:
+                activeEditor.activateSelectedField()
+            case SDLK_C:
+                activeEditor.cycleContentTab()
+            case SDLK_Z:
+                activeEditor.cycleContentTab(step: -1)
+            case SDLK_V:
+                activeEditor.cycleContentTab(step: 1)
+            case SDLK_P:
+                _ = activeEditor.store.validateCurrentPack()
+            case SDLK_K:
+                activeEditor.store.saveCurrentPack()
+            case SDLK_N:
+                activeEditor.createBlankAdventure()
+            case SDLK_Q, SDLK_ESCAPE, SDLK_M, SDLK_X:
+                editorSession = nil
+            default:
+                break
+            }
+            return false
+        }
+
         switch key {
         case SDLK_UP, SDLK_W:
             activeEditor.moveCursor(.up)
@@ -338,7 +370,11 @@ enum SDLGraphicsLauncher {
         let contentFrame = boardFrame.insetBy(dx: theme.contentInset, dy: theme.contentInset)
         fill(renderer, x: contentFrame.x, y: contentFrame.y, width: contentFrame.width, height: contentFrame.height, color: theme.boardBackground)
 
-        renderEditorBoard(editor, session: editorSession, frame: boardFrame, theme: theme, with: renderer)
+        if editor.showsDocumentPanel {
+            renderEditorDocumentBoard(editor, frame: boardFrame, with: renderer)
+        } else {
+            renderEditorBoard(editor, session: editorSession, frame: boardFrame, theme: theme, with: renderer)
+        }
 
         fill(renderer, x: panelFrame.x, y: panelFrame.y, width: panelFrame.width, height: panelFrame.height, color: .editorPanel)
         stroke(renderer, frame: panelFrame, color: .editorAccent)
@@ -599,6 +635,49 @@ enum SDLGraphicsLauncher {
         drawText("E OPEN  Q STAY", x: panel.x + 16, y: y, color: .bright, renderer: renderer)
     }
 
+    private static func renderEditorDocumentBoard(
+        _ editor: AdventureEditorSceneSnapshot,
+        frame: SDLRect,
+        with renderer: OpaquePointer
+    ) {
+        let inset = frame.insetBy(dx: 10, dy: 10)
+        fill(renderer, x: inset.x, y: inset.y, width: inset.width, height: inset.height, color: .editorBoard)
+        stroke(renderer, frame: inset, color: .editorAccent)
+
+        drawText(editor.panelTitle, x: inset.x + 10, y: inset.y + 10, color: .editorAccent, renderer: renderer)
+        drawText(editor.selectedContentTab.shortLabel, x: inset.x + max(160, inset.width / 2), y: inset.y + 10, color: .bright, renderer: renderer)
+
+        let splitX = inset.x + max(180, min(320, inset.width / 2))
+        fill(renderer, x: splitX, y: inset.y + 6, width: 2, height: inset.height - 12, color: .editorGrid)
+
+        var y = inset.y + 34
+        for (index, field) in editor.panelFields.enumerated() {
+            let selected = index == editor.panelSelectionIndex
+            let row = SDLRect(x: inset.x + 10, y: y - 2, width: max(120, splitX - inset.x - 20), height: 18)
+            if selected {
+                fill(renderer, x: row.x, y: row.y, width: row.width, height: row.height, color: .editorAccent.withAlpha(40))
+            }
+            drawText(field.label, x: inset.x + 12, y: y, color: selected ? .editorAccent : .bright, renderer: renderer)
+            drawText(field.value, x: inset.x + 92, y: y, color: field.style == .action ? .editorAccent : .dim, renderer: renderer)
+            y += 18
+        }
+
+        var previewY = inset.y + 34
+        drawText("PREVIEW", x: splitX + 10, y: previewY, color: .editorAccent, renderer: renderer)
+        previewY += 18
+        for line in editor.previewLines.prefix(16) {
+            previewY = drawWrappedText(
+                line,
+                x: splitX + 10,
+                y: previewY,
+                width: max(18, ((inset.width - (splitX - inset.x) - 24) / 8)),
+                color: .bright,
+                renderer: renderer
+            )
+            previewY += 2
+        }
+    }
+
     private static func renderEditorBoard(
         _ editor: AdventureEditorSceneSnapshot,
         session: AdventureEditorSession,
@@ -692,9 +771,10 @@ enum SDLGraphicsLauncher {
         drawText("GLYPH \(String(editor.selectedGlyph))", x: frame.x + 10, y: y, color: .bright, renderer: renderer)
         y += lineHeight * 2
 
-        drawText("SELECTION", x: frame.x + 10, y: y, color: .gold, renderer: renderer)
+        drawText(editor.showsDocumentPanel ? "PREVIEW" : "SELECTION", x: frame.x + 10, y: y, color: .editorAccent, renderer: renderer)
         y += lineHeight
-        for line in editor.selectionSummaryLines.prefix(4) {
+        let summaryLines = editor.showsDocumentPanel ? editor.previewLines : editor.selectionSummaryLines
+        for line in summaryLines.prefix(6) {
             drawText(line.uppercased(), x: frame.x + 10, y: y, color: .bright, renderer: renderer)
             y += lineHeight
         }
@@ -714,9 +794,15 @@ enum SDLGraphicsLauncher {
         y += lineHeight
         y = drawWrappedText(editor.statusLine.uppercased(), x: frame.x + 10, y: y, width: 30, color: .bright, renderer: renderer)
 
-        drawText("WASD MOVE  E APPLY", x: frame.x + 10, y: frame.y + frame.height - 56, color: .bright, renderer: renderer)
-        drawText("R/F TOOL  C TAB", x: frame.x + 10, y: frame.y + frame.height - 42, color: .bright, renderer: renderer)
-        drawText("Z/V MAP  K SAVE  P CHECK", x: frame.x + 10, y: frame.y + frame.height - 28, color: .bright, renderer: renderer)
+        if editor.showsDocumentPanel {
+            drawText("W/S FIELD  A/D ADJUST", x: frame.x + 10, y: frame.y + frame.height - 56, color: .bright, renderer: renderer)
+            drawText("E ACT  C TAB  Z/V TAB", x: frame.x + 10, y: frame.y + frame.height - 42, color: .bright, renderer: renderer)
+            drawText("K SAVE  P CHECK", x: frame.x + 10, y: frame.y + frame.height - 28, color: .bright, renderer: renderer)
+        } else {
+            drawText("WASD MOVE  E APPLY", x: frame.x + 10, y: frame.y + frame.height - 56, color: .bright, renderer: renderer)
+            drawText("R/F TOOL  C TAB", x: frame.x + 10, y: frame.y + frame.height - 42, color: .bright, renderer: renderer)
+            drawText("Z/V MAP  K SAVE  P CHECK", x: frame.x + 10, y: frame.y + frame.height - 28, color: .bright, renderer: renderer)
+        }
         drawText("N NEW  Q/M/X RETURN", x: frame.x + 10, y: frame.y + frame.height - 14, color: .editorAccent, renderer: renderer)
     }
 

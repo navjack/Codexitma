@@ -63,6 +63,8 @@
 - Added a backend-neutral `AdventureEditorSession` snapshot layer and moved editor canvas overlay colors out of `AdventureEditorStore`, so the editor state is less tied to SwiftUI and easier to drive from an eventual SDL-native editor.
 - Replaced the SDL branch's editor fallback with a first SDL-native in-window editor shell: the `M` prompt now opens an SDL editor mode with cursor movement, tool application, validation, saving, map cycling, and return-to-game flow.
 - Tightened the SDL editor UX after live testing: the editor now has clearly distinct blue/cyan chrome instead of blending into the gameplay HUD, and `X` exits editor mode back to the game instead of quitting the application.
+- Extended the SDL editor past map work: the non-spatial content tabs now have cycle-based in-window editing for dialogue, quest stages, encounters, shops, NPCs, and enemies instead of being view-only dead ends.
+- Installed the local Windows cross-toolchain pieces `mingw-w64` and `zig`, and verified `x86_64-w64-mingw32-gcc` can emit a real x86_64 PE executable. The remaining missing piece for actual Swift-to-Windows builds is still a Windows Swift SDK bundle.
 
 ## Current Notes
 
@@ -85,7 +87,8 @@
 - The intended product split is now explicit: native AppKit stays the preferred macOS frontend, while SDL is the parity/cross-platform path that should eventually become the real Windows/Linux graphics frontend.
 - SDL still needs more fidelity work, but it is now much closer to a true second frontend and less of a diagnostic shell: text, layout, and sprite reads are no longer the most glaring parity gaps.
 - The SDL branch now has a real in-window editor shell, but it is still a focused first pass: the spatial map workflow is there, while the richer non-spatial content panels from the native editor are not fully ported yet.
-- The next SDL/editor move should extend the SDL shell beyond map editing into dialogue, quest, encounter, and shop editing so it reaches true functional parity with the native editor.
+- The SDL branch now covers both spatial and non-spatial editor workflows, but it still uses cycle-based editing rather than true text entry for authored content fields.
+- The next SDL/editor move should add proper text entry for authored strings in the SDL editor so those tabs are not limited to curated template cycles.
 
 ## Next Build Targets
 

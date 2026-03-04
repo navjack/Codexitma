@@ -41,8 +41,9 @@ The `--sdl` flag is now a working launch path:
 - it now opens a first SDL-native in-window editor shell from the same `M` confirmation flow, so map editing, tool application, validation, and pack saves no longer depend on AppKit
 - the SDL editor now uses its own distinct cyan/blue editor chrome instead of looking nearly identical to the live game screen, and `X` now returns to gameplay instead of quitting the whole app
 - the editor now has a backend-neutral `AdventureEditorSession` seam and renderer-neutral canvas overlay data, so the eventual SDL-native editor path no longer depends on SwiftUI colors inside editor state
+- the SDL editor now reaches into the non-spatial content tabs too: dialogue, quest, encounter, shop, NPC, and enemy tabs all have cycle-based in-window editing controls instead of being map-only dead ends
 
-This is still an early renderer, not feature parity. The SDL editor shell is a functional first cut for map/cursor/tool workflow, not yet a full replacement for the richer native SwiftUI editor panels.
+This is still an early renderer, not full feature parity. The SDL editor shell now covers both spatial and non-spatial workflows, but it is still a cycle-based editor and not yet a full text-entry replacement for the richer native SwiftUI editor.
 
 ## Immediate Next Steps
 
@@ -50,7 +51,8 @@ This is still an early renderer, not feature parity. The SDL editor shell is a f
 2. Add richer SDL layout logic for very small windows so the mode-specific screens can compress more gracefully when vertical space is tight.
 3. Push tile-surface fidelity higher in SDL so board cells better match the native Gemstone/Ultima visual language, not just the current low-res approximation.
 4. Replace the remaining hardcoded SDL spacing constants with scale-aware metrics driven by the live viewport.
-5. Once parity is acceptable, start splitting platform selection so macOS prefers native while Windows/Linux use SDL as the real graphics path.
+5. Add a real Windows Swift SDK bundle once a compatible one is available; `mingw-w64` and `zig` are now installed, but the local Swift toolchain still reports that no Swift SDKs are installed.
+6. Once parity is acceptable, start splitting platform selection so macOS prefers native while Windows/Linux use SDL as the real graphics path.
 
 ## Constraints
 
