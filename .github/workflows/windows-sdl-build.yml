@@ -21,8 +21,8 @@ jobs:
       - name: Install Swift
         uses: compnerd/gha-setup-swift@main
         with:
-          swift-version: swift-6.2.4-release
-          swift-build: 6.2.4-RELEASE
+          swift-version: swift-6.3-branch
+          swift-build: 6.3-DEVELOPMENT-SNAPSHOT-2026-02-27-a
           update-sdk-modules: true
 
       - name: Verify Swift Toolchain
