@@ -1,6 +1,4 @@
-import AppKit
 import Foundation
-import SwiftUI
 
 extension AdventureEditorStore {
     func paintTile(x: Int, y: Int) {
@@ -42,27 +40,26 @@ extension AdventureEditorStore {
         let position = Position(x: x, y: y)
 
         if let npc = document.npcs.first(where: { $0.mapID == mapID && $0.position == position }) {
-            return EditorCanvasOverlay(glyph: String(npc.glyphSymbol), fill: color(for: npc.glyphColor), text: .black)
+            return EditorCanvasOverlay(glyph: String(npc.glyphSymbol), style: .ansi(npc.glyphColor))
         }
 
         if let enemy = document.enemies.first(where: { $0.mapID == mapID && $0.position == position }) {
-            return EditorCanvasOverlay(glyph: String(enemy.glyph), fill: color(for: enemy.color), text: .black)
+            return EditorCanvasOverlay(glyph: String(enemy.glyph), style: .ansi(enemy.color))
         }
 
         if let interactable = currentMap?.interactables.first(where: { $0.position == position }) {
             return EditorCanvasOverlay(
                 glyph: interactableGlyph(for: interactable.kind),
-                fill: color(for: interactable.kind),
-                text: .black
+                style: .interactable(interactable.kind)
             )
         }
 
         if currentMap?.portals.contains(where: { $0.from == position }) == true {
-            return EditorCanvasOverlay(glyph: ">", fill: Color(red: 0.98, green: 0.82, blue: 0.20), text: .black)
+            return EditorCanvasOverlay(glyph: ">", style: .portal)
         }
 
         if currentMap?.spawn == position {
-            return EditorCanvasOverlay(glyph: "@", fill: Color(red: 0.98, green: 0.95, blue: 0.62), text: .black)
+            return EditorCanvasOverlay(glyph: "@", style: .spawn)
         }
 
         return nil

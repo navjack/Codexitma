@@ -70,11 +70,11 @@ extension AdventureEditorRootView {
 
                 if let overlay {
                     RoundedRectangle(cornerRadius: 2)
-                        .fill(overlay.fill)
+                        .fill(overlayFillColor(for: overlay.style))
                         .padding(2)
                     Text(overlay.glyph)
                         .font(.system(size: 9, weight: .bold, design: .monospaced))
-                        .foregroundStyle(overlay.text)
+                        .foregroundStyle(overlayTextColor(for: overlay.style))
                 } else {
                     Text(displayGlyph(glyph))
                         .font(.system(size: 9, weight: .bold, design: .monospaced))
@@ -161,5 +161,73 @@ extension AdventureEditorRootView {
 
     func displayGlyph(_ glyph: Character) -> String {
         glyph == " " ? "·" : String(glyph)
+    }
+
+    func overlayFillColor(for style: EditorCanvasOverlayStyle) -> Color {
+        switch style {
+        case .ansi(let ansi):
+            return color(for: ansi)
+        case .interactable(let kind):
+            return color(for: kind)
+        case .portal:
+            return Color(red: 0.98, green: 0.82, blue: 0.20)
+        case .spawn:
+            return Color(red: 0.98, green: 0.95, blue: 0.62)
+        }
+    }
+
+    func overlayTextColor(for style: EditorCanvasOverlayStyle) -> Color {
+        switch style {
+        case .ansi(.black), .ansi(.blue), .ansi(.magenta), .ansi(.brightBlack):
+            return palette.text
+        case .ansi, .interactable, .portal, .spawn:
+            return .black
+        }
+    }
+
+    func color(for ansi: ANSIColor) -> Color {
+        switch ansi {
+        case .black:
+            return .black
+        case .red:
+            return Color(red: 0.86, green: 0.22, blue: 0.16)
+        case .green:
+            return Color(red: 0.27, green: 0.78, blue: 0.19)
+        case .yellow:
+            return Color(red: 0.98, green: 0.84, blue: 0.20)
+        case .blue:
+            return Color(red: 0.24, green: 0.56, blue: 0.92)
+        case .magenta:
+            return Color(red: 0.76, green: 0.34, blue: 0.86)
+        case .cyan:
+            return Color(red: 0.22, green: 0.80, blue: 0.86)
+        case .white:
+            return Color(red: 0.95, green: 0.94, blue: 0.87)
+        case .brightBlack:
+            return Color(red: 0.42, green: 0.42, blue: 0.44)
+        case .reset:
+            return Color(red: 0.95, green: 0.94, blue: 0.87)
+        }
+    }
+
+    func color(for kind: InteractableKind) -> Color {
+        switch kind {
+        case .npc:
+            return Color(red: 0.98, green: 0.84, blue: 0.20)
+        case .shrine:
+            return Color(red: 0.78, green: 0.42, blue: 0.94)
+        case .chest:
+            return Color(red: 0.84, green: 0.56, blue: 0.12)
+        case .bed:
+            return Color(red: 0.65, green: 0.32, blue: 0.18)
+        case .gate:
+            return Color(red: 0.88, green: 0.72, blue: 0.18)
+        case .beacon:
+            return Color(red: 0.99, green: 0.94, blue: 0.34)
+        case .plate:
+            return Color(red: 0.72, green: 0.72, blue: 0.72)
+        case .switchRune:
+            return Color(red: 0.28, green: 0.74, blue: 0.90)
+        }
     }
 }

@@ -1,6 +1,4 @@
-import AppKit
 import Foundation
-import SwiftUI
 
 extension AdventureEditorStore {
     func sanitizeIdentifier(_ value: String) -> String {
@@ -371,42 +369,6 @@ extension AdventureEditorStore {
         case .beacon: return "B"
         case .plate: return "o"
         case .switchRune: return "="
-        }
-    }
-
-    func color(for ansi: ANSIColor) -> Color {
-        switch ansi {
-        case .black: return .black
-        case .red: return Color(red: 0.86, green: 0.22, blue: 0.16)
-        case .green: return Color(red: 0.27, green: 0.78, blue: 0.19)
-        case .yellow: return Color(red: 0.98, green: 0.84, blue: 0.20)
-        case .blue: return Color(red: 0.24, green: 0.56, blue: 0.92)
-        case .magenta: return Color(red: 0.76, green: 0.34, blue: 0.86)
-        case .cyan: return Color(red: 0.22, green: 0.80, blue: 0.86)
-        case .white: return Color(red: 0.95, green: 0.94, blue: 0.87)
-        case .brightBlack: return Color(red: 0.42, green: 0.42, blue: 0.44)
-        case .reset: return Color(red: 0.95, green: 0.94, blue: 0.87)
-        }
-    }
-
-    func color(for kind: InteractableKind) -> Color {
-        switch kind {
-        case .npc:
-            return Color(red: 0.98, green: 0.84, blue: 0.20)
-        case .shrine:
-            return Color(red: 0.78, green: 0.42, blue: 0.94)
-        case .chest:
-            return Color(red: 0.84, green: 0.56, blue: 0.12)
-        case .bed:
-            return Color(red: 0.65, green: 0.32, blue: 0.18)
-        case .gate:
-            return Color(red: 0.88, green: 0.72, blue: 0.18)
-        case .beacon:
-            return Color(red: 0.99, green: 0.94, blue: 0.34)
-        case .plate:
-            return Color(red: 0.72, green: 0.72, blue: 0.72)
-        case .switchRune:
-            return Color(red: 0.28, green: 0.74, blue: 0.90)
         }
     }
 
