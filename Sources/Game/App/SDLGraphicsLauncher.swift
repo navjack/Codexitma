@@ -76,9 +76,6 @@ enum SDLGraphicsLauncher {
                         key: event.key.key,
                         editorSession: &editorSession
                     ) {
-                        running = false
-                    }
-                    if editorSession != nil {
                         continue
                     }
                     if showingEditorPrompt {
@@ -185,9 +182,9 @@ enum SDLGraphicsLauncher {
             case SDLK_Q, SDLK_ESCAPE, SDLK_M, SDLK_X:
                 editorSession = nil
             default:
-                break
+                return false
             }
-            return false
+            return true
         }
 
         switch key {
@@ -220,10 +217,10 @@ enum SDLGraphicsLauncher {
         case SDLK_Q, SDLK_ESCAPE, SDLK_M, SDLK_X:
             editorSession = nil
         default:
-            break
+            return false
         }
 
-        return false
+        return true
     }
 
     private static func handleEditorPromptKey(
