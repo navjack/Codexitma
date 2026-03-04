@@ -25,6 +25,11 @@ jobs:
           swift-build: 6.3-DEVELOPMENT-SNAPSHOT-2026-02-27-a
           update-sdk-modules: true
 
+      - name: Set Up Visual Studio Build Environment
+        uses: compnerd/gha-setup-vsdevenv@main
+        with:
+          arch: amd64
+
       - name: Verify Swift Toolchain
         run: swift --version
 

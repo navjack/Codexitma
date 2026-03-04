@@ -69,6 +69,7 @@
 - Split the shared depth math out of the native SwiftUI renderer: `DepthRaycaster` and its sample types no longer depend on `CGPoint` or `CoreGraphics`, and the AppKit-only depth presentation types are fenced back into the native layer.
 - Added platform guards around the native AppKit frontend files, made the terminal/sound/runtime helpers compile without hard `Darwin` or `AVFoundation` assumptions, and added a first Windows GitHub Actions SDL build lane that installs Swift plus the SDL3 VC SDK on a Windows runner.
 - The first Windows CI run proved the workflow path is live; it failed at Swift installation, and the branch is now pointed at the available Swift 6.3 Windows development snapshot (`2026-02-27-a`) instead of the missing 6.3 release installer.
+- The next Windows failure was real progress: the 6.3 snapshot installed and reached `swift build`, then died because the MSVC CRT libraries were not on the linker path while compiling the manifest. The workflow now explicitly loads the Visual Studio developer environment before building.
 
 ## Current Notes
 
