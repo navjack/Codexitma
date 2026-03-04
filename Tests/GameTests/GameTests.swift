@@ -131,6 +131,24 @@ import Testing
     #expect(engine.state.player.facing == .left)
 }
 
+@Test func turningAndBackstepPreserveDungeonCrawlerFacing() async throws {
+    let library = try ContentLoader().load()
+    let saveURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString).appendingPathExtension("json")
+    let engine = GameEngine(library: library, saveRepository: SaveRepository(fileURL: saveURL))
+
+    engine.handle(.newGame)
+    engine.handle(.confirm)
+
+    let start = engine.state.player.position
+    engine.handle(.turnRight)
+    #expect(engine.state.player.facing == .right)
+    #expect(engine.state.player.position == start)
+
+    engine.handle(.moveBackward)
+    #expect(engine.state.player.facing == .right)
+    #expect(engine.state.player.position == Position(x: start.x - 1, y: start.y))
+}
+
 @Test func contentLoaderLoadsAdventureLibrary() async throws {
     let library = try ContentLoader().load()
     #expect(library.adventures.count == 2)
@@ -351,6 +369,8 @@ import Testing
 @Test func automationCommandParserRecognizesMovementAndState() async throws {
     #expect(try AutomationCommandParser.parse("a") == .game(.move(.left)))
     #expect(try AutomationCommandParser.parse("state") == .snapshot)
+    #expect(try AutomationCommandParser.parse("turnleft") == .game(.turnLeft))
+    #expect(try AutomationCommandParser.parse("backstep") == .game(.moveBackward))
 }
 
 @Test func launchOptionsParseScriptMode() async throws {

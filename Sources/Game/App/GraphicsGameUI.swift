@@ -79,9 +79,10 @@ final class GameSessionController: ObservableObject {
 
     func send(_ command: ActionCommand) {
         let previous = state
-        engine.handle(command)
+        let resolved = resolvedCommand(for: command)
+        engine.handle(resolved)
         state = engine.state
-        playSound(for: command, previous: previous, current: state)
+        playSound(for: resolved, previous: previous, current: state)
         if state.shouldQuit {
             Task { @MainActor in
                 NSApplication.shared.terminate(nil)
@@ -99,6 +100,25 @@ final class GameSessionController: ObservableObject {
         preferenceStore.saveTheme(theme)
     }
 
+    private func resolvedCommand(for command: ActionCommand) -> ActionCommand {
+        guard visualTheme == .depth3D, state.mode == .exploration else {
+            return command
+        }
+
+        switch command {
+        case .move(.up):
+            return .move(state.player.facing)
+        case .move(.down):
+            return .moveBackward
+        case .move(.left):
+            return .turnLeft
+        case .move(.right):
+            return .turnRight
+        default:
+            return command
+        }
+    }
+
     private func playSound(for command: ActionCommand, previous: GameState, current: GameState) {
         if previous.mode == .title && current.mode == .characterCreation {
             soundEngine.play(.menuConfirm)
@@ -110,7 +130,7 @@ final class GameSessionController: ObservableObject {
             return
         }
 
-        if command == .move(.up) || command == .move(.down) || command == .move(.left) || command == .move(.right) {
+        if isMovementCommand(command) {
             if previous.player.position != current.player.position {
                 soundEngine.play(.walk)
                 return
@@ -122,6 +142,11 @@ final class GameSessionController: ObservableObject {
                 soundEngine.play(.attack)
                 return
             }
+        }
+
+        if isTurnCommand(command), previous.player.facing != current.player.facing {
+            soundEngine.play(.menuConfirm)
+            return
         }
 
         let usedItem = previous.mode == .inventory && current.mode == .exploration &&
@@ -154,6 +179,24 @@ final class GameSessionController: ObservableObject {
 
         if command == .interact || command == .confirm, previous.mode == .exploration, current.mode == .dialogue {
             soundEngine.play(.menuConfirm)
+        }
+    }
+
+    private func isMovementCommand(_ command: ActionCommand) -> Bool {
+        switch command {
+        case .move, .moveBackward:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func isTurnCommand(_ command: ActionCommand) -> Bool {
+        switch command {
+        case .turnLeft, .turnRight:
+            return true
+        default:
+            return false
         }
     }
 }
@@ -734,7 +777,7 @@ struct GameRootView: View {
             return "ARROWS/WASD BROWSE"
         }
         if session.visualTheme == .depth3D {
-            return "ARROWS/WASD MOVE + FACE"
+            return "W/UP FWD  S/DN BACK"
         }
         return "ARROWS/WASD MOVE"
     }
@@ -780,6 +823,9 @@ struct GameRootView: View {
         case .inventory:
             return "E USE   R DROP   Q LEAVE"
         default:
+            if session.visualTheme == .depth3D {
+                return "A/D TURN  E ACT  I PACK"
+            }
             return "E ACT   I PACK   Q BACK"
         }
     }
@@ -802,6 +848,9 @@ struct GameRootView: View {
         case .inventory:
             return "T STYLE  I ALSO LEAVES"
         default:
+            if session.visualTheme == .depth3D {
+                return "Q BACK  T STYLE  X QUIT"
+            }
             return "T STYLE  X QUIT"
         }
     }
@@ -912,7 +961,7 @@ private struct MapBoardView: View {
                     Text("FIRST-PERSON")
                         .font(.system(size: 10, weight: .regular, design: .monospaced))
                         .foregroundStyle(palette.text.opacity(0.86))
-                    Text("VIEW TURNS WITH LAST STEP")
+                    Text("A/D TURN  W/S STEP")
                         .font(.system(size: 9, weight: .regular, design: .monospaced))
                         .foregroundStyle(palette.text.opacity(0.76))
                 }

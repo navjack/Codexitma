@@ -102,6 +102,12 @@ enum AutomationCommandParser {
             return .game(.move(.left))
         case "right", "east", "d":
             return .game(.move(.right))
+        case "turnleft", "turn-left", "rotateleft", "tl":
+            return .game(.turnLeft)
+        case "turnright", "turn-right", "rotateright", "tr":
+            return .game(.turnRight)
+        case "backward", "backstep", "stepback", "reverse", "retreat":
+            return .game(.moveBackward)
         case "interact", "act", "talk", "use", "e", "space", "confirm":
             return .game(.interact)
         case "inventory", "item", "pack", "i":

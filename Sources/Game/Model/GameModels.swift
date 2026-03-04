@@ -58,6 +58,10 @@ enum Direction: String, Codable, CaseIterable {
         }
     }
 
+    var opposite: Direction {
+        leftTurn.leftTurn
+    }
+
     var shortLabel: String {
         switch self {
         case .up: return "N"
@@ -70,6 +74,9 @@ enum Direction: String, Codable, CaseIterable {
 
 enum ActionCommand: Equatable {
     case move(Direction)
+    case turnLeft
+    case turnRight
+    case moveBackward
     case interact
     case openInventory
     case dropInventoryItem

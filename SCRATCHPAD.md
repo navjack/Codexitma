@@ -31,6 +31,7 @@
 - Added support for third-party adventure packs loaded from `~/Library/Application Support/Codexitma/Adventures`, with dynamic title-screen discovery.
 - Fixed the inventory UI so packs scroll past five items, clearly highlight the active selection, and allow dropping non-essential items with `R`.
 - Started the `codex/3d-renderer` branch and added a first-person pseudo-3D graphics theme that reads the same map data as the 2D renderers.
+- Added real dungeon-crawler controls for `Depth 3D`: turn in place left/right and move forward/back without forcing the camera to rotate.
 
 ## Current Notes
 
