@@ -107,6 +107,31 @@ private struct DepthTextureAtlas {
 }
 
 struct MapBoardView: View {
+    private struct DepthFloorProjectionKey: Hashable {
+        let width: Int
+        let height: Int
+        let horizonOffset: Int
+        let floorBands: Int
+        let facing: Int
+        let fieldOfViewMilli: Int
+    }
+
+    private struct DepthFloorStripProjection {
+        let x0: CGFloat
+        let x1: CGFloat
+        let xNormalized: Double
+        let rayX: Double
+        let rayY: Double
+    }
+
+    private struct DepthFloorBandProjection {
+        let y0: CGFloat
+        let y1: CGFloat
+        let rowDistance: Double
+        let bandNorm: Double
+        let strips: [DepthFloorStripProjection]
+    }
+
     let state: GameState
     let scene: GraphicsSceneSnapshot
     let palette: UltimaPalette
@@ -115,6 +140,7 @@ struct MapBoardView: View {
 
     private let cell: CGFloat = 14
     private static let depthTextureAtlas = DepthTextureAtlas.load()
+    private nonisolated(unsafe) static var depthFloorProjectionCache: [DepthFloorProjectionKey: [DepthFloorBandProjection]] = [:]
 
     var body: some View {
         if visualTheme == .depth3D {
@@ -382,7 +408,7 @@ struct MapBoardView: View {
         samples: [DepthRaySample],
         theme: RegionTheme
     ) {
-        drawDepthBackdrop(into: &context, size: size, theme: theme)
+        drawDepthBackdrop(into: &context, size: size, samples: samples, theme: theme)
         drawDepthWalls(into: &context, size: size, samples: samples, theme: theme)
         drawDepthBillboards(into: &context, size: size, samples: samples, theme: theme)
         drawDepthReticleGlow(into: &context, size: size)
@@ -391,6 +417,7 @@ struct MapBoardView: View {
     private func drawDepthBackdrop(
         into context: inout GraphicsContext,
         size: CGSize,
+        samples: [DepthRaySample],
         theme: RegionTheme
     ) {
         let horizon = size.height * 0.5
@@ -423,7 +450,14 @@ struct MapBoardView: View {
             stripeStrength = 0.08
             floorBands = 18
         }
-        let effectiveFloorBands = max(floorBands, (floorLighting?.bands ?? 20) + 8)
+        let effectiveFloorBands = max(floorBands, (floorLighting?.bands ?? 20) + 2)
+        let projections = depthFloorProjection(
+            size: size,
+            horizon: horizon,
+            floorBands: effectiveFloorBands,
+            fieldOfView: fieldOfView,
+            facing: facing
+        )
 
         if scene.depth?.usesSkyBackdrop ?? true {
             context.fill(
@@ -468,11 +502,10 @@ struct MapBoardView: View {
 
         context.fill(Path(floorRect), with: .color(theme.floor.opacity(0.18)))
 
-        for band in 0..<effectiveFloorBands {
-            let t0 = CGFloat(band) / CGFloat(effectiveFloorBands)
-            let t1 = CGFloat(band + 1) / CGFloat(effectiveFloorBands)
-            let y0 = horizon + (size.height - horizon) * pow(t0, 1.6)
-            let y1 = horizon + (size.height - horizon) * pow(t1, 1.6)
+        for (band, projection) in projections.enumerated() {
+            let y0 = projection.y0
+            let y1 = projection.y1
+            let t1 = CGFloat(band + 1) / CGFloat(max(1, effectiveFloorBands))
             let rect = CGRect(x: 0, y: y0, width: size.width, height: max(1, y1 - y0))
             let shade = 0.10 + (Double(t1) * 0.22)
             let stripe = band.isMultiple(of: 2)
@@ -485,13 +518,10 @@ struct MapBoardView: View {
                     atlas: depthTextureAtlas,
                     floorLighting: floorLighting,
                     worldLighting: worldLighting,
+                    projection: projection,
+                    depthSamples: samples,
                     theme: theme,
-                    horizon: horizon,
-                    canvasSize: size,
-                    fieldOfView: fieldOfView,
-                    facing: facing,
-                    floorBands: effectiveFloorBands,
-                    bandIndex: band
+                    maxDistance: scene.depth?.maxDistance ?? 12.0
                 )
                 context.fill(Path(rect), with: .color(Color.black.opacity(0.06 + (Double(t1) * 0.10))))
                 context.fill(Path(rect.insetBy(dx: 0, dy: 0)), with: .color(stripe.opacity(0.16)))
@@ -539,53 +569,35 @@ struct MapBoardView: View {
         atlas: DepthTextureAtlas,
         floorLighting: DepthFloorLightingSnapshot?,
         worldLighting: DepthWorldLightingSnapshot?,
+        projection: DepthFloorBandProjection,
+        depthSamples: [DepthRaySample],
         theme: RegionTheme,
-        horizon: CGFloat,
-        canvasSize: CGSize,
-        fieldOfView: Double,
-        facing: Direction,
-        floorBands: Int,
-        bandIndex: Int
+        maxDistance: Double
     ) {
-        let forward = facingUnitVector(for: facing)
-        let right = rightUnitVector(for: facing)
-        let planeScale = tan(fieldOfView * 0.5)
-        let leftRay = (x: forward.x - (right.x * planeScale), y: forward.y - (right.y * planeScale))
-        let rightRay = (x: forward.x + (right.x * planeScale), y: forward.y + (right.y * planeScale))
-
         let playerX = Double(scene.player.position.x) + 0.5
         let playerY = Double(scene.player.position.y) + 0.5
-        let rowScreenY = max(horizon + 1, rect.midY)
-        let rowDepth = max(1.0, Double(rowScreenY - horizon))
-        let posZ = Double(canvasSize.height) * 0.50
-        let bandNorm = (Double(bandIndex) + 0.5) / Double(max(1, floorBands))
-        let normalizedScreenDepth = max(
-            0.0,
-            min(1.0, Double((rowScreenY - horizon) / max(1.0, canvasSize.height - horizon)))
-        )
-        let perspectiveWarp = 0.72 + (pow(1.0 - normalizedScreenDepth, 1.55) * 0.65)
-        let rowDistance = (posZ / rowDepth) * perspectiveWarp
-        let stripScale = 0.78 + (pow(1.0 - bandNorm, 1.2) * 0.72)
-        let stripCount = max(96, Int((Double(canvasSize.width) * 0.52) * stripScale))
+        let rowDistance = projection.rowDistance
+        let bandNorm = projection.bandNorm
+        let stripCount = projection.strips.count
+        guard stripCount > 0 else { return }
         var stripLightLevels = Array(repeating: floorLighting?.ambient ?? worldLighting?.ambient ?? 0.20, count: stripCount)
+        var stripContactLevels = Array(repeating: 0.0, count: stripCount)
 
         context.withCGContext { cgContext in
             cgContext.interpolationQuality = .none
-            for strip in 0..<stripCount {
-                let xNorm = (Double(strip) + 0.5) / Double(stripCount)
-                let rayX = leftRay.x + ((rightRay.x - leftRay.x) * xNorm)
-                let rayY = leftRay.y + ((rightRay.y - leftRay.y) * xNorm)
+            for (index, strip) in projection.strips.enumerated() {
+                let xNorm = strip.xNormalized
+                let rayX = strip.rayX
+                let rayY = strip.rayY
                 let worldX = playerX + (rowDistance * rayX)
                 let worldY = playerY + (rowDistance * rayY)
                 let u = fract(worldX)
                 let v = fract(worldY)
 
-                let x0 = rect.minX + (CGFloat(strip) / CGFloat(stripCount)) * rect.width
-                let x1 = rect.minX + (CGFloat(strip + 1) / CGFloat(stripCount)) * rect.width
                 let stripe = CGRect(
-                    x: x0,
+                    x: strip.x0,
                     y: rect.minY,
-                    width: max(1, x1 - x0),
+                    width: max(1, strip.x1 - strip.x0),
                     height: rect.height
                 )
                 if let pixel = atlas.floorPixel(u: u, v: v) {
@@ -595,10 +607,25 @@ struct MapBoardView: View {
                 let light = worldLighting?.level(atWorldX: worldX, y: worldY)
                     ?? floorLighting?.interpolatedLevel(
                         xNormalized: xNorm,
-                        yNormalized: bandNorm
+                    yNormalized: bandNorm
                     )
                     ?? (floorLighting?.ambient ?? worldLighting?.ambient ?? 0.20)
-                stripLightLevels[strip] = light
+                stripLightLevels[index] = light
+
+                guard !depthSamples.isEmpty else { continue }
+                let sampleIndex = min(
+                    depthSamples.count - 1,
+                    max(0, Int(xNorm * Double(depthSamples.count)))
+                )
+                let sample = depthSamples[sampleIndex]
+                guard sample.didHit else { continue }
+                let delta = rowDistance - sample.correctedDistance
+                if delta < -0.05 {
+                    continue
+                }
+                let proximity = max(0.0, min(1.0, 1.0 - (delta / 0.62)))
+                let distanceFade = max(0.30, 1.0 - (sample.correctedDistance / maxDistance))
+                stripContactLevels[index] = proximity * distanceFade
             }
         }
 
@@ -615,16 +642,14 @@ struct MapBoardView: View {
 
         let ambient = floorLighting?.ambient ?? worldLighting?.ambient
         if let ambient {
-            for strip in 0..<stripCount {
-                let x0 = rect.minX + (CGFloat(strip) / CGFloat(stripCount)) * rect.width
-                let x1 = rect.minX + (CGFloat(strip + 1) / CGFloat(stripCount)) * rect.width
+            for (index, strip) in projection.strips.enumerated() {
                 let stripe = CGRect(
-                    x: x0,
+                    x: strip.x0,
                     y: rect.minY,
-                    width: max(1, x1 - x0),
+                    width: max(1, strip.x1 - strip.x0),
                     height: rect.height
                 )
-                let light = stripLightLevels[strip]
+                let light = stripLightLevels[index]
                 let lift = max(0.0, light - ambient)
                 let dim = max(0.0, ambient - light)
                 if lift > 0.01 {
@@ -634,6 +659,11 @@ struct MapBoardView: View {
                 if dim > 0.01 {
                     let shadow = Color.black.opacity(min(0.24, 0.04 + (dim * 0.38)))
                     context.fill(Path(stripe), with: .color(shadow))
+                }
+                let contact = stripContactLevels[index]
+                if contact > 0.01 {
+                    let anchorShadow = Color.black.opacity(min(0.24, 0.04 + (contact * 0.24)))
+                    context.fill(Path(stripe), with: .color(anchorShadow))
                 }
             }
         }
@@ -1436,6 +1466,108 @@ struct MapBoardView: View {
             return (0, -1)
         case .right:
             return (0, 1)
+        }
+    }
+
+    private func depthFloorProjection(
+        size: CGSize,
+        horizon: CGFloat,
+        floorBands: Int,
+        fieldOfView: Double,
+        facing: Direction
+    ) -> [DepthFloorBandProjection] {
+        let key = DepthFloorProjectionKey(
+            width: Int(size.width.rounded()),
+            height: Int(size.height.rounded()),
+            horizonOffset: Int((horizon).rounded()),
+            floorBands: floorBands,
+            facing: facingKey(for: facing),
+            fieldOfViewMilli: Int((fieldOfView * 1000.0).rounded())
+        )
+        if let cached = Self.depthFloorProjectionCache[key] {
+            return cached
+        }
+
+        let forward = facingUnitVector(for: facing)
+        let right = rightUnitVector(for: facing)
+        let planeScale = tan(fieldOfView * 0.5)
+        let leftRay = (
+            x: forward.x - (right.x * planeScale),
+            y: forward.y - (right.y * planeScale)
+        )
+        let rightRay = (
+            x: forward.x + (right.x * planeScale),
+            y: forward.y + (right.y * planeScale)
+        )
+        let posZ = Double(size.height) * 0.50
+        var projections: [DepthFloorBandProjection] = []
+        projections.reserveCapacity(max(1, floorBands))
+
+        for band in 0..<max(1, floorBands) {
+            let t0 = Double(band) / Double(max(1, floorBands))
+            let t1 = Double(band + 1) / Double(max(1, floorBands))
+            let y0 = horizon + (size.height - horizon) * pow(CGFloat(t0), 1.6)
+            let y1 = horizon + (size.height - horizon) * pow(CGFloat(t1), 1.6)
+            let rowScreenY = max(horizon + 1, (y0 + y1) * 0.5)
+            let rowDepth = max(1.0, Double(rowScreenY - horizon))
+            let normalizedScreenDepth = max(
+                0.0,
+                min(1.0, Double((rowScreenY - horizon) / max(1.0, size.height - horizon)))
+            )
+            let perspectiveWarp = 0.72 + (pow(1.0 - normalizedScreenDepth, 1.55) * 0.65)
+            let rowDistance = (posZ / rowDepth) * perspectiveWarp
+            let bandNorm = (Double(band) + 0.5) / Double(max(1, floorBands))
+            let stripScale = 0.78 + (pow(1.0 - bandNorm, 1.2) * 0.72)
+            let stripCount = min(256, max(72, Int((Double(size.width) * 0.40) * stripScale)))
+            var strips: [DepthFloorStripProjection] = []
+            strips.reserveCapacity(stripCount)
+
+            for strip in 0..<stripCount {
+                let xNorm = (Double(strip) + 0.5) / Double(stripCount)
+                let rayX = leftRay.x + ((rightRay.x - leftRay.x) * xNorm)
+                let rayY = leftRay.y + ((rightRay.y - leftRay.y) * xNorm)
+                let x0 = (CGFloat(strip) / CGFloat(stripCount)) * size.width
+                let x1 = (CGFloat(strip + 1) / CGFloat(stripCount)) * size.width
+                strips.append(
+                    DepthFloorStripProjection(
+                        x0: x0,
+                        x1: x1,
+                        xNormalized: xNorm,
+                        rayX: rayX,
+                        rayY: rayY
+                    )
+                )
+            }
+
+            projections.append(
+                DepthFloorBandProjection(
+                    y0: y0,
+                    y1: y1,
+                    rowDistance: rowDistance,
+                    bandNorm: bandNorm,
+                    strips: strips
+                )
+            )
+        }
+
+        Self.depthFloorProjectionCache[key] = projections
+        if Self.depthFloorProjectionCache.count > 24 {
+            Self.depthFloorProjectionCache.removeAll(keepingCapacity: true)
+            Self.depthFloorProjectionCache[key] = projections
+        }
+        return projections
+    }
+
+    private func facingKey(for direction: Direction) -> Int {
+        switch direction {
+        case .up:
+            return 0
+        case .right:
+            return 1
+        case .down:
+            return 2
+        case .left:
+            return 3
         }
     }
 

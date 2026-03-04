@@ -1025,6 +1025,8 @@ enum SDLGraphicsLauncher {
         )
         let playerX = Double(scene.player.position.x) + 0.5
         let playerY = Double(scene.player.position.y) + 0.5
+        let depthSamples = depth.samples
+        let zBuffer = depthSamples.map(\.correctedDistance)
 
         for (band, projection) in floorProjection.enumerated() {
             let y0 = projection.y0
@@ -1053,7 +1055,24 @@ enum SDLGraphicsLauncher {
             for (index, strip) in projection.strips.enumerated() {
                 let level = stripLevels[index]
                 let lift = max(0.0, level - floorLighting.ambient)
-                let dim = max(0.0, floorLighting.ambient - level)
+                var dim = max(0.0, floorLighting.ambient - level)
+
+                if !depthSamples.isEmpty {
+                    let sampleIndex = min(
+                        depthSamples.count - 1,
+                        max(0, Int(strip.xNormalized * Double(depthSamples.count)))
+                    )
+                    let sample = depthSamples[sampleIndex]
+                    if sample.didHit {
+                        let delta = projection.rowDistance - sample.correctedDistance
+                        if delta >= -0.05 {
+                            let proximity = max(0.0, min(1.0, 1.0 - (delta / 0.62)))
+                            let distanceFade = max(0.30, 1.0 - (sample.correctedDistance / max(0.01, depth.maxDistance)))
+                            dim = max(dim, proximity * distanceFade * 0.36)
+                        }
+                    }
+                }
+
                 if lift <= 0.01, dim <= 0.01 {
                     continue
                 }
@@ -1091,15 +1110,14 @@ enum SDLGraphicsLauncher {
         fill(renderer, x: frame.x, y: horizon, width: frame.width, height: 1, color: depthTheme.innerBorder.withAlpha(36))
         stroke(renderer, frame: frame, color: .gold)
 
-        guard !depth.samples.isEmpty else { return }
-        let columnWidth = max(1, frame.width / depth.samples.count)
-        let zBuffer = depth.samples.map(\.correctedDistance)
-        var wallBottomByColumn = Array(repeating: horizon, count: depth.samples.count)
+        guard !depthSamples.isEmpty else { return }
+        let columnWidth = max(1, frame.width / depthSamples.count)
+        var wallBottomByColumn = Array(repeating: horizon, count: depthSamples.count)
         let fogColor = depth.usesSkyBackdrop
             ? blended(depthTheme.frameBackground, toward: .sky, amount: 0.35)
             : blended(.ceiling, toward: .void, amount: 0.40)
 
-        for sample in depth.samples where sample.didHit {
+        for sample in depthSamples where sample.didHit {
             let distance = max(0.14, sample.correctedDistance)
             let wallHeight = min(Double(frame.height) * 0.92, (Double(frame.height) * 0.82) / distance)
             let top = Int(Double(horizon) - (wallHeight * 0.5))
@@ -1144,7 +1162,7 @@ enum SDLGraphicsLauncher {
         }
 
         // Anchor floor shading to the wall contact line to avoid detached ("peter-panning") shadows.
-        for (column, sample) in depth.samples.enumerated() where sample.didHit {
+        for (column, sample) in depthSamples.enumerated() where sample.didHit {
             let distanceRatio = max(0.0, min(1.0, sample.correctedDistance / max(0.01, depth.maxDistance)))
             let contactAlpha = UInt8(max(18, min(138, Int((0.42 - (distanceRatio * 0.30)) * 255.0))))
             let contactHeight = max(1, min(8, Int(2.0 + ((1.0 - distanceRatio) * 4.0))))
@@ -1172,7 +1190,7 @@ enum SDLGraphicsLauncher {
             let top = Int(Double(horizon) - (projectedHeight * 0.5))
             let height = max(2, Int(projectedHeight))
             let startSample = max(0, (left - frame.x) / columnWidth)
-            let endSample = min(depth.samples.count - 1, (left - frame.x + width - 1) / columnWidth)
+            let endSample = min(depthSamples.count - 1, (left - frame.x + width - 1) / columnWidth)
             if startSample <= endSample {
                 var visible = false
                 for sampleIndex in startSample...endSample where billboard.distance <= (zBuffer[sampleIndex] + 0.06) {

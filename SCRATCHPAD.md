@@ -176,3 +176,6 @@
 - Added strip-level light smoothing in both native and SDL depth floor passes so shadow/light transitions are less stair-stepped across adjacent strips.
 - Increased floor-band density in both renderers to reduce horizontal banding and better preserve shadow continuity while moving/turning.
 - Added native wall-contact floor shading (matching the SDL grounding pass concept) so wall shadows visually attach to the wall base more reliably.
+- Added a cached floor projection model in native Depth3D (per frame geometry/facing/FOV key) so floor strip rays and row-distance math are reused instead of recomputed each frame.
+- Added depth-aware floor contact dimming in both native and SDL: each floor strip now references the nearest wall ray distance (`zBuffer`) and darkens near wall-contact depth to reduce detached/peter-panning shadow edges at oblique angles.
+- Reduced native floor strip density cap and lowered excess floor band expansion to recover performance while keeping the new shadow-attachment behavior.
