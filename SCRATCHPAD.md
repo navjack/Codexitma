@@ -111,3 +111,4 @@
 - Local CrossOver testing on macOS proved the first successful Windows artifact was still incomplete: the EXE imports Swift runtime DLLs (`swiftCore.dll`, `Foundation.dll`, etc.), so the Windows CI packaging step now needs to bundle runtime DLLs from both the release folder and `swiftc -print-target-info` runtime paths.
 
 - Windows SDL crash under Wine traced to Foundation UserDefaults in GraphicsPreferenceStore.loadTheme(); switched Windows theme persistence to a simple JSON file under Application Support while keeping macOS on UserDefaults.
+- The SDL cross-platform branch is ready to merge: `windows-builds/` is now ignored locally, and the Windows SDL workflow is set to run from `main` pushes (plus manual dispatch) rather than PR branch updates.
