@@ -399,6 +399,8 @@ enum InteractableKind: String, Codable {
     case beacon
     case plate
     case switchRune
+    case torchFloor
+    case torchWall
 }
 
 struct InteractableDefinition: Codable {
@@ -562,4 +564,3 @@ struct SaveGame: Codable {
         try container.encode(adventureID, forKey: .adventureID)
     }
 }
-

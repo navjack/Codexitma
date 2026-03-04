@@ -147,3 +147,7 @@
 - Extended depth ray samples and billboards with calculated light levels and used those values in both native and SDL frontends for darker occluded spaces, brighter lit zones, and more grounded billboard shading.
 - Upgraded depth backdrops in both renderers with stronger floor/sky depth cues, fog blending, and vignette-style contrast to improve readability and depth perception.
 - Updated depth UI legends to show the active dynamic range value instead of a hardcoded distance.
+- Added explicit torch authoring support across the data model/editor/renderers (`torchFloor`, `torchWall`) so adventures can place authored light sources instead of relying only on inferred map lighting.
+- Extended Depth 3D billboard generation to render more non-wall map tiles (stairs, shrine/beacon, brush, open doors) and torch interactables, reducing cases where meaningful world objects appeared missing in first-person view.
+- Added authored torch placements to both bundled adventures (`world.json` and `world_starfall.json`) across village, field, dungeon, fen, and spire maps so the runtime light-probe effect is visible during normal progression.
+- Added depth lightmap caching in the snapshot builder (static map light field + player-lantern composite cache) to keep the new lighting pass cheap when no relevant light inputs changed.

@@ -38,6 +38,16 @@
         "rewardItem": null,
         "requiredFlag": null,
         "grantsFlag": null
+      },
+      {
+        "id": "wharf_torch_watch",
+        "kind": "torchWall",
+        "position": { "x": 15, "y": 2 },
+        "title": "Wharf Watchfire",
+        "lines": ["The watchfire throws long shadows over the tide chains."],
+        "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": null
       }
     ]
   },
@@ -86,6 +96,26 @@
         "rewardItem": null,
         "requiredFlag": null,
         "grantsFlag": null
+      },
+      {
+        "id": "bazaar_torch_left",
+        "kind": "torchWall",
+        "position": { "x": 6, "y": 2 },
+        "title": "Signal Sconce",
+        "lines": ["A bright signal flame jitters against brass mirrors."],
+        "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": null
+      },
+      {
+        "id": "bazaar_torch_right",
+        "kind": "torchWall",
+        "position": { "x": 12, "y": 2 },
+        "title": "Signal Sconce",
+        "lines": ["A paired sconce keeps the bazaar's map wall lit."],
+        "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": null
       }
     ]
   },
@@ -122,6 +152,16 @@
         "title": "Tool Chest",
         "lines": ["A balanced blade gleams among the forge tools."],
         "rewardItem": "ashenBlade",
+        "requiredFlag": null,
+        "grantsFlag": null
+      },
+      {
+        "id": "forge_brazier",
+        "kind": "torchFloor",
+        "position": { "x": 8, "y": 4 },
+        "title": "Forge Brazier",
+        "lines": ["Coals pop and spit in the forge-side brazier."],
+        "rewardItem": null,
         "requiredFlag": null,
         "grantsFlag": null
       }
@@ -289,6 +329,16 @@
         "rewardItem": "healingTonic",
         "requiredFlag": null,
         "grantsFlag": null
+      },
+      {
+        "id": "archive_torch_sconce",
+        "kind": "torchWall",
+        "position": { "x": 10, "y": 3 },
+        "title": "Archive Sconce",
+        "lines": ["A sealed sconce burns with calm, dry light."],
+        "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": null
       }
     ]
   },
@@ -454,6 +504,16 @@
         "rewardItem": "lanternOil",
         "requiredFlag": null,
         "grantsFlag": null
+      },
+      {
+        "id": "nest_brazier_perch",
+        "kind": "torchFloor",
+        "position": { "x": 10, "y": 5 },
+        "title": "Perch Brazier",
+        "lines": ["A wind-cut brazier burns with a stubborn blue edge."],
+        "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": null
       }
     ]
   },
@@ -532,6 +592,26 @@
         "rewardItem": null,
         "requiredFlag": null,
         "grantsFlag": "beaconLit"
+      },
+      {
+        "id": "sky_engine_torch_left",
+        "kind": "torchWall",
+        "position": { "x": 7, "y": 1 },
+        "title": "Engine Sconce",
+        "lines": ["A copper sconce paints the dials in hot gold."],
+        "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": null
+      },
+      {
+        "id": "sky_engine_torch_right",
+        "kind": "torchWall",
+        "position": { "x": 13, "y": 1 },
+        "title": "Engine Sconce",
+        "lines": ["The paired sconce flickers across the lens carriage."],
+        "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": null
       }
     ]
   }

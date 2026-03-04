@@ -1096,7 +1096,7 @@ enum SDLGraphicsLauncher {
             let distanceShade = max(0.24, 1.0 - (distanceRatio * 0.72))
             let fogAmount = max(0.0, min(0.70, (distanceRatio - 0.42) * 1.42))
             let spriteBase = shaded(
-                billboardColor(for: billboard.kind),
+                billboardColor(for: billboard.kind, theme: depthTheme),
                 intensity: distanceShade * lightShade
             )
             let spriteColor = blended(spriteBase, toward: fogColor, amount: fogAmount * 0.82)
@@ -1167,6 +1167,8 @@ enum SDLGraphicsLauncher {
         case .plateDown: return .dim
         case .switchIdle: return .blue
         case .switchLit: return .gold
+        case .torchFloor: return .gold
+        case .torchWall: return .doorOpen
         case .shrine: return .violet
         case .beacon: return .beacon
         case .gate: return .doorLocked
@@ -1251,6 +1253,10 @@ enum SDLGraphicsLauncher {
             return .bright
         case .switchRune:
             return .blue
+        case .torchFloor:
+            return .gold
+        case .torchWall:
+            return .doorOpen
         }
     }
 
@@ -1276,7 +1282,7 @@ enum SDLGraphicsLauncher {
         }
     }
 
-    private static func billboardColor(for kind: DepthBillboardKind) -> SDLColor {
+    private static func billboardColor(for kind: DepthBillboardKind, theme: SDLBoardTheme) -> SDLColor {
         switch kind {
         case .npc(let id):
             return occupantColor(for: .npc(id))
@@ -1286,6 +1292,8 @@ enum SDLGraphicsLauncher {
             return occupantColor(for: .boss(id))
         case .feature(let feature):
             return featureColor(for: feature)
+        case .tile(let tileType):
+            return tileColor(for: tileType, theme: theme)
         }
     }
 
@@ -1407,6 +1415,20 @@ enum SDLGraphicsLauncher {
                 [1, 1, 1],
                 [0, 1, 0]
             ]
+        case .torchFloor:
+            return [
+                [0, 1, 0],
+                [1, 1, 1],
+                [0, 1, 0],
+                [0, 1, 0]
+            ]
+        case .torchWall:
+            return [
+                [1, 1, 1],
+                [0, 1, 0],
+                [1, 1, 1],
+                [0, 1, 0]
+            ]
         case .shrine:
             return [
                 [0, 1, 0],
@@ -1477,6 +1499,45 @@ enum SDLGraphicsLauncher {
             return occupantPattern(for: .boss(id))
         case .feature(let feature):
             return featurePattern(for: feature)
+        case .tile(let tileType):
+            return tileBillboardPattern(for: tileType)
+        }
+    }
+
+    private static func tileBillboardPattern(for tileType: TileType) -> [[Int]] {
+        switch tileType {
+        case .stairs:
+            return [
+                [1, 1, 1, 1],
+                [1, 0, 0, 0],
+                [1, 1, 1, 0]
+            ]
+        case .doorOpen:
+            return [
+                [1, 0, 1],
+                [1, 0, 1],
+                [1, 1, 1]
+            ]
+        case .brush:
+            return [
+                [1, 0, 1, 0],
+                [0, 1, 0, 1],
+                [1, 0, 1, 0]
+            ]
+        case .shrine:
+            return [
+                [0, 1, 0],
+                [1, 1, 1],
+                [0, 1, 0]
+            ]
+        case .beacon:
+            return [
+                [0, 1, 0],
+                [1, 1, 1],
+                [1, 1, 1]
+            ]
+        case .floor, .wall, .water, .doorLocked:
+            return [[1]]
         }
     }
 

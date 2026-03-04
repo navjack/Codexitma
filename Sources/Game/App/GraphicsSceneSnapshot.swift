@@ -16,6 +16,8 @@ enum MapFeature {
     case plateDown
     case switchIdle
     case switchLit
+    case torchFloor
+    case torchWall
     case shrine
     case beacon
     case gate
@@ -29,6 +31,8 @@ enum MapFeature {
         case .plateDown: return "plate_down"
         case .switchIdle: return "switch_idle"
         case .switchLit: return "switch_lit"
+        case .torchFloor: return "torch_floor"
+        case .torchWall: return "torch_wall"
         case .shrine: return "shrine"
         case .beacon: return "beacon"
         case .gate: return "gate"
@@ -41,6 +45,7 @@ enum DepthBillboardKind {
     case enemy(String)
     case boss(String)
     case feature(MapFeature)
+    case tile(TileType)
 }
 
 struct BoardCellSnapshot {
@@ -168,6 +173,24 @@ enum GraphicsSceneSnapshotBuilder {
             return values[position.y][position.x]
         }
     }
+
+    private struct DepthStaticLightCacheKey: Hashable {
+        let mapID: String
+        let width: Int
+        let height: Int
+        let ambientBucket: Int
+        let openedInteractablesHash: Int
+        let bossStateHash: Int
+    }
+
+    private struct DepthFinalLightCacheKey: Hashable {
+        let staticKey: DepthStaticLightCacheKey
+        let playerPosition: Position
+        let lanternBucket: Int
+    }
+
+    private nonisolated(unsafe) static var cachedStaticLightField: (key: DepthStaticLightCacheKey, field: DepthLightField)?
+    private nonisolated(unsafe) static var cachedFinalLightField: (key: DepthFinalLightCacheKey, field: DepthLightField)?
 
     static func build(state: GameState, visualTheme: GraphicsVisualTheme) -> GraphicsSceneSnapshot {
         let board = makeBoard(from: state)
@@ -433,19 +456,31 @@ enum GraphicsSceneSnapshotBuilder {
             break
         }
 
-        guard cell.feature != .none else {
-            return nil
+        if cell.feature != .none {
+            let appearance = featureAppearance(for: cell.feature)
+            return DepthBillboardSnapshot(
+                id: "feature:\(cell.position.x):\(cell.position.y):\(cell.feature.debugName)",
+                kind: .feature(cell.feature),
+                distance: distance,
+                angleOffset: angleOffset,
+                maxDistance: maxDistance,
+                scale: appearance.scale,
+                widthScale: appearance.widthScale,
+                lightLevel: lightLevel
+            )
         }
 
-        let appearance = featureAppearance(for: cell.feature)
+        guard let tileAppearance = tileBillboardAppearance(for: cell.tile.type) else {
+            return nil
+        }
         return DepthBillboardSnapshot(
-            id: "feature:\(cell.position.x):\(cell.position.y):\(cell.feature.debugName)",
-            kind: .feature(cell.feature),
+            id: "tile:\(cell.position.x):\(cell.position.y):\(cell.tile.type.rawValue)",
+            kind: .tile(cell.tile.type),
             distance: distance,
             angleOffset: angleOffset,
             maxDistance: maxDistance,
-            scale: appearance.scale,
-            widthScale: appearance.widthScale,
+            scale: tileAppearance.scale,
+            widthScale: tileAppearance.widthScale,
             lightLevel: lightLevel
         )
     }
@@ -464,12 +499,33 @@ enum GraphicsSceneSnapshotBuilder {
             return (0.16, 1.45)
         case .switchIdle, .switchLit:
             return (0.28, 0.84)
+        case .torchFloor:
+            return (0.36, 0.82)
+        case .torchWall:
+            return (0.42, 0.76)
         case .shrine:
             return (0.46, 0.90)
         case .beacon:
             return (0.54, 0.92)
         case .gate:
             return (0.62, 1.05)
+        }
+    }
+
+    private static func tileBillboardAppearance(for tileType: TileType) -> (scale: Double, widthScale: Double)? {
+        switch tileType {
+        case .stairs:
+            return (0.32, 1.18)
+        case .doorOpen:
+            return (0.58, 0.90)
+        case .brush:
+            return (0.30, 1.12)
+        case .shrine:
+            return (0.46, 0.90)
+        case .beacon:
+            return (0.54, 0.92)
+        case .floor, .wall, .water, .doorLocked:
+            return nil
         }
     }
 
@@ -517,51 +573,134 @@ enum GraphicsSceneSnapshotBuilder {
             return DepthLightField(width: board.width, height: board.height, ambient: ambient, values: [])
         }
 
-        var sources = collectDepthLightSources(from: state, board: board)
-        let lanternStrength = max(0.0, min(1.0, Double(state.player.effectiveLanternCapacity()) / 18.0))
-        sources.append(
-            DepthLightSource(
-                position: state.player.position,
-                intensity: 0.34 + (lanternStrength * 0.34),
-                radius: 3.2 + (lanternStrength * 3.0)
+        let staticKey = staticLightCacheKey(from: state, board: board, ambient: ambient)
+        let staticField: DepthLightField
+        if let cached = cachedStaticLightField, cached.key == staticKey {
+            staticField = cached.field
+        } else {
+            let staticSources = collectDepthLightSources(from: state, board: board)
+            staticField = buildLightField(
+                width: board.width,
+                height: board.height,
+                ambient: ambient,
+                sources: staticSources,
+                board: board
             )
-        )
-
-        var values = Array(
-            repeating: Array(repeating: ambient, count: board.width),
-            count: board.height
-        )
-        for y in 0..<board.height {
-            for x in 0..<board.width {
-                let target = Position(x: x, y: y)
-                var light = ambient
-
-                for source in sources {
-                    let dx = Double(source.position.x - target.x)
-                    let dy = Double(source.position.y - target.y)
-                    let distance = hypot(dx, dy)
-                    if distance > source.radius {
-                        continue
-                    }
-
-                    let attenuation = pow(max(0.0, 1.0 - (distance / source.radius)), 1.75)
-                    var contribution = source.intensity * attenuation
-                    if !hasLightLineOfSight(from: source.position, to: target, board: board) {
-                        contribution *= 0.24
-                    }
-                    light += contribution
-                }
-
-                values[y][x] = max(0.05, min(1.0, light))
-            }
+            cachedStaticLightField = (staticKey, staticField)
         }
 
-        return DepthLightField(
+        let lantern = playerLanternLightSource(for: state.player)
+        let finalKey = DepthFinalLightCacheKey(
+            staticKey: staticKey,
+            playerPosition: state.player.position,
+            lanternBucket: Int((lantern.intensity * 1000.0) + (lantern.radius * 100.0))
+        )
+        if let cached = cachedFinalLightField, cached.key == finalKey {
+            return cached.field
+        }
+
+        var values = staticField.values
+        applyLightSource(lantern, to: &values, board: board)
+        let finalField = DepthLightField(
             width: board.width,
             height: board.height,
             ambient: ambient,
             values: values
         )
+        cachedFinalLightField = (finalKey, finalField)
+        return finalField
+    }
+
+    private static func staticLightCacheKey(
+        from state: GameState,
+        board: MapBoardSnapshot,
+        ambient: Double
+    ) -> DepthStaticLightCacheKey {
+        let openedInteractablesHash = hashStrings(state.world.openedInteractables)
+        let bossMarkers = state.world.enemies
+            .filter { $0.active && $0.ai == .boss && $0.mapID == state.player.currentMapID }
+            .map { "\($0.id):\($0.position.x):\($0.position.y):\($0.hp)" }
+        let bossStateHash = hashStrings(bossMarkers)
+        return DepthStaticLightCacheKey(
+            mapID: state.player.currentMapID,
+            width: board.width,
+            height: board.height,
+            ambientBucket: Int(ambient * 1000.0),
+            openedInteractablesHash: openedInteractablesHash,
+            bossStateHash: bossStateHash
+        )
+    }
+
+    private static func hashStrings<S: Sequence>(_ values: S) -> Int where S.Element == String {
+        var hasher = Hasher()
+        let sorted = Array(values).sorted()
+        for value in sorted {
+            hasher.combine(value)
+        }
+        return hasher.finalize()
+    }
+
+    private static func playerLanternLightSource(for player: PlayerState) -> DepthLightSource {
+        let lanternStrength = max(0.0, min(1.0, Double(player.effectiveLanternCapacity()) / 18.0))
+        return DepthLightSource(
+            position: player.position,
+            intensity: 0.34 + (lanternStrength * 0.34),
+            radius: 3.2 + (lanternStrength * 3.0)
+        )
+    }
+
+    private static func buildLightField(
+        width: Int,
+        height: Int,
+        ambient: Double,
+        sources: [DepthLightSource],
+        board: MapBoardSnapshot
+    ) -> DepthLightField {
+        var values = Array(
+            repeating: Array(repeating: ambient, count: width),
+            count: height
+        )
+        for source in sources {
+            applyLightSource(source, to: &values, board: board)
+        }
+        return DepthLightField(
+            width: width,
+            height: height,
+            ambient: ambient,
+            values: values
+        )
+    }
+
+    private static func applyLightSource(
+        _ source: DepthLightSource,
+        to values: inout [[Double]],
+        board: MapBoardSnapshot
+    ) {
+        guard board.width > 0, board.height > 0 else { return }
+
+        let minX = max(0, Int(floor(Double(source.position.x) - source.radius)))
+        let maxX = min(board.width - 1, Int(ceil(Double(source.position.x) + source.radius)))
+        let minY = max(0, Int(floor(Double(source.position.y) - source.radius)))
+        let maxY = min(board.height - 1, Int(ceil(Double(source.position.y) + source.radius)))
+
+        for y in minY...maxY {
+            for x in minX...maxX {
+                let target = Position(x: x, y: y)
+                let dx = Double(source.position.x - target.x)
+                let dy = Double(source.position.y - target.y)
+                let distance = hypot(dx, dy)
+                if distance > source.radius {
+                    continue
+                }
+
+                let attenuation = pow(max(0.0, 1.0 - (distance / source.radius)), 1.75)
+                var contribution = source.intensity * attenuation
+                if !hasLightLineOfSight(from: source.position, to: target, board: board) {
+                    contribution *= 0.24
+                }
+                values[y][x] = max(0.05, min(1.0, values[y][x] + contribution))
+            }
+        }
     }
 
     private static func collectDepthLightSources(from state: GameState, board: MapBoardSnapshot) -> [DepthLightSource] {
@@ -599,6 +738,10 @@ enum GraphicsSceneSnapshotBuilder {
             return DepthLightSource(position: cell.position, intensity: 0.58, radius: 5.2)
         case .switchLit:
             return DepthLightSource(position: cell.position, intensity: 0.30, radius: 3.4)
+        case .torchFloor:
+            return DepthLightSource(position: cell.position, intensity: 0.42, radius: 3.8)
+        case .torchWall:
+            return DepthLightSource(position: cell.position, intensity: 0.36, radius: 3.2)
         case .gate:
             return DepthLightSource(position: cell.position, intensity: 0.16, radius: 2.1)
         case .none, .chest, .bed, .plateUp, .plateDown, .switchIdle:
@@ -700,6 +843,10 @@ enum GraphicsSceneSnapshotBuilder {
             return state.world.openedInteractables.contains(interactable.id) ? .plateDown : .plateUp
         case .switchRune:
             return state.world.openedInteractables.contains("spire_mirrors_aligned") ? .switchLit : .switchIdle
+        case .torchFloor:
+            return .torchFloor
+        case .torchWall:
+            return .torchWall
         case .shrine:
             return .shrine
         case .beacon:

@@ -141,6 +141,10 @@ extension InteractableKind {
             return "Stone Plate"
         case .switchRune:
             return "Rune Switch"
+        case .torchFloor:
+            return "Floor Torch"
+        case .torchWall:
+            return "Wall Torch"
         }
     }
 
@@ -162,6 +166,10 @@ extension InteractableKind {
             return ["The stone sinks slightly beneath your weight."]
         case .switchRune:
             return ["A rune flickers, waiting for a sequence."]
+        case .torchFloor:
+            return ["A squat torch basin spills warm amber light."]
+        case .torchWall:
+            return ["A wall sconce spits and crackles in the draft."]
         }
     }
 }

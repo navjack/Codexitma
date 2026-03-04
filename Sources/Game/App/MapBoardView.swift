@@ -586,6 +586,30 @@ struct MapBoardView: View {
                 0.28,
                 0.84
             )
+        case .torchFloor:
+            fallback = (
+                [
+                    [0,1,0],
+                    [1,1,1],
+                    [0,1,0],
+                    [0,1,0]
+                ],
+                palette.titleGold,
+                0.36,
+                0.82
+            )
+        case .torchWall:
+            fallback = (
+                [
+                    [1,1,1],
+                    [0,1,0],
+                    [1,1,1],
+                    [0,1,0]
+                ],
+                palette.lightGold,
+                0.42,
+                0.76
+            )
         case .shrine:
             fallback = (
                 [
@@ -649,6 +673,8 @@ struct MapBoardView: View {
                 ]
         case .feature(let feature):
             return depthFeatureAppearance(for: feature)?.pattern ?? [[1]]
+        case .tile(let tileType):
+            return depthTileAppearance(for: tileType).pattern
         }
     }
 
@@ -664,6 +690,65 @@ struct MapBoardView: View {
                 ?? palette.accentViolet
         case .feature(let feature):
             return depthFeatureAppearance(for: feature)?.color ?? palette.text
+        case .tile(let tileType):
+            return depthTileAppearance(for: tileType).color
+        }
+    }
+
+    private func depthTileAppearance(for tileType: TileType) -> (pattern: [[Int]], color: Color) {
+        switch tileType {
+        case .stairs:
+            return (
+                [
+                    [1,1,1,1],
+                    [1,0,0,0],
+                    [1,1,1,0]
+                ],
+                regionTheme.stairs
+            )
+        case .doorOpen:
+            return (
+                [
+                    [1,0,1],
+                    [1,0,1],
+                    [1,1,1]
+                ],
+                regionTheme.doorOpen
+            )
+        case .brush:
+            return (
+                [
+                    [1,0,1,0],
+                    [0,1,0,1],
+                    [1,0,1,0]
+                ],
+                regionTheme.brush
+            )
+        case .shrine:
+            return (
+                [
+                    [0,1,0],
+                    [1,1,1],
+                    [0,1,0]
+                ],
+                regionTheme.shrine
+            )
+        case .beacon:
+            return (
+                [
+                    [0,1,0],
+                    [1,1,1],
+                    [1,1,1]
+                ],
+                regionTheme.beacon
+            )
+        case .floor, .wall, .water, .doorLocked:
+            return (
+                [
+                    [1]
+                ],
+                palette.text
+            )
         }
     }
 
@@ -1092,6 +1177,10 @@ struct MapBoardView: View {
             return state.world.openedInteractables.contains(interactable.id) ? .plateDown : .plateUp
         case .switchRune:
             return state.world.openedInteractables.contains("spire_mirrors_aligned") ? .switchLit : .switchIdle
+        case .torchFloor:
+            return .torchFloor
+        case .torchWall:
+            return .torchWall
         case .shrine:
             return .shrine
         case .beacon:

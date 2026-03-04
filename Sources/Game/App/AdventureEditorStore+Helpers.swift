@@ -369,6 +369,8 @@ extension AdventureEditorStore {
         case .beacon: return "B"
         case .plate: return "o"
         case .switchRune: return "="
+        case .torchFloor: return "t"
+        case .torchWall: return "T"
         }
     }
 
