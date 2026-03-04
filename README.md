@@ -245,6 +245,14 @@ These packaging workflows no longer run on every `main` push. They run on:
 
 That keeps routine development pushes cheap while still allowing reproducible release builds.
 
+To mirror a published GitHub release back into the local ignored `dist/` folder, run:
+
+```sh
+./scripts/sync_release_to_dist.sh v0.2.1
+```
+
+If you omit the tag, the script pulls the latest published release.
+
 ## Repository Notes
 
 - [PLAN.md](PLAN.md) contains the original project plan and scope.
