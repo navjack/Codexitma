@@ -931,27 +931,10 @@ private struct MapBoardView: View {
 
     private func firstPersonView(theme: RegionTheme) -> some View {
         GeometryReader { proxy in
-            let slices = corridorSlices()
-            let size = proxy.size
+            let raySamples = depthRaySamples(columns: 96, maxDistance: 9.0)
             ZStack {
-                Rectangle()
-                    .fill(Color.black)
-
-                VStack(spacing: 0) {
-                    Rectangle()
-                        .fill(theme.roomShadow.opacity(0.55))
-                    Rectangle()
-                        .fill(theme.floor.opacity(0.22))
-                }
-
-                if slices.isEmpty {
-                    Rectangle()
-                        .fill(frontWallColor(for: TileFactory.tile(for: "#"), theme: theme))
-                        .frame(width: size.width * 0.28, height: size.height * 0.28)
-                }
-
-                ForEach(Array(slices.reversed()), id: \.depth) { slice in
-                    corridorLayer(for: slice, in: size, theme: theme)
+                Canvas { context, canvasSize in
+                    drawDepthScene(into: &context, size: canvasSize, samples: raySamples, theme: theme)
                 }
 
                 VStack(alignment: .leading, spacing: 5) {
@@ -961,7 +944,10 @@ private struct MapBoardView: View {
                     Text("FIRST-PERSON")
                         .font(.system(size: 10, weight: .regular, design: .monospaced))
                         .foregroundStyle(palette.text.opacity(0.86))
-                    Text("A/D TURN  W/S STEP")
+                    Text("RAYCAST MAP  A/D TURN")
+                        .font(.system(size: 9, weight: .regular, design: .monospaced))
+                        .foregroundStyle(palette.text.opacity(0.76))
+                    Text("W/S STEP  RANGE 9 TILES")
                         .font(.system(size: 9, weight: .regular, design: .monospaced))
                         .foregroundStyle(palette.text.opacity(0.76))
                 }
@@ -983,6 +969,183 @@ private struct MapBoardView: View {
             .drawingGroup(opaque: false)
         }
         .frame(width: 584, height: 356)
+    }
+
+    private func depthRaySamples(columns: Int, maxDistance: Double) -> [DepthRaySample] {
+        let origin = CGPoint(
+            x: Double(state.player.position.x) + 0.5,
+            y: Double(state.player.position.y) + 0.5
+        )
+        let caster = DepthRaycaster(origin: origin, facing: state.player.facing) { position in
+            tile(at: position)
+        }
+        return caster.castSamples(columns: columns, maxDistance: maxDistance)
+    }
+
+    private func drawDepthScene(
+        into context: inout GraphicsContext,
+        size: CGSize,
+        samples: [DepthRaySample],
+        theme: RegionTheme
+    ) {
+        drawDepthBackdrop(into: &context, size: size, theme: theme)
+        drawDepthWalls(into: &context, size: size, samples: samples, theme: theme)
+        drawDepthReticleGlow(into: &context, size: size)
+    }
+
+    private func drawDepthBackdrop(
+        into context: inout GraphicsContext,
+        size: CGSize,
+        theme: RegionTheme
+    ) {
+        let horizon = size.height * 0.5
+        let ceilingRect = CGRect(x: 0, y: 0, width: size.width, height: horizon)
+        let floorRect = CGRect(x: 0, y: horizon, width: size.width, height: size.height - horizon)
+
+        if usesSkyBackdrop {
+            context.fill(
+                Path(ceilingRect),
+                with: .linearGradient(
+                    Gradient(colors: [
+                        theme.roomHighlight.opacity(0.34),
+                        theme.roomShadow.opacity(0.86)
+                    ]),
+                    startPoint: CGPoint(x: size.width * 0.5, y: 0),
+                    endPoint: CGPoint(x: size.width * 0.5, y: horizon)
+                )
+            )
+
+            for band in 0..<5 {
+                let y = horizon * (0.12 + (CGFloat(band) * 0.13))
+                let width = size.width * (0.16 + (CGFloat(band % 3) * 0.08))
+                let x = (size.width * 0.18) + (CGFloat((band * 17) % 41) / 100.0) * size.width
+                let cloud = CGRect(x: min(x, size.width - width), y: y, width: width, height: 3)
+                context.fill(Path(cloud), with: .color(theme.roomHighlight.opacity(0.08)))
+            }
+        } else {
+            context.fill(
+                Path(ceilingRect),
+                with: .linearGradient(
+                    Gradient(colors: [
+                        Color.black.opacity(0.98),
+                        theme.wall.opacity(0.34)
+                    ]),
+                    startPoint: CGPoint(x: size.width * 0.5, y: 0),
+                    endPoint: CGPoint(x: size.width * 0.5, y: horizon)
+                )
+            )
+
+            for row in 1...8 {
+                let t = CGFloat(row) / 8.0
+                let y = horizon * pow(t, 1.65)
+                let line = Path(CGRect(x: 0, y: y, width: size.width, height: 1))
+                context.fill(line, with: .color(theme.roomHighlight.opacity(0.05)))
+            }
+        }
+
+        context.fill(Path(floorRect), with: .color(theme.floor.opacity(0.18)))
+
+        let floorBands = 14
+        for band in 0..<floorBands {
+            let t0 = CGFloat(band) / CGFloat(floorBands)
+            let t1 = CGFloat(band + 1) / CGFloat(floorBands)
+            let y0 = horizon + (size.height - horizon) * pow(t0, 1.6)
+            let y1 = horizon + (size.height - horizon) * pow(t1, 1.6)
+            let rect = CGRect(x: 0, y: y0, width: size.width, height: max(1, y1 - y0))
+            let shade = 0.10 + (Double(t1) * 0.22)
+            let stripe = band.isMultiple(of: 2) ? theme.roomHighlight.opacity(0.05) : Color.black.opacity(0.04)
+            context.fill(Path(rect), with: .color(theme.floor.opacity(shade)))
+            context.fill(Path(rect.insetBy(dx: 0, dy: 0)), with: .color(stripe))
+
+            if band > 0 {
+                let line = Path(CGRect(x: 0, y: y0, width: size.width, height: 1))
+                context.fill(line, with: .color(theme.roomHighlight.opacity(0.06)))
+            }
+        }
+
+        let center = CGPoint(x: size.width * 0.5, y: horizon)
+        for step in stride(from: -0.8, through: 0.8, by: 0.2) {
+            let end = CGPoint(x: size.width * (0.5 + (step * 0.55)), y: size.height)
+            var guide = Path()
+            guide.move(to: center)
+            guide.addLine(to: end)
+            context.stroke(guide, with: .color(theme.roomHighlight.opacity(0.04)), lineWidth: 1)
+        }
+
+        let horizonLine = Path(CGRect(x: 0, y: horizon, width: size.width, height: 1))
+        context.fill(horizonLine, with: .color(theme.roomHighlight.opacity(0.10)))
+    }
+
+    private func drawDepthWalls(
+        into context: inout GraphicsContext,
+        size: CGSize,
+        samples: [DepthRaySample],
+        theme: RegionTheme
+    ) {
+        guard !samples.isEmpty else { return }
+
+        let horizon = size.height * 0.5
+        let columnWidth = size.width / CGFloat(samples.count)
+
+        for sample in samples where sample.didHit {
+            let distance = max(0.14, sample.correctedDistance)
+            let wallHeight = min(size.height * 0.92, (size.height * 0.82) / CGFloat(distance))
+            let top = max(0, horizon - (wallHeight * 0.5))
+            let rect = CGRect(
+                x: CGFloat(sample.column) * columnWidth,
+                y: top,
+                width: ceil(columnWidth) + 1,
+                height: min(size.height - top, wallHeight)
+            )
+
+            let axisShade = sample.hitAxis == .vertical ? 0.78 : 0.92
+            let distanceShade = max(0.20, 1.0 - ((sample.correctedDistance / sample.maxDistance) * 0.76))
+            let wallColor = frontWallColor(for: sample.hitTile, theme: theme).opacity(distanceShade * axisShade)
+            context.fill(Path(rect), with: .color(wallColor))
+
+            if sample.column.isMultiple(of: 3) {
+                let stripe = CGRect(
+                    x: rect.minX,
+                    y: rect.minY,
+                    width: max(1, rect.width * 0.34),
+                    height: rect.height
+                )
+                context.fill(Path(stripe), with: .color(Color.black.opacity(0.08)))
+            }
+
+            let topEdge = Path(CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: 1))
+            context.fill(topEdge, with: .color(theme.roomHighlight.opacity(0.12)))
+        }
+    }
+
+    private func drawDepthReticleGlow(
+        into context: inout GraphicsContext,
+        size: CGSize
+    ) {
+        let glow = CGRect(
+            x: (size.width * 0.5) - 3,
+            y: (size.height * 0.5) - 3,
+            width: 6,
+            height: 6
+        )
+        context.fill(Path(ellipseIn: glow), with: .color(palette.lightGold.opacity(0.05)))
+    }
+
+    private var usesSkyBackdrop: Bool {
+        let mapID = state.player.currentMapID
+        let indoorFragments = [
+            "barrow",
+            "spire",
+            "vault",
+            "archive",
+            "observatory",
+            "cloister",
+            "keep",
+            "catacomb",
+            "crypt",
+            "sanctum"
+        ]
+        return indoorFragments.allSatisfy { !mapID.contains($0) }
     }
 
     private func corridorLayer(for slice: CorridorSlice, in size: CGSize, theme: RegionTheme) -> some View {
@@ -1587,6 +1750,148 @@ private struct PerspectiveFrame {
 
     var center: CGPoint {
         CGPoint(x: (topLeft.x + topRight.x) / 2, y: (topLeft.y + bottomLeft.y) / 2)
+    }
+}
+
+enum DepthHitAxis {
+    case none
+    case vertical
+    case horizontal
+}
+
+struct DepthRaySample {
+    let column: Int
+    let didHit: Bool
+    let correctedDistance: Double
+    let rawDistance: Double
+    let maxDistance: Double
+    let hitTile: Tile
+    let hitAxis: DepthHitAxis
+}
+
+struct DepthRaycaster {
+    let origin: CGPoint
+    let facing: Direction
+    let tileAt: (Position) -> Tile
+    let fov: Double
+
+    init(
+        origin: CGPoint,
+        facing: Direction,
+        fov: Double = .pi / 3.1,
+        tileAt: @escaping (Position) -> Tile
+    ) {
+        self.origin = origin
+        self.facing = facing
+        self.tileAt = tileAt
+        self.fov = fov
+    }
+
+    func castSamples(columns: Int, maxDistance: Double) -> [DepthRaySample] {
+        guard columns > 0 else { return [] }
+
+        return (0..<columns).map { column in
+            let cameraOffset = ((Double(column) + 0.5) / Double(columns)) - 0.5
+            let rayAngle = baseAngle + (cameraOffset * fov)
+            return castRay(column: column, angle: rayAngle, maxDistance: maxDistance)
+        }
+    }
+
+    private func castRay(column: Int, angle: Double, maxDistance: Double) -> DepthRaySample {
+        let originX = Double(origin.x)
+        let originY = Double(origin.y)
+        let rayX = cos(angle)
+        let rayY = sin(angle)
+
+        var mapX = Int(floor(originX))
+        var mapY = Int(floor(originY))
+
+        let deltaX = rayX == 0 ? Double.greatestFiniteMagnitude : abs(1.0 / rayX)
+        let deltaY = rayY == 0 ? Double.greatestFiniteMagnitude : abs(1.0 / rayY)
+
+        let stepX: Int
+        var sideX: Double
+        if rayX < 0 {
+            stepX = -1
+            sideX = (originX - Double(mapX)) * deltaX
+        } else {
+            stepX = 1
+            sideX = (Double(mapX + 1) - originX) * deltaX
+        }
+
+        let stepY: Int
+        var sideY: Double
+        if rayY < 0 {
+            stepY = -1
+            sideY = (originY - Double(mapY)) * deltaY
+        } else {
+            stepY = 1
+            sideY = (Double(mapY + 1) - originY) * deltaY
+        }
+
+        var hitAxis: DepthHitAxis = .none
+        var hitTile = TileFactory.tile(for: ".")
+        var rawDistance = maxDistance
+        var didHit = false
+        var travelDistance = 0.0
+
+        while !didHit && travelDistance < maxDistance {
+            if sideX < sideY {
+                mapX += stepX
+                rawDistance = sideX
+                sideX += deltaX
+                hitAxis = .vertical
+            } else {
+                mapY += stepY
+                rawDistance = sideY
+                sideY += deltaY
+                hitAxis = .horizontal
+            }
+            travelDistance = rawDistance
+
+            let tile = tileAt(Position(x: mapX, y: mapY))
+            if !tile.walkable {
+                hitTile = tile
+                didHit = true
+                break
+            }
+        }
+
+        if !didHit {
+            return DepthRaySample(
+                column: column,
+                didHit: false,
+                correctedDistance: maxDistance,
+                rawDistance: maxDistance,
+                maxDistance: maxDistance,
+                hitTile: hitTile,
+                hitAxis: .none
+            )
+        }
+
+        let corrected = max(0.05, rawDistance * cos(angle - baseAngle))
+        return DepthRaySample(
+            column: column,
+            didHit: true,
+            correctedDistance: corrected,
+            rawDistance: rawDistance,
+            maxDistance: maxDistance,
+            hitTile: hitTile,
+            hitAxis: hitAxis
+        )
+    }
+
+    private var baseAngle: Double {
+        switch facing {
+        case .up:
+            return -.pi / 2
+        case .down:
+            return .pi / 2
+        case .left:
+            return .pi
+        case .right:
+            return 0
+        }
     }
 }
 

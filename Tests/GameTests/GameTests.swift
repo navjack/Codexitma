@@ -119,6 +119,32 @@ import Testing
     #expect(store.loadTheme() == .depth3D)
 }
 
+@Test func depthRaycasterMeasuresCenterWallDistance() async throws {
+    let map = [
+        "#####",
+        "#...#",
+        "#####"
+    ]
+
+    let caster = DepthRaycaster(
+        origin: CGPoint(x: 2.5, y: 1.5),
+        facing: .right
+    ) { position in
+        guard position.y >= 0,
+              position.y < map.count,
+              position.x >= 0,
+              position.x < map[position.y].count else {
+            return TileFactory.tile(for: "#")
+        }
+        let raw = Array(map[position.y])[position.x]
+        return TileFactory.tile(for: raw)
+    }
+
+    let sample = try #require(caster.castSamples(columns: 1, maxDistance: 8).first)
+    #expect(sample.didHit)
+    #expect(abs(sample.correctedDistance - 1.5) < 0.001)
+}
+
 @Test func movementUpdatesPlayerFacing() async throws {
     let library = try ContentLoader().load()
     let saveURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString).appendingPathExtension("json")
