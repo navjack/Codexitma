@@ -41,6 +41,8 @@
 - Filled in more inspector coverage so enemies expose AI, interactables expose reward/flag fields, and portals expose destination coordinates.
 - Finished the merge-blocking editor polish pass: added pre-export validation with surfaced issues, interactable `rewardMarks`, portal gate text/flag authoring, and promoted the editor into a first-class graphics-mode feature via `M` from the title screen or a live run with a confirmation prompt.
 - Bundled adventures now open in the editor as safe external overrides, while external packs and existing user mods reopen and save back into their existing pack folder.
+- Fixed the in-game editor window close path so closing the editor after launching it from a live adventure no longer releases the controller during AppKit's close callback.
+- Made the editor and graphics UI layouts responsive: both now keep their wide-screen layouts when there is room, but fall back to stacked/scrollable arrangements inside smaller normal windows instead of overflowing.
 
 ## Current Notes
 
@@ -55,6 +57,7 @@
 - Theme selection is now a UI concern only; keep future visual experiments in the renderer/session layer rather than pushing them into `GameEngine`.
 - Content authoring should now default to the JSON packs in `Sources/Game/ContentData`; only core rules, state transitions, and rendering logic should require Swift changes.
 - External content packs can now extend the title menu without modifying the app bundle, as long as they follow the expected manifest and JSON file layout.
+- The editor and graphics shells now intentionally use `ViewThatFits` plus scroll-backed fallbacks; keep future panel additions responsive instead of adding more fixed-width rows.
 
 ## Next Build Targets
 

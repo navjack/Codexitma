@@ -42,6 +42,7 @@ private final class AdventureEditorWindowController: NSObject, NSWindowDelegate 
     private let store: AdventureEditorStore
     private let onClose: (AdventureEditorWindowController) -> Void
     private var window: NSWindow?
+    private var hasScheduledClose = false
 
     init(
         library: GameContentLibrary,
@@ -64,20 +65,27 @@ private final class AdventureEditorWindowController: NSObject, NSWindowDelegate 
     }
 
     func windowWillClose(_ notification: Notification) {
-        onClose(self)
+        guard hasScheduledClose == false else {
+            return
+        }
+        hasScheduledClose = true
+        window?.delegate = nil
         window = nil
+        DispatchQueue.main.async { [self] in
+            onClose(self)
+        }
     }
 
     private func makeWindow() -> NSWindow {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1380, height: 840),
+            contentRect: NSRect(x: 0, y: 0, width: 1200, height: 760),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
         window.title = "Codexitma Adventure Editor"
         window.backgroundColor = .black
-        window.contentMinSize = NSSize(width: 1180, height: 760)
+        window.contentMinSize = NSSize(width: 1024, height: 680)
         window.delegate = self
         window.center()
         window.contentView = NSHostingView(rootView: AdventureEditorRootView(store: store))
@@ -2305,40 +2313,68 @@ struct AdventureEditorRootView: View {
         ZStack {
             palette.background.ignoresSafeArea()
 
-            VStack(spacing: 12) {
-                header
+            ScrollView([.vertical, .horizontal], showsIndicators: false) {
+                VStack(spacing: 12) {
+                    header
 
-                HStack(alignment: .top, spacing: 12) {
-                    sourcePanel
-                        .frame(width: 240)
+                    ViewThatFits(in: .horizontal) {
+                        HStack(alignment: .top, spacing: 12) {
+                            sourcePanel
+                                .frame(width: 220)
 
-                    VStack(spacing: 12) {
-                        metadataPanel
-                        contentTabBar
-                        contentPanel
+                            VStack(spacing: 12) {
+                                metadataPanel
+                                contentTabBar
+                                contentPanel
+                            }
+                        }
+
+                        VStack(alignment: .leading, spacing: 12) {
+                            sourcePanel
+                            metadataPanel
+                            contentTabBar
+                            contentPanel
+                        }
                     }
-                }
 
-                footer
+                    footer
+                }
+                .padding(18)
             }
-            .padding(18)
         }
     }
 
     private var header: some View {
-        HStack {
-            Text("CODEXITMA ADVENTURE EDITOR")
-                .font(.system(size: 20, weight: .bold, design: .monospaced))
-                .foregroundStyle(palette.title)
-            Spacer()
+        ViewThatFits(in: .horizontal) {
+            HStack {
+                Text("CODEXITMA ADVENTURE EDITOR")
+                    .font(.system(size: 20, weight: .bold, design: .monospaced))
+                    .foregroundStyle(palette.title)
+                Spacer()
+                editorHeaderButtons
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("CODEXITMA ADVENTURE EDITOR")
+                    .font(.system(size: 18, weight: .bold, design: .monospaced))
+                    .foregroundStyle(palette.title)
+                editorHeaderButtons
+            }
+        }
+    }
+
+    private var editorHeaderButtons: some View {
+        HStack(spacing: 8) {
             Button("VALIDATE") {
                 _ = store.validateCurrentPack()
             }
             .buttonStyle(EditorButtonStyle(background: palette.panelAlt))
+
             Button("SAVE + PLAYTEST") {
                 store.saveAndPlaytestCurrentPack()
             }
             .buttonStyle(EditorButtonStyle(background: palette.title))
+
             Button("SAVE PACK") {
                 store.saveCurrentPack()
             }
@@ -2517,19 +2553,37 @@ struct AdventureEditorRootView: View {
 
     private var contentTabBar: some View {
         EditorPanel(title: "EDITOR DATA", palette: palette) {
-            HStack(spacing: 6) {
-                ForEach(EditorContentTab.allCases) { tab in
-                    Button {
-                        store.selectContentTab(tab)
-                    } label: {
-                        Text(tab.shortLabel)
-                            .frame(minWidth: 64)
-                    }
-                    .buttonStyle(
-                        EditorButtonStyle(
-                            background: store.selectedContentTab == tab ? palette.title : palette.panelAlt
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 6) {
+                    ForEach(EditorContentTab.allCases) { tab in
+                        Button {
+                            store.selectContentTab(tab)
+                        } label: {
+                            Text(tab.shortLabel)
+                                .frame(minWidth: 64)
+                        }
+                        .buttonStyle(
+                            EditorButtonStyle(
+                                background: store.selectedContentTab == tab ? palette.title : palette.panelAlt
+                            )
                         )
-                    )
+                    }
+                }
+
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 72), spacing: 6)], alignment: .leading, spacing: 6) {
+                    ForEach(EditorContentTab.allCases) { tab in
+                        Button {
+                            store.selectContentTab(tab)
+                        } label: {
+                            Text(tab.shortLabel)
+                                .frame(minWidth: 72)
+                        }
+                        .buttonStyle(
+                            EditorButtonStyle(
+                                background: store.selectedContentTab == tab ? palette.title : palette.panelAlt
+                            )
+                        )
+                    }
                 }
             }
         }
@@ -2539,10 +2593,17 @@ struct AdventureEditorRootView: View {
     private var contentPanel: some View {
         switch store.selectedContentTab {
         case .maps:
-            HStack(alignment: .top, spacing: 12) {
-                mapListPanel
-                    .frame(width: 240)
-                mapEditorPanel
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: 12) {
+                    mapListPanel
+                        .frame(width: 220)
+                    mapEditorPanel
+                }
+
+                VStack(alignment: .leading, spacing: 12) {
+                    mapListPanel
+                    mapEditorPanel
+                }
             }
         case .dialogues:
             dialoguesPanel
@@ -2584,71 +2645,18 @@ struct AdventureEditorRootView: View {
                         interactablePalette
                     }
 
-                    HStack(alignment: .top, spacing: 12) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(store.currentMapCountsLine)
-                                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                .foregroundStyle(palette.text.opacity(0.84))
+                    ViewThatFits(in: .horizontal) {
+                        HStack(alignment: .top, spacing: 12) {
+                            mapCanvasPanel
 
-                            Text(store.selectedToolSummary)
-                                .font(.system(size: 10, weight: .regular, design: .monospaced))
-                                .foregroundStyle(palette.text.opacity(0.80))
-                                .fixedSize(horizontal: false, vertical: true)
-
-                            ScrollView([.horizontal, .vertical]) {
-                                VStack(alignment: .leading, spacing: 1) {
-                                    ForEach(Array((store.currentMap?.lines ?? []).enumerated()), id: \.offset) { y, line in
-                                        HStack(spacing: 1) {
-                                            ForEach(Array(line.enumerated()), id: \.offset) { x, glyph in
-                                                Button {
-                                                    store.handleCanvasClick(x: x, y: y)
-                                                } label: {
-                                                    let overlay = store.overlay(atX: x, y: y)
-                                                    ZStack {
-                                                        Rectangle()
-                                                            .fill(tileColor(for: glyph))
-
-                                                        if store.isSpawn(x: x, y: y) {
-                                                            RoundedRectangle(cornerRadius: 2)
-                                                                .stroke(palette.light.opacity(0.85), lineWidth: 1.2)
-                                                                .padding(2)
-                                                        }
-
-                                                        if let overlay {
-                                                            RoundedRectangle(cornerRadius: 2)
-                                                                .fill(overlay.fill)
-                                                                .padding(2)
-                                                            Text(overlay.glyph)
-                                                                .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                                                .foregroundStyle(overlay.text)
-                                                        } else {
-                                                            Text(displayGlyph(glyph))
-                                                                .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                                                .foregroundStyle(palette.background)
-                                                        }
-                                                    }
-                                                    .frame(width: 18, height: 18)
-                                                    .overlay(
-                                                        Rectangle().stroke(
-                                                            store.isSelected(x: x, y: y) ? palette.title : palette.border.opacity(0.55),
-                                                            lineWidth: store.isSelected(x: x, y: y) ? 1.5 : 0.5
-                                                        )
-                                                    )
-                                                }
-                                                .buttonStyle(.plain)
-                                            }
-                                        }
-                                    }
-                                }
-                                .padding(6)
-                                .background(palette.panelAlt)
-                            }
-                            .frame(minHeight: 360)
-                            .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
+                            selectionPanel
+                                .frame(width: 210)
                         }
 
-                        selectionPanel
-                            .frame(width: 220)
+                        VStack(alignment: .leading, spacing: 12) {
+                            mapCanvasPanel
+                            selectionPanel
+                        }
                     }
                 } else {
                     Text("NO MAP IS ACTIVE.")
@@ -2665,19 +2673,37 @@ struct AdventureEditorRootView: View {
                 .font(.system(size: 10, weight: .bold, design: .monospaced))
                 .foregroundStyle(palette.label)
 
-            HStack(spacing: 6) {
-                ForEach(EditorTool.allCases) { tool in
-                    Button {
-                        store.selectTool(tool)
-                    } label: {
-                        Text(tool.shortLabel)
-                            .frame(minWidth: 44)
-                    }
-                    .buttonStyle(
-                        EditorButtonStyle(
-                            background: store.selectedTool == tool ? palette.title : palette.panelAlt
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 6) {
+                    ForEach(EditorTool.allCases) { tool in
+                        Button {
+                            store.selectTool(tool)
+                        } label: {
+                            Text(tool.shortLabel)
+                                .frame(minWidth: 44)
+                        }
+                        .buttonStyle(
+                            EditorButtonStyle(
+                                background: store.selectedTool == tool ? palette.title : palette.panelAlt
+                            )
                         )
-                    )
+                    }
+                }
+
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 58), spacing: 6)], alignment: .leading, spacing: 6) {
+                    ForEach(EditorTool.allCases) { tool in
+                        Button {
+                            store.selectTool(tool)
+                        } label: {
+                            Text(tool.shortLabel)
+                                .frame(minWidth: 58)
+                        }
+                        .buttonStyle(
+                            EditorButtonStyle(
+                                background: store.selectedTool == tool ? palette.title : palette.panelAlt
+                            )
+                        )
+                    }
                 }
             }
         }
@@ -2689,32 +2715,27 @@ struct AdventureEditorRootView: View {
                 .font(.system(size: 10, weight: .bold, design: .monospaced))
                 .foregroundStyle(palette.label)
 
-            HStack(spacing: 6) {
-                ForEach(editorTilePalette, id: \.glyph) { tile in
-                    Button {
-                        store.selectedGlyph = tile.glyph
-                    } label: {
-                        VStack(spacing: 2) {
-                            ZStack {
-                                Rectangle()
-                                    .fill(tileColor(for: tile.glyph))
-                                Text(displayGlyph(tile.glyph))
-                                    .font(.system(size: 11, weight: .bold, design: .monospaced))
-                                    .foregroundStyle(palette.background)
-                            }
-                            .frame(width: 26, height: 26)
-                            .overlay(
-                                Rectangle().stroke(
-                                    store.selectedGlyph == tile.glyph ? palette.title : palette.border,
-                                    lineWidth: store.selectedGlyph == tile.glyph ? 2 : 1
-                                )
-                            )
-                            Text(tile.label)
-                                .font(.system(size: 8, weight: .regular, design: .monospaced))
-                                .foregroundStyle(palette.text.opacity(0.82))
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 6) {
+                    ForEach(editorTilePalette, id: \.glyph) { tile in
+                        Button {
+                            store.selectedGlyph = tile.glyph
+                        } label: {
+                            tilePaletteSwatch(tile)
                         }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
+                }
+
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 48), spacing: 6)], alignment: .leading, spacing: 6) {
+                    ForEach(editorTilePalette, id: \.glyph) { tile in
+                        Button {
+                            store.selectedGlyph = tile.glyph
+                        } label: {
+                            tilePaletteSwatch(tile)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
         }
@@ -2726,32 +2747,27 @@ struct AdventureEditorRootView: View {
                 .font(.system(size: 10, weight: .bold, design: .monospaced))
                 .foregroundStyle(palette.label)
 
-            HStack(spacing: 6) {
-                ForEach(editorInteractablePalette, id: \.kind) { choice in
-                    Button {
-                        store.selectedInteractableKind = choice.kind
-                    } label: {
-                        VStack(spacing: 2) {
-                            ZStack {
-                                Rectangle()
-                                    .fill(choice.color)
-                                Text(choice.glyph)
-                                    .font(.system(size: 11, weight: .bold, design: .monospaced))
-                                    .foregroundStyle(Color.black)
-                            }
-                            .frame(width: 26, height: 26)
-                            .overlay(
-                                Rectangle().stroke(
-                                    store.selectedInteractableKind == choice.kind ? palette.title : palette.border,
-                                    lineWidth: store.selectedInteractableKind == choice.kind ? 2 : 1
-                                )
-                            )
-                            Text(choice.label)
-                                .font(.system(size: 8, weight: .regular, design: .monospaced))
-                                .foregroundStyle(palette.text.opacity(0.82))
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 6) {
+                    ForEach(editorInteractablePalette, id: \.kind) { choice in
+                        Button {
+                            store.selectedInteractableKind = choice.kind
+                        } label: {
+                            interactablePaletteSwatch(choice)
                         }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
+                }
+
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 60), spacing: 6)], alignment: .leading, spacing: 6) {
+                    ForEach(editorInteractablePalette, id: \.kind) { choice in
+                        Button {
+                            store.selectedInteractableKind = choice.kind
+                        } label: {
+                            interactablePaletteSwatch(choice)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
         }
@@ -2792,162 +2808,222 @@ struct AdventureEditorRootView: View {
     }
 
     private var dialoguesPanel: some View {
-        HStack(alignment: .top, spacing: 12) {
-            EditorPanel(title: "DIALOGUES", palette: palette) {
-                VStack(alignment: .leading, spacing: 8) {
-                    ScrollView {
-                        VStack(spacing: 6) {
-                            ForEach(Array(store.document.dialogues.enumerated()), id: \.element.id) { index, dialogue in
-                                Button {
-                                    store.selectDialogue(index: index)
-                                } label: {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(dialogue.id.uppercased())
-                                            .font(.system(size: 11, weight: .bold, design: .monospaced))
-                                        Text(dialogue.speaker)
-                                            .font(.system(size: 9, weight: .regular, design: .monospaced))
-                                            .opacity(0.78)
-                                    }
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(8)
-                                    .background(store.selectedDialogueIndex == index ? palette.selection : palette.panelAlt)
-                                    .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-                    .frame(maxHeight: 360)
-
-                    HStack(spacing: 8) {
-                        Button("ADD") {
-                            store.addDialogue()
-                        }
-                        .buttonStyle(EditorButtonStyle(background: palette.panelAlt))
-
-                        Button("DROP") {
-                            store.removeSelectedDialogue()
-                        }
-                        .buttonStyle(EditorButtonStyle(background: palette.panelAlt))
-                    }
-                }
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 12) {
+                dialogueListPanel
+                    .frame(width: 240)
+                dialogueEditorPanel
             }
-            .frame(width: 260)
 
-            EditorPanel(title: "DIALOGUE EDITOR", palette: palette) {
-                if let dialogue = store.selectedDialogue {
-                    VStack(alignment: .leading, spacing: 8) {
-                        labeledField("DIALOGUE ID", text: Binding(
-                            get: { store.selectedDialogue?.id ?? dialogue.id },
-                            set: { store.updateSelectedDialogueID($0) }
-                        ))
-
-                        labeledField("SPEAKER", text: Binding(
-                            get: { store.selectedDialogue?.speaker ?? dialogue.speaker },
-                            set: { store.updateSelectedDialogueSpeaker($0) }
-                        ))
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("LINES")
-                                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                .foregroundStyle(palette.label)
-                            TextEditor(text: Binding(
-                                get: { (store.selectedDialogue?.lines ?? dialogue.lines).joined(separator: "\n") },
-                                set: { store.updateSelectedDialogueLinesText($0) }
-                            ))
-                            .font(.system(size: 11, weight: .regular, design: .monospaced))
-                            .scrollContentBackground(.hidden)
-                            .foregroundStyle(palette.text)
-                            .frame(minHeight: 220)
-                            .padding(6)
-                            .background(palette.panelAlt)
-                            .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
-                        }
-                    }
-                } else {
-                    emptyEditorLabel("NO DIALOGUE IS AVAILABLE.")
-                }
+            VStack(alignment: .leading, spacing: 12) {
+                dialogueListPanel
+                dialogueEditorPanel
             }
         }
     }
 
     private var questFlowPanel: some View {
-        HStack(alignment: .top, spacing: 12) {
-            EditorPanel(title: "QUEST STAGES", palette: palette) {
-                VStack(alignment: .leading, spacing: 8) {
-                    ScrollView {
-                        VStack(spacing: 6) {
-                            ForEach(Array(store.document.questFlow.stages.enumerated()), id: \.offset) { index, stage in
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 12) {
+                questStageListPanel
+                    .frame(width: 240)
+                questFlowEditorPanel
+            }
+
+            VStack(alignment: .leading, spacing: 12) {
+                questStageListPanel
+                questFlowEditorPanel
+            }
+        }
+    }
+
+    private var encountersPanel: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 12) {
+                encounterListPanel
+                    .frame(width: 240)
+                encounterEditorPanel
+            }
+
+            VStack(alignment: .leading, spacing: 12) {
+                encounterListPanel
+                encounterEditorPanel
+            }
+        }
+    }
+
+    private var shopsPanel: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 12) {
+                shopListPanel
+                    .frame(width: 240)
+                shopEditorPanel
+            }
+
+            VStack(alignment: .leading, spacing: 12) {
+                shopListPanel
+                shopEditorPanel
+            }
+        }
+    }
+
+    private var npcRosterPanel: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 12) {
+                npcRosterListPanel
+                    .frame(width: 250)
+                selectionPanel
+            }
+
+            VStack(alignment: .leading, spacing: 12) {
+                npcRosterListPanel
+                selectionPanel
+            }
+        }
+    }
+
+    private var enemyRosterPanel: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 12) {
+                enemyRosterListPanel
+                    .frame(width: 250)
+                selectionPanel
+            }
+
+            VStack(alignment: .leading, spacing: 12) {
+                enemyRosterListPanel
+                selectionPanel
+            }
+        }
+    }
+
+    private var mapCanvasPanel: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(store.currentMapCountsLine)
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundStyle(palette.text.opacity(0.84))
+
+            Text(store.selectedToolSummary)
+                .font(.system(size: 10, weight: .regular, design: .monospaced))
+                .foregroundStyle(palette.text.opacity(0.80))
+                .fixedSize(horizontal: false, vertical: true)
+
+            ScrollView([.horizontal, .vertical]) {
+                VStack(alignment: .leading, spacing: 1) {
+                    ForEach(Array((store.currentMap?.lines ?? []).enumerated()), id: \.offset) { y, line in
+                        HStack(spacing: 1) {
+                            ForEach(Array(line.enumerated()), id: \.offset) { x, glyph in
                                 Button {
-                                    store.selectQuestStage(index: index)
+                                    store.handleCanvasClick(x: x, y: y)
                                 } label: {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text("STAGE \(index + 1)")
-                                            .font(.system(size: 11, weight: .bold, design: .monospaced))
-                                        Text(stage.objective)
-                                            .font(.system(size: 9, weight: .regular, design: .monospaced))
-                                            .lineLimit(2)
-                                            .opacity(0.78)
+                                    let overlay = store.overlay(atX: x, y: y)
+                                    ZStack {
+                                        Rectangle()
+                                            .fill(tileColor(for: glyph))
+
+                                        if store.isSpawn(x: x, y: y) {
+                                            RoundedRectangle(cornerRadius: 2)
+                                                .stroke(palette.light.opacity(0.85), lineWidth: 1.2)
+                                                .padding(2)
+                                        }
+
+                                        if let overlay {
+                                            RoundedRectangle(cornerRadius: 2)
+                                                .fill(overlay.fill)
+                                                .padding(2)
+                                            Text(overlay.glyph)
+                                                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                                .foregroundStyle(overlay.text)
+                                        } else {
+                                            Text(displayGlyph(glyph))
+                                                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                                .foregroundStyle(palette.background)
+                                        }
                                     }
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(8)
-                                    .background(store.selectedQuestStageIndex == index ? palette.selection : palette.panelAlt)
-                                    .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
+                                    .frame(width: 18, height: 18)
+                                    .overlay(
+                                        Rectangle().stroke(
+                                            store.isSelected(x: x, y: y) ? palette.title : palette.border.opacity(0.55),
+                                            lineWidth: store.isSelected(x: x, y: y) ? 1.5 : 0.5
+                                        )
+                                    )
                                 }
                                 .buttonStyle(.plain)
                             }
                         }
                     }
-                    .frame(maxHeight: 360)
+                }
+                .padding(6)
+                .background(palette.panelAlt)
+            }
+            .frame(minHeight: 300)
+            .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
+        }
+    }
 
-                    HStack(spacing: 8) {
-                        Button("ADD") {
-                            store.addQuestStage()
+    private var dialogueListPanel: some View {
+        EditorPanel(title: "DIALOGUES", palette: palette) {
+            VStack(alignment: .leading, spacing: 8) {
+                ScrollView {
+                    VStack(spacing: 6) {
+                        ForEach(Array(store.document.dialogues.enumerated()), id: \.element.id) { index, dialogue in
+                            Button {
+                                store.selectDialogue(index: index)
+                            } label: {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(dialogue.id.uppercased())
+                                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                    Text(dialogue.speaker)
+                                        .font(.system(size: 9, weight: .regular, design: .monospaced))
+                                        .opacity(0.78)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(8)
+                                .background(store.selectedDialogueIndex == index ? palette.selection : palette.panelAlt)
+                                .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(EditorButtonStyle(background: palette.panelAlt))
-
-                        Button("DROP") {
-                            store.removeSelectedQuestStage()
-                        }
-                        .buttonStyle(EditorButtonStyle(background: palette.panelAlt))
                     }
                 }
-            }
-            .frame(width: 260)
+                .frame(maxHeight: 320)
 
-            EditorPanel(title: "QUEST FLOW", palette: palette) {
-                VStack(alignment: .leading, spacing: 8) {
-                    if let stage = store.selectedQuestStage {
-                        labeledField("OBJECTIVE", text: Binding(
-                            get: { store.selectedQuestStage?.objective ?? stage.objective },
-                            set: { store.updateSelectedQuestObjective($0) }
-                        ))
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("COMPLETE WHEN FLAG")
-                                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                .foregroundStyle(palette.label)
-
-                            Picker("Quest Flag", selection: Binding(
-                                get: { store.selectedQuestStage?.completeWhenFlag ?? stage.completeWhenFlag },
-                                set: { store.updateSelectedQuestFlag($0) }
-                            )) {
-                                ForEach(QuestFlag.allCases, id: \.self) { flag in
-                                    Text(flag.rawValue).tag(flag)
-                                }
-                            }
-                            .pickerStyle(.menu)
-                            .labelsHidden()
-                        }
+                HStack(spacing: 8) {
+                    Button("ADD") {
+                        store.addDialogue()
                     }
+                    .buttonStyle(EditorButtonStyle(background: palette.panelAlt))
+
+                    Button("DROP") {
+                        store.removeSelectedDialogue()
+                    }
+                    .buttonStyle(EditorButtonStyle(background: palette.panelAlt))
+                }
+            }
+        }
+    }
+
+    private var dialogueEditorPanel: some View {
+        EditorPanel(title: "DIALOGUE EDITOR", palette: palette) {
+            if let dialogue = store.selectedDialogue {
+                VStack(alignment: .leading, spacing: 8) {
+                    labeledField("DIALOGUE ID", text: Binding(
+                        get: { store.selectedDialogue?.id ?? dialogue.id },
+                        set: { store.updateSelectedDialogueID($0) }
+                    ))
+
+                    labeledField("SPEAKER", text: Binding(
+                        get: { store.selectedDialogue?.speaker ?? dialogue.speaker },
+                        set: { store.updateSelectedDialogueSpeaker($0) }
+                    ))
 
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("COMPLETION TEXT")
+                        Text("LINES")
                             .font(.system(size: 10, weight: .bold, design: .monospaced))
                             .foregroundStyle(palette.label)
                         TextEditor(text: Binding(
-                            get: { store.document.questFlow.completionText },
-                            set: { store.updateQuestCompletionText($0) }
+                            get: { (store.selectedDialogue?.lines ?? dialogue.lines).joined(separator: "\n") },
+                            set: { store.updateSelectedDialogueLinesText($0) }
                         ))
                         .font(.system(size: 11, weight: .regular, design: .monospaced))
                         .scrollContentBackground(.hidden)
@@ -2958,346 +3034,440 @@ struct AdventureEditorRootView: View {
                         .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
                     }
                 }
+            } else {
+                emptyEditorLabel("NO DIALOGUE IS AVAILABLE.")
             }
         }
     }
 
-    private var encountersPanel: some View {
-        HStack(alignment: .top, spacing: 12) {
-            EditorPanel(title: "ENCOUNTERS", palette: palette) {
-                VStack(alignment: .leading, spacing: 8) {
-                    ScrollView {
-                        VStack(spacing: 6) {
-                            ForEach(Array(store.document.encounters.enumerated()), id: \.element.id) { index, encounter in
-                                Button {
-                                    store.selectEncounter(index: index)
-                                } label: {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(encounter.id.uppercased())
-                                            .font(.system(size: 11, weight: .bold, design: .monospaced))
-                                        Text(encounter.enemyID)
-                                            .font(.system(size: 9, weight: .regular, design: .monospaced))
-                                            .opacity(0.78)
-                                    }
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(8)
-                                    .background(store.selectedEncounterIndex == index ? palette.selection : palette.panelAlt)
-                                    .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
+    private var questStageListPanel: some View {
+        EditorPanel(title: "QUEST STAGES", palette: palette) {
+            VStack(alignment: .leading, spacing: 8) {
+                ScrollView {
+                    VStack(spacing: 6) {
+                        ForEach(Array(store.document.questFlow.stages.enumerated()), id: \.offset) { index, stage in
+                            Button {
+                                store.selectQuestStage(index: index)
+                            } label: {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("STAGE \(index + 1)")
+                                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                    Text(stage.objective)
+                                        .font(.system(size: 9, weight: .regular, design: .monospaced))
+                                        .lineLimit(2)
+                                        .opacity(0.78)
                                 }
-                                .buttonStyle(.plain)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(8)
+                                .background(store.selectedQuestStageIndex == index ? palette.selection : palette.panelAlt)
+                                .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
                             }
+                            .buttonStyle(.plain)
                         }
-                    }
-                    .frame(maxHeight: 360)
-
-                    HStack(spacing: 8) {
-                        Button("ADD") {
-                            store.addEncounter()
-                        }
-                        .buttonStyle(EditorButtonStyle(background: palette.panelAlt))
-
-                        Button("DROP") {
-                            store.removeSelectedEncounter()
-                        }
-                        .buttonStyle(EditorButtonStyle(background: palette.panelAlt))
                     }
                 }
-            }
-            .frame(width: 260)
+                .frame(maxHeight: 320)
 
-            EditorPanel(title: "ENCOUNTER EDITOR", palette: palette) {
-                if let encounter = store.selectedEncounter {
-                    VStack(alignment: .leading, spacing: 8) {
-                        labeledField("ENCOUNTER ID", text: Binding(
-                            get: { store.selectedEncounter?.id ?? encounter.id },
-                            set: { store.updateSelectedEncounterID($0) }
-                        ))
-
-                        labeledField("ENEMY ID", text: Binding(
-                            get: { store.selectedEncounter?.enemyID ?? encounter.enemyID },
-                            set: { store.updateSelectedEncounterEnemyID($0) }
-                        ))
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("INTRO LINE")
-                                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                .foregroundStyle(palette.label)
-                            TextEditor(text: Binding(
-                                get: { store.selectedEncounter?.introLine ?? encounter.introLine },
-                                set: { store.updateSelectedEncounterIntro($0) }
-                            ))
-                            .font(.system(size: 11, weight: .regular, design: .monospaced))
-                            .scrollContentBackground(.hidden)
-                            .foregroundStyle(palette.text)
-                            .frame(minHeight: 180)
-                            .padding(6)
-                            .background(palette.panelAlt)
-                            .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
-                        }
+                HStack(spacing: 8) {
+                    Button("ADD") {
+                        store.addQuestStage()
                     }
-                } else {
-                    emptyEditorLabel("NO ENCOUNTER IS AVAILABLE.")
+                    .buttonStyle(EditorButtonStyle(background: palette.panelAlt))
+
+                    Button("DROP") {
+                        store.removeSelectedQuestStage()
+                    }
+                    .buttonStyle(EditorButtonStyle(background: palette.panelAlt))
                 }
             }
         }
     }
 
-    private var shopsPanel: some View {
-        HStack(alignment: .top, spacing: 12) {
-            EditorPanel(title: "SHOPS", palette: palette) {
-                VStack(alignment: .leading, spacing: 8) {
-                    ScrollView {
-                        VStack(spacing: 6) {
-                            ForEach(Array(store.document.shops.enumerated()), id: \.element.id) { index, shop in
-                                Button {
-                                    store.selectShop(index: index)
-                                } label: {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(shop.id.uppercased())
-                                            .font(.system(size: 11, weight: .bold, design: .monospaced))
-                                        Text(shop.merchantName)
-                                            .font(.system(size: 9, weight: .regular, design: .monospaced))
-                                            .opacity(0.78)
-                                    }
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(8)
-                                    .background(store.selectedShopIndex == index ? palette.selection : palette.panelAlt)
-                                    .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-                    .frame(maxHeight: 300)
+    private var questFlowEditorPanel: some View {
+        EditorPanel(title: "QUEST FLOW", palette: palette) {
+            VStack(alignment: .leading, spacing: 8) {
+                if let stage = store.selectedQuestStage {
+                    labeledField("OBJECTIVE", text: Binding(
+                        get: { store.selectedQuestStage?.objective ?? stage.objective },
+                        set: { store.updateSelectedQuestObjective($0) }
+                    ))
 
-                    HStack(spacing: 8) {
-                        Button("ADD") {
-                            store.addShop()
-                        }
-                        .buttonStyle(EditorButtonStyle(background: palette.panelAlt))
-
-                        Button("DROP") {
-                            store.removeSelectedShop()
-                        }
-                        .buttonStyle(EditorButtonStyle(background: palette.panelAlt))
-                    }
-                }
-            }
-            .frame(width: 260)
-
-            EditorPanel(title: "SHOP EDITOR", palette: palette) {
-                if let shop = store.selectedShop {
-                    VStack(alignment: .leading, spacing: 8) {
-                        labeledField("SHOP ID", text: Binding(
-                            get: { store.selectedShop?.id ?? shop.id },
-                            set: { store.updateSelectedShopID($0) }
-                        ))
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("MERCHANT")
-                                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                .foregroundStyle(palette.label)
-                            Picker("Merchant", selection: Binding(
-                                get: { store.selectedShop?.merchantID ?? shop.merchantID },
-                                set: { store.updateSelectedShopMerchantID($0) }
-                            )) {
-                                ForEach(store.document.npcs, id: \.id) { npc in
-                                    Text(npc.name.uppercased()).tag(npc.id)
-                                }
-                            }
-                            .pickerStyle(.menu)
-                            .labelsHidden()
-                        }
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("INTRO LINE")
-                                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                .foregroundStyle(palette.label)
-                            TextEditor(text: Binding(
-                                get: { store.selectedShop?.introLine ?? shop.introLine },
-                                set: { store.updateSelectedShopIntro($0) }
-                            ))
-                            .font(.system(size: 11, weight: .regular, design: .monospaced))
-                            .scrollContentBackground(.hidden)
-                            .foregroundStyle(palette.text)
-                            .frame(height: 78)
-                            .padding(6)
-                            .background(palette.panelAlt)
-                            .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
-                        }
-
-                        Text("OFFERS")
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("COMPLETE WHEN FLAG")
                             .font(.system(size: 10, weight: .bold, design: .monospaced))
                             .foregroundStyle(palette.label)
 
+                        Picker("Quest Flag", selection: Binding(
+                            get: { store.selectedQuestStage?.completeWhenFlag ?? stage.completeWhenFlag },
+                            set: { store.updateSelectedQuestFlag($0) }
+                        )) {
+                            ForEach(QuestFlag.allCases, id: \.self) { flag in
+                                Text(flag.rawValue).tag(flag)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("COMPLETION TEXT")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundStyle(palette.label)
+                    TextEditor(text: Binding(
+                        get: { store.document.questFlow.completionText },
+                        set: { store.updateQuestCompletionText($0) }
+                    ))
+                    .font(.system(size: 11, weight: .regular, design: .monospaced))
+                    .scrollContentBackground(.hidden)
+                    .foregroundStyle(palette.text)
+                    .frame(minHeight: 140)
+                    .padding(6)
+                    .background(palette.panelAlt)
+                    .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
+                }
+            }
+        }
+    }
+
+    private var encounterListPanel: some View {
+        EditorPanel(title: "ENCOUNTERS", palette: palette) {
+            VStack(alignment: .leading, spacing: 8) {
+                ScrollView {
+                    VStack(spacing: 6) {
+                        ForEach(Array(store.document.encounters.enumerated()), id: \.element.id) { index, encounter in
+                            Button {
+                                store.selectEncounter(index: index)
+                            } label: {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(encounter.id.uppercased())
+                                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                    Text(encounter.enemyID)
+                                        .font(.system(size: 9, weight: .regular, design: .monospaced))
+                                        .opacity(0.78)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(8)
+                                .background(store.selectedEncounterIndex == index ? palette.selection : palette.panelAlt)
+                                .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+                .frame(maxHeight: 320)
+
+                HStack(spacing: 8) {
+                    Button("ADD") {
+                        store.addEncounter()
+                    }
+                    .buttonStyle(EditorButtonStyle(background: palette.panelAlt))
+
+                    Button("DROP") {
+                        store.removeSelectedEncounter()
+                    }
+                    .buttonStyle(EditorButtonStyle(background: palette.panelAlt))
+                }
+            }
+        }
+    }
+
+    private var encounterEditorPanel: some View {
+        EditorPanel(title: "ENCOUNTER EDITOR", palette: palette) {
+            if let encounter = store.selectedEncounter {
+                VStack(alignment: .leading, spacing: 8) {
+                    labeledField("ENCOUNTER ID", text: Binding(
+                        get: { store.selectedEncounter?.id ?? encounter.id },
+                        set: { store.updateSelectedEncounterID($0) }
+                    ))
+
+                    labeledField("ENEMY ID", text: Binding(
+                        get: { store.selectedEncounter?.enemyID ?? encounter.enemyID },
+                        set: { store.updateSelectedEncounterEnemyID($0) }
+                    ))
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("INTRO LINE")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .foregroundStyle(palette.label)
+                        TextEditor(text: Binding(
+                            get: { store.selectedEncounter?.introLine ?? encounter.introLine },
+                            set: { store.updateSelectedEncounterIntro($0) }
+                        ))
+                        .font(.system(size: 11, weight: .regular, design: .monospaced))
+                        .scrollContentBackground(.hidden)
+                        .foregroundStyle(palette.text)
+                        .frame(minHeight: 140)
+                        .padding(6)
+                        .background(palette.panelAlt)
+                        .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
+                    }
+                }
+            } else {
+                emptyEditorLabel("NO ENCOUNTER IS AVAILABLE.")
+            }
+        }
+    }
+
+    private var shopListPanel: some View {
+        EditorPanel(title: "SHOPS", palette: palette) {
+            VStack(alignment: .leading, spacing: 8) {
+                ScrollView {
+                    VStack(spacing: 6) {
+                        ForEach(Array(store.document.shops.enumerated()), id: \.element.id) { index, shop in
+                            Button {
+                                store.selectShop(index: index)
+                            } label: {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(shop.id.uppercased())
+                                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                    Text(shop.merchantName)
+                                        .font(.system(size: 9, weight: .regular, design: .monospaced))
+                                        .opacity(0.78)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(8)
+                                .background(store.selectedShopIndex == index ? palette.selection : palette.panelAlt)
+                                .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+                .frame(maxHeight: 280)
+
+                HStack(spacing: 8) {
+                    Button("ADD") {
+                        store.addShop()
+                    }
+                    .buttonStyle(EditorButtonStyle(background: palette.panelAlt))
+
+                    Button("DROP") {
+                        store.removeSelectedShop()
+                    }
+                    .buttonStyle(EditorButtonStyle(background: palette.panelAlt))
+                }
+            }
+        }
+    }
+
+    private var shopEditorPanel: some View {
+        EditorPanel(title: "SHOP EDITOR", palette: palette) {
+            if let shop = store.selectedShop {
+                VStack(alignment: .leading, spacing: 8) {
+                    labeledField("SHOP ID", text: Binding(
+                        get: { store.selectedShop?.id ?? shop.id },
+                        set: { store.updateSelectedShopID($0) }
+                    ))
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("MERCHANT")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .foregroundStyle(palette.label)
+                        Picker("Merchant", selection: Binding(
+                            get: { store.selectedShop?.merchantID ?? shop.merchantID },
+                            set: { store.updateSelectedShopMerchantID($0) }
+                        )) {
+                            ForEach(store.document.npcs, id: \.id) { npc in
+                                Text(npc.name.uppercased()).tag(npc.id)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("INTRO LINE")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .foregroundStyle(palette.label)
+                        TextEditor(text: Binding(
+                            get: { store.selectedShop?.introLine ?? shop.introLine },
+                            set: { store.updateSelectedShopIntro($0) }
+                        ))
+                        .font(.system(size: 11, weight: .regular, design: .monospaced))
+                        .scrollContentBackground(.hidden)
+                        .foregroundStyle(palette.text)
+                        .frame(height: 72)
+                        .padding(6)
+                        .background(palette.panelAlt)
+                        .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
+                    }
+
+                    Text("OFFERS")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundStyle(palette.label)
+
+                    ViewThatFits(in: .horizontal) {
                         HStack(alignment: .top, spacing: 8) {
-                            ScrollView {
-                                VStack(spacing: 6) {
-                                    ForEach(Array((store.selectedShop?.offers ?? []).enumerated()), id: \.element.id) { index, offer in
-                                        Button {
-                                            store.selectShopOffer(index: index)
-                                        } label: {
-                                            VStack(alignment: .leading, spacing: 2) {
-                                                Text(offer.id.uppercased())
-                                                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                                Text("\(offer.itemID.rawValue)  \(offer.price)M")
-                                                    .font(.system(size: 8, weight: .regular, design: .monospaced))
-                                                    .opacity(0.78)
-                                            }
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                            .padding(6)
-                                            .background(store.selectedShopOfferIndex == index ? palette.selection : palette.panelAlt)
-                                            .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
-                                }
-                            }
-                            .frame(width: 220)
-                            .frame(maxHeight: 220)
-
-                            VStack(alignment: .leading, spacing: 8) {
-                                if let offer = store.selectedShopOffer {
-                                    labeledField("OFFER ID", text: Binding(
-                                        get: { store.selectedShopOffer?.id ?? offer.id },
-                                        set: { store.updateSelectedShopOfferID($0) }
-                                    ))
-
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text("ITEM")
-                                            .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                            .foregroundStyle(palette.label)
-                                        Picker("Item", selection: Binding(
-                                            get: { store.selectedShopOffer?.itemID ?? offer.itemID },
-                                            set: { store.updateSelectedShopOfferItemID($0) }
-                                        )) {
-                                            ForEach(ItemID.allCases, id: \.self) { itemID in
-                                                Text(itemID.rawValue).tag(itemID)
-                                            }
-                                        }
-                                        .pickerStyle(.menu)
-                                        .labelsHidden()
-                                    }
-
-                                    labeledStepper("PRICE", value: Binding(
-                                        get: { store.selectedShopOffer?.price ?? offer.price },
-                                        set: { store.updateSelectedShopOfferPrice($0) }
-                                    ), range: 0...99)
-
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text("BLURB")
-                                            .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                            .foregroundStyle(palette.label)
-                                        TextEditor(text: Binding(
-                                            get: { store.selectedShopOffer?.blurb ?? offer.blurb },
-                                            set: { store.updateSelectedShopOfferBlurb($0) }
-                                        ))
-                                        .font(.system(size: 11, weight: .regular, design: .monospaced))
-                                        .scrollContentBackground(.hidden)
-                                        .foregroundStyle(palette.text)
-                                        .frame(height: 68)
-                                        .padding(6)
-                                        .background(palette.panelAlt)
-                                        .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
-                                    }
-
-                                    Toggle(isOn: Binding(
-                                        get: { store.selectedShopOffer?.repeatable ?? offer.repeatable },
-                                        set: { store.updateSelectedShopOfferRepeatable($0) }
-                                    )) {
-                                        Text("REPEATABLE")
-                                            .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                            .foregroundStyle(palette.label)
-                                    }
-                                    .toggleStyle(.checkbox)
-                                } else {
-                                    emptyEditorLabel("NO OFFER IS SELECTED.")
-                                }
-                            }
+                            shopOfferListPanel
+                                .frame(width: 200)
+                            shopOfferDetailsPanel
                         }
 
-                        HStack(spacing: 8) {
-                            Button("ADD OFFER") {
-                                store.addShopOffer()
-                            }
-                            .buttonStyle(EditorButtonStyle(background: palette.panelAlt))
-
-                            Button("DROP OFFER") {
-                                store.removeSelectedShopOffer()
-                            }
-                            .buttonStyle(EditorButtonStyle(background: palette.panelAlt))
+                        VStack(alignment: .leading, spacing: 8) {
+                            shopOfferListPanel
+                            shopOfferDetailsPanel
                         }
                     }
-                } else {
-                    emptyEditorLabel("NO SHOP IS AVAILABLE.")
+
+                    HStack(spacing: 8) {
+                        Button("ADD OFFER") {
+                            store.addShopOffer()
+                        }
+                        .buttonStyle(EditorButtonStyle(background: palette.panelAlt))
+
+                        Button("DROP OFFER") {
+                            store.removeSelectedShopOffer()
+                        }
+                        .buttonStyle(EditorButtonStyle(background: palette.panelAlt))
+                    }
                 }
+            } else {
+                emptyEditorLabel("NO SHOP IS AVAILABLE.")
             }
         }
     }
 
-    private var npcRosterPanel: some View {
-        HStack(alignment: .top, spacing: 12) {
-            EditorPanel(title: "NPC ROSTER", palette: palette) {
-                ScrollView {
-                    VStack(spacing: 6) {
-                        ForEach(store.document.npcs, id: \.id) { npc in
-                            Button {
-                                store.focusNPC(id: npc.id)
-                            } label: {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(npc.name.uppercased())
-                                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                                    Text("\(npc.id)  @ \(npc.mapID)")
-                                        .font(.system(size: 9, weight: .regular, design: .monospaced))
-                                        .opacity(0.78)
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(8)
-                                .background(store.selectedNPC?.id == npc.id ? palette.selection : palette.panelAlt)
-                                .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
-                            }
-                            .buttonStyle(.plain)
+    private var shopOfferListPanel: some View {
+        ScrollView {
+            VStack(spacing: 6) {
+                ForEach(Array((store.selectedShop?.offers ?? []).enumerated()), id: \.element.id) { index, offer in
+                    Button {
+                        store.selectShopOffer(index: index)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(offer.id.uppercased())
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            Text("\(offer.itemID.rawValue)  \(offer.price)M")
+                                .font(.system(size: 8, weight: .regular, design: .monospaced))
+                                .opacity(0.78)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(6)
+                        .background(store.selectedShopOfferIndex == index ? palette.selection : palette.panelAlt)
+                        .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .frame(maxHeight: 220)
+    }
+
+    private var shopOfferDetailsPanel: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let offer = store.selectedShopOffer {
+                labeledField("OFFER ID", text: Binding(
+                    get: { store.selectedShopOffer?.id ?? offer.id },
+                    set: { store.updateSelectedShopOfferID($0) }
+                ))
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("ITEM")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundStyle(palette.label)
+                    Picker("Item", selection: Binding(
+                        get: { store.selectedShopOffer?.itemID ?? offer.itemID },
+                        set: { store.updateSelectedShopOfferItemID($0) }
+                    )) {
+                        ForEach(ItemID.allCases, id: \.self) { itemID in
+                            Text(itemID.rawValue).tag(itemID)
                         }
                     }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
                 }
-                .frame(maxHeight: 420)
-            }
-            .frame(width: 280)
 
-            selectionPanel
+                labeledStepper("PRICE", value: Binding(
+                    get: { store.selectedShopOffer?.price ?? offer.price },
+                    set: { store.updateSelectedShopOfferPrice($0) }
+                ), range: 0...99)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("BLURB")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundStyle(palette.label)
+                    TextEditor(text: Binding(
+                        get: { store.selectedShopOffer?.blurb ?? offer.blurb },
+                        set: { store.updateSelectedShopOfferBlurb($0) }
+                    ))
+                    .font(.system(size: 11, weight: .regular, design: .monospaced))
+                    .scrollContentBackground(.hidden)
+                    .foregroundStyle(palette.text)
+                    .frame(height: 64)
+                    .padding(6)
+                    .background(palette.panelAlt)
+                    .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
+                }
+
+                Toggle(isOn: Binding(
+                    get: { store.selectedShopOffer?.repeatable ?? offer.repeatable },
+                    set: { store.updateSelectedShopOfferRepeatable($0) }
+                )) {
+                    Text("REPEATABLE")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundStyle(palette.label)
+                }
+                .toggleStyle(.checkbox)
+            } else {
+                emptyEditorLabel("NO OFFER IS SELECTED.")
+            }
         }
     }
 
-    private var enemyRosterPanel: some View {
-        HStack(alignment: .top, spacing: 12) {
-            EditorPanel(title: "ENEMY ROSTER", palette: palette) {
-                ScrollView {
-                    VStack(spacing: 6) {
-                        ForEach(store.document.enemies, id: \.id) { enemy in
-                            Button {
-                                store.focusEnemy(id: enemy.id)
-                            } label: {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(enemy.name.uppercased())
-                                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                                    Text("\(enemy.id)  @ \(enemy.mapID)")
-                                        .font(.system(size: 9, weight: .regular, design: .monospaced))
-                                        .opacity(0.78)
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(8)
-                                .background(store.selectedEnemy?.id == enemy.id ? palette.selection : palette.panelAlt)
-                                .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
+    private var npcRosterListPanel: some View {
+        EditorPanel(title: "NPC ROSTER", palette: palette) {
+            ScrollView {
+                VStack(spacing: 6) {
+                    ForEach(store.document.npcs, id: \.id) { npc in
+                        Button {
+                            store.focusNPC(id: npc.id)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(npc.name.uppercased())
+                                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                Text("\(npc.id)  @ \(npc.mapID)")
+                                    .font(.system(size: 9, weight: .regular, design: .monospaced))
+                                    .opacity(0.78)
                             }
-                            .buttonStyle(.plain)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(8)
+                            .background(store.selectedNPC?.id == npc.id ? palette.selection : palette.panelAlt)
+                            .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
                         }
+                        .buttonStyle(.plain)
                     }
                 }
-                .frame(maxHeight: 420)
             }
-            .frame(width: 280)
+            .frame(maxHeight: 360)
+        }
+    }
 
-            selectionPanel
+    private var enemyRosterListPanel: some View {
+        EditorPanel(title: "ENEMY ROSTER", palette: palette) {
+            ScrollView {
+                VStack(spacing: 6) {
+                    ForEach(store.document.enemies, id: \.id) { enemy in
+                        Button {
+                            store.focusEnemy(id: enemy.id)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(enemy.name.uppercased())
+                                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                Text("\(enemy.id)  @ \(enemy.mapID)")
+                                    .font(.system(size: 9, weight: .regular, design: .monospaced))
+                                    .opacity(0.78)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(8)
+                            .background(store.selectedEnemy?.id == enemy.id ? palette.selection : palette.panelAlt)
+                            .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .frame(maxHeight: 360)
         }
     }
 
@@ -3550,15 +3720,27 @@ struct AdventureEditorRootView: View {
     }
 
     private var footer: some View {
-        HStack {
-            Text(store.statusLine)
-                .font(.system(size: 10, weight: .regular, design: .monospaced))
-                .foregroundStyle(palette.text.opacity(0.84))
-                .lineLimit(2)
-            Spacer()
-            Text("EXPORTS TO ~/LIBRARY/APPLICATION SUPPORT/CODEXITMA/ADVENTURES")
-                .font(.system(size: 10, weight: .regular, design: .monospaced))
-                .foregroundStyle(palette.text.opacity(0.72))
+        ViewThatFits(in: .horizontal) {
+            HStack {
+                Text(store.statusLine)
+                    .font(.system(size: 10, weight: .regular, design: .monospaced))
+                    .foregroundStyle(palette.text.opacity(0.84))
+                    .lineLimit(2)
+                Spacer()
+                Text("EXPORTS TO ~/LIBRARY/APPLICATION SUPPORT/CODEXITMA/ADVENTURES")
+                    .font(.system(size: 10, weight: .regular, design: .monospaced))
+                    .foregroundStyle(palette.text.opacity(0.72))
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(store.statusLine)
+                    .font(.system(size: 10, weight: .regular, design: .monospaced))
+                    .foregroundStyle(palette.text.opacity(0.84))
+                    .lineLimit(3)
+                Text("EXPORTS TO ~/LIBRARY/APPLICATION SUPPORT/CODEXITMA/ADVENTURES")
+                    .font(.system(size: 10, weight: .regular, design: .monospaced))
+                    .foregroundStyle(palette.text.opacity(0.72))
+            }
         }
     }
 
@@ -3603,6 +3785,50 @@ struct AdventureEditorRootView: View {
             .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func tilePaletteSwatch(_ tile: EditorTileChoice) -> some View {
+        VStack(spacing: 2) {
+            ZStack {
+                Rectangle()
+                    .fill(tileColor(for: tile.glyph))
+                Text(displayGlyph(tile.glyph))
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundStyle(palette.background)
+            }
+            .frame(width: 26, height: 26)
+            .overlay(
+                Rectangle().stroke(
+                    store.selectedGlyph == tile.glyph ? palette.title : palette.border,
+                    lineWidth: store.selectedGlyph == tile.glyph ? 2 : 1
+                )
+            )
+            Text(tile.label)
+                .font(.system(size: 8, weight: .regular, design: .monospaced))
+                .foregroundStyle(palette.text.opacity(0.82))
+        }
+    }
+
+    private func interactablePaletteSwatch(_ choice: EditorInteractableChoice) -> some View {
+        VStack(spacing: 2) {
+            ZStack {
+                Rectangle()
+                    .fill(choice.color)
+                Text(choice.glyph)
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundStyle(Color.black)
+            }
+            .frame(width: 26, height: 26)
+            .overlay(
+                Rectangle().stroke(
+                    store.selectedInteractableKind == choice.kind ? palette.title : palette.border,
+                    lineWidth: store.selectedInteractableKind == choice.kind ? 2 : 1
+                )
+            )
+            Text(choice.label)
+                .font(.system(size: 8, weight: .regular, design: .monospaced))
+                .foregroundStyle(palette.text.opacity(0.82))
+        }
     }
 
     private func tileColor(for glyph: Character) -> Color {

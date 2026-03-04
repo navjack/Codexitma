@@ -285,7 +285,7 @@ final class GraphicsAppDelegate: NSObject, NSApplicationDelegate {
         )
         window.title = "Codexitma"
         window.backgroundColor = .black
-        window.contentMinSize = NSSize(width: 1100, height: 700)
+        window.contentMinSize = NSSize(width: 960, height: 680)
         window.center()
         window.contentView = NSHostingView(rootView: GameRootView(session: session))
         window.makeKeyAndOrderFront(nil)
@@ -343,204 +343,288 @@ struct GameRootView: View {
     }
 
     private var titleView: some View {
-        return VStack(spacing: 16) {
-            Spacer()
-            PixelBanner(text: "CODEXITMA", color: palette.titleGold)
-            Text("A LOW-RES APPLE II FANTASY")
-                .font(.system(size: 13, weight: .bold, design: .monospaced))
-                .foregroundStyle(palette.text)
-            Text("\(session.state.selectedAdventureTitle().uppercased()) // CLASSES, TRAITS, AND LOW-RES LEGENDS")
-                .font(.system(size: 11, weight: .regular, design: .monospaced))
-                .foregroundStyle(palette.accentBlue)
+        return ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: 16) {
+                Spacer(minLength: 24)
+                PixelBanner(text: "CODEXITMA", color: palette.titleGold)
+                Text("A LOW-RES APPLE II FANTASY")
+                    .font(.system(size: 13, weight: .bold, design: .monospaced))
+                    .foregroundStyle(palette.text)
+                Text("\(session.state.selectedAdventureTitle().uppercased()) // CLASSES, TRAITS, AND LOW-RES LEGENDS")
+                    .font(.system(size: 11, weight: .regular, design: .monospaced))
+                    .foregroundStyle(palette.accentBlue)
 
-            HStack(spacing: 10) {
-                menuButton("A: PREV") { session.send(.move(.left)) }
-                menuButton("D: NEXT") { session.send(.move(.right)) }
-                menuButton("N: CREATE") { session.send(.newGame) }
-                menuButton("L: LOAD") { session.send(.load) }
-                menuButton("M: EDIT") { requestEditor() }
-                menuButton("X: QUIT") { session.send(.quit) }
-            }
-            .frame(maxWidth: 900)
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 10) {
+                        menuButton("A: PREV") { session.send(.move(.left)) }
+                        menuButton("D: NEXT") { session.send(.move(.right)) }
+                        menuButton("N: CREATE") { session.send(.newGame) }
+                        menuButton("L: LOAD") { session.send(.load) }
+                        menuButton("M: EDIT") { requestEditor() }
+                        menuButton("X: QUIT") { session.send(.quit) }
+                    }
+                    .frame(maxWidth: 900)
 
-            Text(session.state.selectedAdventureSummary().uppercased())
-                .font(.system(size: 10, weight: .regular, design: .monospaced))
-                .foregroundStyle(palette.text.opacity(0.9))
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 820)
+                    VStack(spacing: 10) {
+                        HStack(spacing: 10) {
+                            menuButton("A: PREV") { session.send(.move(.left)) }
+                            menuButton("D: NEXT") { session.send(.move(.right)) }
+                            menuButton("N: CREATE") { session.send(.newGame) }
+                        }
+                        HStack(spacing: 10) {
+                            menuButton("L: LOAD") { session.send(.load) }
+                            menuButton("M: EDIT") { requestEditor() }
+                            menuButton("X: QUIT") { session.send(.quit) }
+                        }
+                    }
+                    .frame(maxWidth: 540)
+                }
 
-            HStack(spacing: 10) {
-                menuButton("T: STYLE") { session.cycleVisualTheme() }
-                    .frame(width: 150)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("DISPLAY \(session.visualTheme.displayName.uppercased())")
-                    Text(session.visualTheme.summary.uppercased())
-                        .lineLimit(2)
+                Text(session.state.selectedAdventureSummary().uppercased())
+                    .font(.system(size: 10, weight: .regular, design: .monospaced))
+                    .foregroundStyle(palette.text.opacity(0.9))
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 820)
+
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 10) {
+                        menuButton("T: STYLE") { session.cycleVisualTheme() }
+                            .frame(width: 150)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("DISPLAY \(session.visualTheme.displayName.uppercased())")
+                            Text(session.visualTheme.summary.uppercased())
+                                .lineLimit(2)
+                        }
+                        .font(.system(size: 10, weight: .regular, design: .monospaced))
+                        .foregroundStyle(palette.text.opacity(0.9))
+                    }
+                    .frame(maxWidth: 760)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        menuButton("T: STYLE") { session.cycleVisualTheme() }
+                            .frame(maxWidth: 220)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("DISPLAY \(session.visualTheme.displayName.uppercased())")
+                            Text(session.visualTheme.summary.uppercased())
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .font(.system(size: 10, weight: .regular, design: .monospaced))
+                        .foregroundStyle(palette.text.opacity(0.9))
+                    }
+                    .frame(maxWidth: 540, alignment: .leading)
+                }
+
+                VStack(spacing: 4) {
+                    Text("\(session.visualTheme.displayName.uppercased()) DISPLAY ACTIVE. CREATE A HERO BEFORE YOU ENTER THE VALLEY")
+                    Text("A/D PICK ADVENTURE   ARROWS/WASD STEP ROOM TO ROOM")
+                    Text("E TALK OR USE   I OPEN PACK")
+                    Text("J SHOW GOAL   K SAVE   L LOAD   T SWITCH STYLE")
+                    Text("M OPENS EDITOR   Q BACKS OUT OF MENUS")
+                    Text("--BRIDGE / --SCRIPT FOR HEADLESS CONTROL")
                 }
                 .font(.system(size: 10, weight: .regular, design: .monospaced))
-                .foregroundStyle(palette.text.opacity(0.9))
+                .foregroundStyle(palette.text.opacity(0.85))
+                Spacer(minLength: 24)
             }
-            .frame(maxWidth: 760)
-
-            VStack(spacing: 4) {
-                Text("\(session.visualTheme.displayName.uppercased()) DISPLAY ACTIVE. CREATE A HERO BEFORE YOU ENTER THE VALLEY")
-                Text("A/D PICK ADVENTURE   ARROWS/WASD STEP ROOM TO ROOM")
-                Text("E TALK OR USE   I OPEN PACK")
-                Text("J SHOW GOAL   K SAVE   L LOAD   T SWITCH STYLE")
-                Text("M OPENS EDITOR   Q BACKS OUT OF MENUS")
-                Text("--BRIDGE / --SCRIPT FOR HEADLESS CONTROL")
-            }
-            .font(.system(size: 10, weight: .regular, design: .monospaced))
-            .foregroundStyle(palette.text.opacity(0.85))
-            Spacer()
+            .padding(28)
+            .frame(maxWidth: .infinity)
         }
-        .padding(28)
     }
 
     private var creatorView: some View {
         let heroClass = session.state.selectedHeroClass()
         let template = heroTemplate(for: heroClass)
 
-        return VStack(spacing: 16) {
-            Spacer()
-            PixelBanner(text: template.heroClass.displayName.uppercased(), color: palette.titleGold)
-            Text(template.title.uppercased())
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
-                .foregroundStyle(palette.lightGold)
-            Text(template.summary.uppercased())
-                .font(.system(size: 10, weight: .regular, design: .monospaced))
-                .foregroundStyle(palette.text)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
-            Text(session.state.selectedAdventureTitle().uppercased())
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                .foregroundStyle(palette.accentBlue)
+        return ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: 16) {
+                Spacer(minLength: 24)
+                PixelBanner(text: template.heroClass.displayName.uppercased(), color: palette.titleGold)
+                Text(template.title.uppercased())
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .foregroundStyle(palette.lightGold)
+                Text(template.summary.uppercased())
+                    .font(.system(size: 10, weight: .regular, design: .monospaced))
+                    .foregroundStyle(palette.text)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 40)
+                Text(session.state.selectedAdventureTitle().uppercased())
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundStyle(palette.accentBlue)
 
-            HStack(spacing: 12) {
-                menuButton("A / LEFT") { session.send(.move(.left)) }
-                menuButton("D / RIGHT") { session.send(.move(.right)) }
-            }
-            .frame(width: 320)
-
-            PixelPanel(title: "TRAITS", palette: palette) {
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(TraitStat.allCases, id: \.self) { stat in
-                        Text("\(stat.shortLabel) \(template.traits.value(for: stat))  \(stat.displayName.uppercased())")
-                            .font(.system(size: 10, weight: .regular, design: .monospaced))
-                            .foregroundStyle(palette.text)
-                    }
+                HStack(spacing: 12) {
+                    menuButton("A / LEFT") { session.send(.move(.left)) }
+                    menuButton("D / RIGHT") { session.send(.move(.right)) }
                 }
-                .frame(width: 300, alignment: .leading)
-            }
+                .frame(maxWidth: 360)
 
-            PixelPanel(title: "SKILLS", palette: palette) {
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(template.skills, id: \.self) { skill in
-                        Text("\(skill.displayName.uppercased()): \(skill.summary.uppercased())")
+                PixelPanel(title: "TRAITS", palette: palette) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(TraitStat.allCases, id: \.self) { stat in
+                            Text("\(stat.shortLabel) \(template.traits.value(for: stat))  \(stat.displayName.uppercased())")
+                                .font(.system(size: 10, weight: .regular, design: .monospaced))
+                                .foregroundStyle(palette.text)
+                        }
+                    }
+                    .frame(maxWidth: 320, alignment: .leading)
+                }
+
+                PixelPanel(title: "SKILLS", palette: palette) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(template.skills, id: \.self) { skill in
+                            Text("\(skill.displayName.uppercased()): \(skill.summary.uppercased())")
+                                .font(.system(size: 10, weight: .regular, design: .monospaced))
+                                .foregroundStyle(palette.text)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .frame(maxWidth: 520, alignment: .leading)
+                }
+
+                PixelPanel(title: "START LOADOUT", palette: palette) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        equipmentRow("WPN", template.startingEquipment.weapon.flatMap { itemTable[$0]?.name.uppercased() } ?? "NONE")
+                        equipmentRow("ARM", template.startingEquipment.armor.flatMap { itemTable[$0]?.name.uppercased() } ?? "NONE")
+                        equipmentRow("CHM", template.startingEquipment.charm.flatMap { itemTable[$0]?.name.uppercased() } ?? "NONE")
+                        Text("PACK \(template.startingInventory.compactMap { itemTable[$0]?.name.uppercased() }.joined(separator: ", "))")
                             .font(.system(size: 10, weight: .regular, design: .monospaced))
                             .foregroundStyle(palette.text)
                             .fixedSize(horizontal: false, vertical: true)
                     }
+                    .frame(maxWidth: 520, alignment: .leading)
                 }
-                .frame(width: 420, alignment: .leading)
-            }
 
-            PixelPanel(title: "START LOADOUT", palette: palette) {
-                VStack(alignment: .leading, spacing: 4) {
-                    equipmentRow("WPN", template.startingEquipment.weapon.flatMap { itemTable[$0]?.name.uppercased() } ?? "NONE")
-                    equipmentRow("ARM", template.startingEquipment.armor.flatMap { itemTable[$0]?.name.uppercased() } ?? "NONE")
-                    equipmentRow("CHM", template.startingEquipment.charm.flatMap { itemTable[$0]?.name.uppercased() } ?? "NONE")
-                    Text("PACK \(template.startingInventory.compactMap { itemTable[$0]?.name.uppercased() }.joined(separator: ", "))")
-                        .font(.system(size: 10, weight: .regular, design: .monospaced))
-                        .foregroundStyle(palette.text)
-                        .fixedSize(horizontal: false, vertical: true)
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 10) {
+                        menuButton("T: STYLE") { session.cycleVisualTheme() }
+                        Text(session.visualTheme.displayName.uppercased())
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .foregroundStyle(palette.accentBlue)
+                        menuButton("M: EDIT") { requestEditor() }
+                        menuButton("E: BEGIN") { session.send(.confirm) }
+                        menuButton("Q: BACK") { session.send(.cancel) }
+                    }
+                    .frame(maxWidth: 520)
+
+                    VStack(spacing: 10) {
+                        HStack(spacing: 10) {
+                            menuButton("T: STYLE") { session.cycleVisualTheme() }
+                            menuButton("M: EDIT") { requestEditor() }
+                        }
+                        HStack(spacing: 10) {
+                            menuButton("E: BEGIN") { session.send(.confirm) }
+                            menuButton("Q: BACK") { session.send(.cancel) }
+                        }
+                        Text(session.visualTheme.displayName.uppercased())
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .foregroundStyle(palette.accentBlue)
+                    }
+                    .frame(maxWidth: 420)
                 }
-                .frame(width: 420, alignment: .leading)
+                Spacer(minLength: 24)
             }
-
-            HStack(spacing: 10) {
-                menuButton("T: STYLE") { session.cycleVisualTheme() }
-                Text(session.visualTheme.displayName.uppercased())
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .foregroundStyle(palette.accentBlue)
-                menuButton("M: EDIT") { requestEditor() }
-                menuButton("E: BEGIN") { session.send(.confirm) }
-                menuButton("Q: BACK") { session.send(.cancel) }
-            }
-            .frame(width: 520)
-            Spacer()
+            .padding(28)
+            .frame(maxWidth: .infinity)
         }
-        .padding(28)
     }
 
     private var endingView: some View {
-        VStack(spacing: 16) {
-            Spacer()
-            PixelBanner(text: "BEACON LIT", color: palette.lightGold)
-            Text("THE VALLEY ENDURES.")
-                .font(.system(size: 13, weight: .bold, design: .monospaced))
-                .foregroundStyle(palette.text)
-            if let line = session.state.messages.last {
-                Text(line.uppercased())
-                    .font(.system(size: 10, weight: .regular, design: .monospaced))
-                    .foregroundStyle(palette.accentBlue)
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: 16) {
+                Spacer(minLength: 24)
+                PixelBanner(text: "BEACON LIT", color: palette.lightGold)
+                Text("THE VALLEY ENDURES.")
+                    .font(.system(size: 13, weight: .bold, design: .monospaced))
+                    .foregroundStyle(palette.text)
+                if let line = session.state.messages.last {
+                    Text(line.uppercased())
+                        .font(.system(size: 10, weight: .regular, design: .monospaced))
+                        .foregroundStyle(palette.accentBlue)
+                }
+                menuButton("X: EXIT") { session.send(.quit) }
+                Spacer(minLength: 24)
             }
-            menuButton("X: EXIT") { session.send(.quit) }
-            Spacer()
+            .padding(28)
+            .frame(maxWidth: .infinity)
         }
-        .padding(28)
     }
 
     private var worldView: some View {
         let sidebarPanelWidth: CGFloat = 192
 
-        return ScrollView([.vertical, .horizontal], showsIndicators: false) {
-            HStack(alignment: .top, spacing: 14) {
-                VStack(alignment: .leading, spacing: 10) {
-                    PixelPanel(title: mapPanelTitle, palette: palette) {
-                        MapBoardView(state: session.state, palette: palette, visualTheme: session.visualTheme)
-                    }
+        return GeometryReader { proxy in
+            ScrollView([.vertical, .horizontal], showsIndicators: false) {
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: 14) {
+                        primaryWorldColumn
+                            .frame(width: 620, alignment: .leading)
 
-                    PixelPanel(title: "LOG", palette: palette) {
-                        VStack(alignment: .leading, spacing: 3) {
-                            ForEach(Array(session.state.messages.suffix(4).enumerated()), id: \.offset) { _, line in
-                                Text(line.uppercased())
-                                    .font(.system(size: 10, weight: .regular, design: .monospaced))
-                                    .foregroundStyle(palette.text)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack(alignment: .top, spacing: 10) {
+                                statusPanel
+                                    .frame(width: sidebarPanelWidth)
+                                commercePanel
+                                    .frame(width: sidebarPanelWidth)
+                            }
+
+                            HStack(alignment: .top, spacing: 10) {
+                                paperDollPanel
+                                    .frame(width: sidebarPanelWidth)
+                                inputPanel
+                                    .frame(width: sidebarPanelWidth)
+                            }
+
+                            HStack(alignment: .top, spacing: 10) {
+                                legendPanel
+                                    .frame(width: sidebarPanelWidth)
+                                traitsPanel
+                                    .frame(width: sidebarPanelWidth)
                             }
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(width: (sidebarPanelWidth * 2) + 10, alignment: .leading)
                     }
+                    .frame(minWidth: 1048, alignment: .topLeading)
+
+                    VStack(alignment: .leading, spacing: 14) {
+                        primaryWorldColumn
+
+                        LazyVGrid(
+                            columns: [GridItem(.adaptive(minimum: 220), spacing: 10)],
+                            alignment: .leading,
+                            spacing: 10
+                        ) {
+                            statusPanel
+                            commercePanel
+                            paperDollPanel
+                            inputPanel
+                            legendPanel
+                            traitsPanel
+                        }
+                    }
+                    .frame(maxWidth: 860, alignment: .leading)
                 }
-                .frame(width: 620, alignment: .leading)
-
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(alignment: .top, spacing: 10) {
-                        statusPanel
-                            .frame(width: sidebarPanelWidth)
-                        commercePanel
-                            .frame(width: sidebarPanelWidth)
-                    }
-
-                    HStack(alignment: .top, spacing: 10) {
-                        paperDollPanel
-                            .frame(width: sidebarPanelWidth)
-                        inputPanel
-                            .frame(width: sidebarPanelWidth)
-                    }
-
-                    HStack(alignment: .top, spacing: 10) {
-                        legendPanel
-                            .frame(width: sidebarPanelWidth)
-                        traitsPanel
-                            .frame(width: sidebarPanelWidth)
-                    }
-                }
-                .frame(width: (sidebarPanelWidth * 2) + 10, alignment: .leading)
+                .padding(18)
+                .frame(minHeight: proxy.size.height, alignment: .topLeading)
             }
-            .frame(minWidth: 1048, alignment: .topLeading)
-            .padding(18)
+        }
+    }
+
+    private var primaryWorldColumn: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            PixelPanel(title: mapPanelTitle, palette: palette) {
+                MapBoardView(state: session.state, palette: palette, visualTheme: session.visualTheme)
+            }
+
+            PixelPanel(title: "LOG", palette: palette) {
+                VStack(alignment: .leading, spacing: 3) {
+                    ForEach(Array(session.state.messages.suffix(4).enumerated()), id: \.offset) { _, line in
+                        Text(line.uppercased())
+                            .font(.system(size: 10, weight: .regular, design: .monospaced))
+                            .foregroundStyle(palette.text)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
     }
 
@@ -957,9 +1041,9 @@ struct GameRootView: View {
                         }
                     }
                 }
-                .frame(width: 520, alignment: .leading)
+                .frame(maxWidth: 520, alignment: .leading)
             }
-            .frame(width: 580)
+            .frame(maxWidth: 580)
         }
     }
 
