@@ -184,7 +184,7 @@ struct ContentLoader {
             if let url = resourceURL(
                 baseName: descriptor.baseName,
                 fileExtension: descriptor.fileExtension,
-                bundle: Bundle.module,
+                bundle: GameResourceBundle.current,
                 exactSubdirectory: path
             ) {
                 return url
@@ -298,7 +298,7 @@ extension EncounterDefinition: HasStringIdentifier {}
 
 let itemTable: [ItemID: Item] = {
     let descriptor = ResourceDescriptor(file: "items.json")
-    guard let url = Bundle.module.url(forResource: descriptor.baseName, withExtension: descriptor.fileExtension) else {
+    guard let url = GameResourceBundle.current.url(forResource: descriptor.baseName, withExtension: descriptor.fileExtension) else {
         preconditionFailure("Missing items.json in bundled resources.")
     }
 

@@ -36,9 +36,8 @@ mkdir -p "$APP_MACOS" "$APP_RESOURCES" "$CLI_DIR"
 cp "$BUILD_BIN" "$APP_MACOS/Codexitma"
 chmod +x "$APP_MACOS/Codexitma"
 
-# SwiftPM's generated Bundle.module accessor looks for Game_Game.bundle
-# under Bundle.main.bundleURL, so keep a copy at the app bundle root.
-cp -R "$RESOURCE_BUNDLE" "$APP_DIR/Game_Game.bundle"
+# The runtime now checks Contents/Resources first, so the app can be
+# packaged like a normal macOS bundle.
 cp -R "$RESOURCE_BUNDLE" "$APP_RESOURCES/Game_Game.bundle"
 
 cat > "$APP_CONTENTS/Info.plist" <<'EOF'

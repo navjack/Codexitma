@@ -176,7 +176,7 @@ extension NPCState: RenderableEntity {
 }
 
 let adventureCatalogEntries: [AdventureCatalogEntry] = {
-    guard let url = Bundle.module.url(forResource: "adventure_catalog", withExtension: "json") else {
+    guard let url = GameResourceBundle.current.url(forResource: "adventure_catalog", withExtension: "json") else {
         return []
     }
 
@@ -190,7 +190,7 @@ let adventureCatalogEntries: [AdventureCatalogEntry] = {
 
 let heroTemplateTable: [HeroClass: HeroTemplate] = {
     let descriptor = ("hero_templates" as NSString)
-    guard let url = Bundle.module.url(forResource: descriptor.deletingPathExtension, withExtension: "json") else {
+    guard let url = GameResourceBundle.current.url(forResource: descriptor.deletingPathExtension, withExtension: "json") else {
         preconditionFailure("Missing hero_templates.json in bundled resources.")
     }
 
