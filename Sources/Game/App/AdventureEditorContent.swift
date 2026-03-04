@@ -1,6 +1,4 @@
-import AppKit
 import Foundation
-import SwiftUI
 
 struct EditableAdventureDocument {
     var folderName: String

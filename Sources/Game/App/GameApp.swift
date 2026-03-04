@@ -43,11 +43,19 @@ struct GameApp {
         try MainActor.assumeIsolated {
             switch backend {
             case .native:
+#if canImport(AppKit)
                 GraphicsGameLauncher.run(
                     library: library,
                     saveRepository: saves,
                     playtestAdventureID: playtestAdventureID
                 )
+#else
+                try SDLGraphicsLauncher.run(
+                    library: library,
+                    saveRepository: saves,
+                    playtestAdventureID: playtestAdventureID
+                )
+#endif
             case .sdl:
                 try SDLGraphicsLauncher.run(
                     library: library,
@@ -61,7 +69,12 @@ struct GameApp {
     func runEditor() {
         let library = self.library
         MainActor.assumeIsolated {
+#if canImport(AppKit)
             AdventureEditorLauncher.run(library: library)
+#else
+            _ = library
+            fputs("Codexitma editor mode is currently only available in the native macOS frontend.\n", stderr)
+#endif
         }
     }
 

@@ -65,6 +65,7 @@
 - Tightened the SDL editor UX after live testing: the editor now has clearly distinct blue/cyan chrome instead of blending into the gameplay HUD, and `X` exits editor mode back to the game instead of quitting the application.
 - Extended the SDL editor past map work: the non-spatial content tabs now have cycle-based in-window editing for dialogue, quest stages, encounters, shops, NPCs, and enemies instead of being view-only dead ends.
 - Installed the local Windows cross-toolchain pieces `mingw-w64` and `zig`, and verified `x86_64-w64-mingw32-gcc` can emit a real x86_64 PE executable. The remaining missing piece for actual Swift-to-Windows builds is still a Windows Swift SDK bundle.
+- Kept the native macOS path intact while starting the portability cleanup: `GameApp` now only calls the native launcher/editor on platforms that have them, and shared editor files no longer import AppKit/SwiftUI when they do not actually need those frameworks.
 
 ## Current Notes
 
@@ -89,6 +90,7 @@
 - The SDL branch now has a real in-window editor shell, but it is still a focused first pass: the spatial map workflow is there, while the richer non-spatial content panels from the native editor are not fully ported yet.
 - The SDL branch now covers both spatial and non-spatial editor workflows, but it still uses cycle-based editing rather than true text entry for authored content fields.
 - The next SDL/editor move should add proper text entry for authored strings in the SDL editor so those tabs are not limited to curated template cycles.
+- The next portability move should be a real target/source split: keep the native AppKit/SwiftUI frontend as a macOS-only path, and isolate the SDL/frontend-shared code so a Windows runner can build without compiling the native files at all.
 
 ## Next Build Targets
 
