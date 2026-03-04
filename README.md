@@ -1,13 +1,15 @@
 # Codexitma
 
-Codexitma is a Swift 6 retro RPG engine for macOS with a playable low-resolution fantasy game, a built-in adventure editor, and a data-driven content pipeline.
+Codexitma is a Swift 6 retro RPG engine with a native macOS frontend, a shipping SDL-based Win64 build, a built-in adventure editor, and a data-driven content pipeline.
 
-It is deliberately styled after early Apple II and Ultima-era computer RPGs, with a modern codebase underneath: native graphics mode, terminal mode, JSON content packs, deterministic automation hooks, and an in-game editor workflow.
+It is deliberately styled after early Apple II and Ultima-era computer RPGs, with a modern codebase underneath: native graphics mode, an SDL cross-platform renderer, terminal mode, JSON content packs, deterministic automation hooks, and an in-game editor workflow.
 
 ## What It Is
 
 - Graphics-first macOS RPG with low-resolution retro presentation
-- Native AppKit/SwiftUI windowed mode plus ANSI terminal mode
+- Native AppKit/SwiftUI windowed mode on macOS
+- SDL3 graphics frontend used for cross-platform rendering and the Win64 release build
+- ANSI terminal mode for the original text-mode presentation
 - Three graphics styles on the same game state:
   - `Gemstone`
   - `Ultima`
@@ -21,7 +23,7 @@ It is deliberately styled after early Apple II and Ultima-era computer RPGs, wit
 
 ## Current State
 
-The project is beyond prototype status. The engine, save/load flow, combat, quests, exploration, shops, class-based hero starts, graphics themes, editor, and external content loading are all working.
+The project is beyond prototype status. The engine, save/load flow, combat, quests, exploration, shops, class-based hero starts, graphics themes, editor, external content loading, native macOS frontend, and Win64 SDL packaging are all working.
 
 What is still evolving is depth and content scale:
 
@@ -35,8 +37,28 @@ The core engine and tooling are already real and usable.
 
 ## Requirements
 
+For local development:
+
 - macOS 14 or newer
 - Swift 6 toolchain (the package is set to Swift tools `6.3`)
+- SDL3 installed locally if you want to run the SDL frontend on macOS (`brew install sdl3`)
+
+For packaged builds:
+
+- Tagged GitHub releases now include:
+  - a macOS `.app` zip
+  - a macOS CLI zip
+  - a Win64 SDL zip
+
+## Platform Support
+
+- macOS
+  - native AppKit/SwiftUI frontend is the primary shipping experience
+  - SDL3 frontend is also available for parity testing with `--sdl`
+- Windows
+  - the supported packaged path is the Win64 SDL release artifact
+- Linux
+  - the SDL frontend is the intended future path, but packaged Linux releases are not published yet
 
 ## Quick Start
 
@@ -56,6 +78,12 @@ Launch directly into the graphical editor:
 
 ```sh
 swift run Game --editor
+```
+
+Run the SDL frontend on macOS for cross-platform parity testing:
+
+```sh
+swift run Game --sdl
 ```
 
 After successful builds, a convenience copy of the latest working binary is also kept at the repo root:
@@ -88,6 +116,8 @@ After successful builds, a convenience copy of the latest working binary is also
   - first-person raycast dungeon view with turn-in-place controls and map-accurate depth
 
 In graphics mode, press `T` to cycle styles.
+
+On macOS, the native frontend is still the default. The SDL frontend is the cross-platform path and is what the Win64 release build uses.
 
 ## Controls
 
@@ -204,6 +234,24 @@ The bridge is the preferred automation surface. If an MCP server is added later,
 
 See [AUTOMATION.md](AUTOMATION.md) for details.
 
+## Releases
+
+Tagged releases are now built through GitHub Actions and published with platform artifacts.
+
+- `Windows SDL Build`
+  - runs on Windows runners
+  - produces the Win64 SDL package
+- `macOS Package Build`
+  - runs on macOS runners
+  - produces the macOS app and CLI zips
+
+These packaging workflows no longer run on every `main` push. They run on:
+
+- manual dispatch
+- version tags matching `v*`
+
+That keeps routine development pushes cheap while still allowing reproducible release builds.
+
 ## Repository Notes
 
 - [PLAN.md](PLAN.md) contains the original project plan and scope.
@@ -222,6 +270,8 @@ The project is organized as a Swift Package with:
 
 - executable target: `Game`
 - test target: `GameTests`
+
+To create a release build through GitHub Actions, tag the release commit with a version tag such as `v0.2.1` and push the tag.
 
 ## Road Ahead
 
