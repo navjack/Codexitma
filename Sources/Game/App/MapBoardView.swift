@@ -69,11 +69,20 @@ private struct DepthTextureAtlas {
     }
 
     static func load(bundle: Bundle = GameResourceBundle.current) -> DepthTextureAtlas? {
-        guard let url = bundle.url(
-            forResource: "punyworld-dungeon-tileset",
-            withExtension: "png",
-            subdirectory: "ContentData/DepthTextures"
-        ) else {
+        let candidates: [URL?] = [
+            bundle.url(forResource: "punyworld-dungeon-tileset", withExtension: "png"),
+            bundle.url(
+                forResource: "punyworld-dungeon-tileset",
+                withExtension: "png",
+                subdirectory: "DepthTextures"
+            ),
+            bundle.url(
+                forResource: "punyworld-dungeon-tileset",
+                withExtension: "png",
+                subdirectory: "ContentData/DepthTextures"
+            ),
+        ]
+        guard let url = candidates.compactMap({ $0 }).first else {
             return nil
         }
         guard let nsImage = NSImage(contentsOf: url),
@@ -337,11 +346,12 @@ struct MapBoardView: View {
                     floorBands: floorBands,
                     bandIndex: band
                 )
+                context.fill(Path(rect), with: .color(theme.floor.opacity(shade * 0.22)))
+                context.fill(Path(rect.insetBy(dx: 0, dy: 0)), with: .color(stripe.opacity(0.30)))
             } else {
                 context.fill(Path(rect), with: .color(theme.floor.opacity(shade)))
+                context.fill(Path(rect.insetBy(dx: 0, dy: 0)), with: .color(stripe))
             }
-            context.fill(Path(rect), with: .color(theme.floor.opacity(shade)))
-            context.fill(Path(rect.insetBy(dx: 0, dy: 0)), with: .color(stripe))
 
             if band > 0 {
                 let line = Path(CGRect(x: 0, y: y0, width: size.width, height: 1))
@@ -512,7 +522,7 @@ struct MapBoardView: View {
                 context.fill(Path(rect), with: .color(Color.black.opacity(darkness)))
             }
 
-            if sample.column.isMultiple(of: 3) {
+            if depthTextureAtlas == nil, sample.column.isMultiple(of: 3) {
                 let stripe = CGRect(
                     x: rect.minX,
                     y: rect.minY,
