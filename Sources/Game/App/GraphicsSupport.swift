@@ -129,12 +129,14 @@ struct PixelKeyCapture: NSViewRepresentable {
     let onCommand: (ActionCommand) -> Void
     let onThemeToggle: () -> Void
     let onEditorRequest: () -> Void
+    let onScreenshotRequest: () -> Void
 
     func makeNSView(context: Context) -> KeyCaptureView {
         let view = KeyCaptureView()
         view.onCommand = onCommand
         view.onThemeToggle = onThemeToggle
         view.onEditorRequest = onEditorRequest
+        view.onScreenshotRequest = onScreenshotRequest
         DispatchQueue.main.async {
             view.window?.makeFirstResponder(view)
         }
@@ -145,6 +147,7 @@ struct PixelKeyCapture: NSViewRepresentable {
         nsView.onCommand = onCommand
         nsView.onThemeToggle = onThemeToggle
         nsView.onEditorRequest = onEditorRequest
+        nsView.onScreenshotRequest = onScreenshotRequest
         DispatchQueue.main.async {
             nsView.window?.makeFirstResponder(nsView)
         }
@@ -155,6 +158,7 @@ final class KeyCaptureView: NSView {
     var onCommand: ((ActionCommand) -> Void)?
     var onThemeToggle: (() -> Void)?
     var onEditorRequest: (() -> Void)?
+    var onScreenshotRequest: (() -> Void)?
 
     override var acceptsFirstResponder: Bool { true }
 
@@ -163,6 +167,8 @@ final class KeyCaptureView: NSView {
             onThemeToggle?()
         } else if isEditorRequest(event) {
             onEditorRequest?()
+        } else if isScreenshotRequest(event) {
+            onScreenshotRequest?()
         } else if let command = parse(event) {
             onCommand?(command)
         } else {
@@ -184,6 +190,10 @@ final class KeyCaptureView: NSView {
             return false
         }
         return char == "m"
+    }
+
+    private func isScreenshotRequest(_ event: NSEvent) -> Bool {
+        event.keyCode == 111 // F12
     }
 
     private func parse(_ event: NSEvent) -> ActionCommand? {

@@ -126,6 +126,7 @@ On macOS, the native frontend is still the default. The SDL frontend is the cros
 - `X`: quit
 - `T`: cycle graphics theme
 - `M`: open the editor (graphics mode)
+- `F12`: save a framebuffer screenshot (`.png` in native mode, `.bmp` in SDL mode)
 
 ### Depth 3D
 
@@ -209,6 +210,16 @@ External adventure packs are loaded from:
 Each pack lives in its own folder and provides the same JSON-driven content structure.
 
 If an external pack uses the same adventure `id` as a bundled adventure, it overrides the bundled one. That is the supported mod path for changing shipped adventures without touching the app bundle.
+
+Graphics tile/sprite palettes and map theme overrides can also be modded without recompiling Swift by creating:
+
+```text
+~/Library/Application Support/Codexitma/graphics_assets.json
+```
+
+An example schema and default pack lives at:
+
+- `Sources/Game/ContentData/graphics_assets.json`
 
 ## Automation And Testing
 

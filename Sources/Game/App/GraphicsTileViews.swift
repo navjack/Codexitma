@@ -217,7 +217,13 @@ struct LowResTileView: View {
 
     @ViewBuilder
     private func featureMark(size: CGFloat) -> some View {
-        if visualTheme == .ultima {
+        if feature != .none,
+           let override = GraphicsAssetCatalog.featureSprite(for: feature.debugName),
+           let pattern = override.pattern?.rows,
+           let color = override.color.map(swiftUIColor(from:)) {
+            PixelSprite(color: color, pattern: pattern)
+                .frame(width: size * 0.62, height: size * 0.62)
+        } else if visualTheme == .ultima {
             ultimaFeatureMark(size: size)
         } else {
             switch feature {
@@ -305,21 +311,13 @@ struct LowResTileView: View {
             case .none:
                 EmptyView()
             case .player:
-                simpleSprite(color: palette.text, pattern: [
-                    [0,1,0],
-                    [1,1,1],
-                    [1,0,1]
-                ], size: size * 0.62)
+                simpleSprite(color: playerColor(), pattern: playerPattern(ultima: true), size: size * 0.62)
             case .npc(let id):
                 simpleSprite(color: npcColor(for: id), pattern: ultimaNPCPattern(for: id), size: size * 0.58)
             case .enemy(let id):
                 simpleSprite(color: enemyColor(for: id), pattern: ultimaEnemyPattern(for: id), size: size * 0.64)
-            case .boss:
-                simpleSprite(color: palette.accentViolet, pattern: [
-                    [1,1,1],
-                    [1,0,1],
-                    [1,1,1]
-                ], size: size * 0.68)
+            case .boss(let id):
+                simpleSprite(color: bossColor(for: id), pattern: bossPattern(for: id, ultima: true), size: size * 0.68)
             }
         } else {
             switch occupant {
@@ -327,28 +325,18 @@ struct LowResTileView: View {
                 EmptyView()
             case .player:
                 gemstoneSprite(
-                    color: palette.text,
-                    pattern: [
-                        [0,1,1,0],
-                        [1,1,1,1],
-                        [1,0,0,1],
-                        [1,0,0,1]
-                    ],
+                    color: playerColor(),
+                    pattern: playerPattern(ultima: false),
                     size: size * 0.78
                 )
             case .npc(let id):
                 gemstoneSprite(color: npcColor(for: id), pattern: npcPattern(for: id), size: size * 0.76)
             case .enemy(let id):
                 gemstoneSprite(color: enemyColor(for: id), pattern: enemyPattern(for: id), size: size * 0.84)
-            case .boss:
+            case .boss(let id):
                 gemstoneSprite(
-                    color: palette.accentViolet,
-                    pattern: [
-                        [1,0,1,0,1],
-                        [1,1,1,1,1],
-                        [0,1,1,1,0],
-                        [1,0,1,0,1]
-                    ],
+                    color: bossColor(for: id),
+                    pattern: bossPattern(for: id, ultima: false),
                     size: size * 0.90
                 )
             }
@@ -370,6 +358,9 @@ struct LowResTileView: View {
     }
 
     private func npcPattern(for id: String) -> [[Int]] {
+        if let pattern = GraphicsAssetCatalog.npcSprite(for: id)?.pattern?.rows {
+            return pattern
+        }
         switch id {
         case "elder":
             return [
@@ -403,6 +394,9 @@ struct LowResTileView: View {
     }
 
     private func ultimaNPCPattern(for id: String) -> [[Int]] {
+        if let pattern = GraphicsAssetCatalog.npcSprite(for: id)?.pattern?.rows {
+            return pattern
+        }
         switch id {
         case "elder":
             return [
@@ -432,6 +426,9 @@ struct LowResTileView: View {
     }
 
     private func npcColor(for id: String) -> Color {
+        if let color = GraphicsAssetCatalog.npcSprite(for: id)?.color {
+            return swiftUIColor(from: color)
+        }
         switch id {
         case "elder":
             return palette.accentBlue
@@ -447,6 +444,9 @@ struct LowResTileView: View {
     }
 
     private func enemyPattern(for id: String) -> [[Int]] {
+        if let pattern = GraphicsAssetCatalog.enemySprite(for: id)?.pattern?.rows {
+            return pattern
+        }
         if id.hasPrefix("crow") {
             return [
                 [1,0,0,1],
@@ -480,6 +480,9 @@ struct LowResTileView: View {
     }
 
     private func ultimaEnemyPattern(for id: String) -> [[Int]] {
+        if let pattern = GraphicsAssetCatalog.enemySprite(for: id)?.pattern?.rows {
+            return pattern
+        }
         if id.hasPrefix("crow") {
             return [
                 [1,0,1],
@@ -509,6 +512,9 @@ struct LowResTileView: View {
     }
 
     private func enemyColor(for id: String) -> Color {
+        if let color = GraphicsAssetCatalog.enemySprite(for: id)?.color {
+            return swiftUIColor(from: color)
+        }
         if id.hasPrefix("crow") {
             return palette.text
         }
@@ -519,6 +525,72 @@ struct LowResTileView: View {
             return palette.accentBlue
         }
         return palette.lightGold
+    }
+
+    private func playerPattern(ultima: Bool) -> [[Int]] {
+        if let pattern = GraphicsAssetCatalog.occupantSprite(for: "player")?.pattern?.rows {
+            return pattern
+        }
+        if ultima {
+            return [
+                [0,1,0],
+                [1,1,1],
+                [1,0,1]
+            ]
+        }
+        return [
+            [0,1,1,0],
+            [1,1,1,1],
+            [1,0,0,1],
+            [1,0,0,1]
+        ]
+    }
+
+    private func playerColor() -> Color {
+        if let color = GraphicsAssetCatalog.occupantSprite(for: "player")?.color {
+            return swiftUIColor(from: color)
+        }
+        return palette.text
+    }
+
+    private func bossPattern(for id: String, ultima: Bool) -> [[Int]] {
+        if let pattern = GraphicsAssetCatalog.occupantSprite(for: "boss")?.pattern?.rows {
+            return pattern
+        }
+        if let pattern = GraphicsAssetCatalog.enemySprite(for: id)?.pattern?.rows {
+            return pattern
+        }
+        if ultima {
+            return [
+                [1,1,1],
+                [1,0,1],
+                [1,1,1]
+            ]
+        }
+        return [
+            [1,0,1,0,1],
+            [1,1,1,1,1],
+            [0,1,1,1,0],
+            [1,0,1,0,1]
+        ]
+    }
+
+    private func bossColor(for id: String) -> Color {
+        if let color = GraphicsAssetCatalog.occupantSprite(for: "boss")?.color {
+            return swiftUIColor(from: color)
+        }
+        if let color = GraphicsAssetCatalog.enemySprite(for: id)?.color {
+            return swiftUIColor(from: color)
+        }
+        return palette.accentViolet
+    }
+
+    private func swiftUIColor(from color: GraphicsRGBColor) -> Color {
+        Color(
+            red: Double(color.r) / 255.0,
+            green: Double(color.g) / 255.0,
+            blue: Double(color.b) / 255.0
+        )
     }
 }
 #endif

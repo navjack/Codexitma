@@ -7,6 +7,8 @@ import SwiftUI
 struct GameRootView: View {
     @ObservedObject var session: GameSessionController
     @State private var showingEditorConfirm = false
+    @State private var screenshotNotice: String?
+    @State private var screenshotNoticeWorkItem: DispatchWorkItem?
 
     private let palette = UltimaPalette()
 
@@ -26,6 +28,9 @@ struct GameRootView: View {
                 onEditorRequest: {
                     guard !showingEditorConfirm else { return }
                     requestEditor()
+                },
+                onScreenshotRequest: {
+                    captureScreenshot()
                 }
             )
                 .frame(width: 1, height: 1)
@@ -46,6 +51,19 @@ struct GameRootView: View {
         .overlay {
             if showingEditorConfirm {
                 editorConfirmOverlay
+            }
+        }
+        .overlay(alignment: .topTrailing) {
+            if let screenshotNotice {
+                Text(screenshotNotice)
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundStyle(palette.background)
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 10)
+                    .background(palette.lightGold)
+                    .overlay(Rectangle().stroke(palette.titleGold, lineWidth: 2))
+                    .padding(.top, 12)
+                    .padding(.trailing, 12)
             }
         }
         .onMoveCommand(perform: handleMove)
@@ -128,7 +146,8 @@ struct GameRootView: View {
                     Text("A/D PICK ADVENTURE   ARROWS/WASD STEP ROOM TO ROOM")
                     Text("E TALK OR USE   I OPEN PACK")
                     Text("J SHOW GOAL   K SAVE   L LOAD   T SWITCH STYLE")
-                    Text("M OPENS EDITOR   Q BACKS OUT OF MENUS")
+                    Text("M OPENS EDITOR   F12 SAVES SCREENSHOT PNG")
+                    Text("Q BACKS OUT OF MENUS")
                     Text("--BRIDGE / --SCRIPT FOR HEADLESS CONTROL")
                 }
                 .font(.system(size: 10, weight: .regular, design: .monospaced))
@@ -494,6 +513,9 @@ struct GameRootView: View {
                 Text(inputTertiaryLine)
                     .font(.system(size: 10, weight: .regular, design: .monospaced))
                     .foregroundStyle(palette.text)
+                Text(inputQuaternaryLine)
+                    .font(.system(size: 10, weight: .regular, design: .monospaced))
+                    .foregroundStyle(palette.text)
 
                 VStack(spacing: 8) {
                     HStack(spacing: 8) {
@@ -515,6 +537,7 @@ struct GameRootView: View {
                     HStack(spacing: 8) {
                         menuButton("M") { requestEditor() }
                         menuButton("T") { session.cycleVisualTheme() }
+                        menuButton("SHOT") { captureScreenshot() }
                     }
                 }
             }
@@ -727,6 +750,10 @@ struct GameRootView: View {
         }
     }
 
+    private var inputQuaternaryLine: String {
+        "F12 SAVES SCREENSHOT PNG"
+    }
+
     private var editorConfirmOverlay: some View {
         ZStack {
             Color.black.opacity(0.74)
@@ -764,6 +791,39 @@ struct GameRootView: View {
     private func requestEditor() {
         guard session.canOpenEditorFromCurrentMode() else { return }
         showingEditorConfirm = true
+    }
+
+    private func captureScreenshot() {
+        let label = screenshotLabel
+        do {
+            let url = try NativeScreenshotCapture.captureKeyWindow(label: label)
+            postScreenshotNotice("SHOT SAVED \(url.lastPathComponent.uppercased())")
+        } catch {
+            postScreenshotNotice("SHOT FAILED \(error.localizedDescription.uppercased())")
+        }
+    }
+
+    private var screenshotLabel: String {
+        switch session.state.mode {
+        case .title:
+            return "title-\(session.state.selectedAdventureID().rawValue)"
+        case .characterCreation:
+            return "creator-\(session.state.selectedHeroClass().rawValue)"
+        case .ending:
+            return "ending-\(session.state.currentAdventureID.rawValue)"
+        default:
+            return "\(session.state.currentAdventureID.rawValue)-\(session.state.player.currentMapID)-\(String(describing: session.state.mode))"
+        }
+    }
+
+    private func postScreenshotNotice(_ text: String) {
+        screenshotNoticeWorkItem?.cancel()
+        screenshotNotice = text
+        let workItem = DispatchWorkItem {
+            screenshotNotice = nil
+        }
+        screenshotNoticeWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.6, execute: workItem)
     }
 }
 #endif
