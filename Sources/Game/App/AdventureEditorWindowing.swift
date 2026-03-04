@@ -61,6 +61,7 @@ private final class AdventureEditorWindowController: NSObject, NSWindowDelegate 
         let window = self.window ?? makeWindow()
         self.window = window
         window.makeKeyAndOrderFront(nil)
+        window.orderFrontRegardless()
         NSApplication.shared.activate(ignoringOtherApps: true)
     }
 

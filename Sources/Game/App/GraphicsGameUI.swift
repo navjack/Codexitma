@@ -39,7 +39,9 @@ struct GameRootView: View {
             default:
                 worldView
             }
-
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay {
             if showingEditorConfirm {
                 editorConfirmOverlay
             }

@@ -40,6 +40,7 @@ struct AdventureEditorRootView: View {
                 .padding(18)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
 }
