@@ -6,24 +6,65 @@ import Foundation
 final class GraphicsPreferenceStore: @unchecked Sendable {
     static let shared = GraphicsPreferenceStore()
 
-    private let defaults: UserDefaults
     private let themeKey = "codexitma.graphics.visualTheme"
+    #if os(Windows)
+    private let fileURL: URL
+    #else
+    private let defaults: UserDefaults
+    #endif
 
+    #if os(Windows)
+    init(fileManager: FileManager = .default, fileURL: URL? = nil) {
+        if let fileURL {
+            self.fileURL = fileURL
+            return
+        }
+
+        let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSTemporaryDirectory())
+        let folder = appSupport.appendingPathComponent("Codexitma", isDirectory: true)
+        self.fileURL = folder.appendingPathComponent("graphics_theme.json")
+    }
+    #else
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
     }
+    #endif
 
     func loadTheme() -> GraphicsVisualTheme {
+        #if os(Windows)
+        guard let data = try? Data(contentsOf: fileURL),
+              let payload = try? JSONDecoder().decode(GraphicsThemePreferencePayload.self, from: data),
+              let theme = GraphicsVisualTheme(rawValue: payload.visualTheme) else {
+            return .gemstone
+        }
+        return theme
+        #else
         guard let rawValue = defaults.string(forKey: themeKey),
               let theme = GraphicsVisualTheme(rawValue: rawValue) else {
             return .gemstone
         }
         return theme
+        #endif
     }
 
     func saveTheme(_ theme: GraphicsVisualTheme) {
+        #if os(Windows)
+        let directory = fileURL.deletingLastPathComponent()
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let payload = GraphicsThemePreferencePayload(visualTheme: theme.rawValue)
+        guard let data = try? JSONEncoder().encode(payload) else {
+            return
+        }
+        try? data.write(to: fileURL, options: .atomic)
+        #else
         defaults.set(theme.rawValue, forKey: themeKey)
+        #endif
     }
+}
+
+private struct GraphicsThemePreferencePayload: Codable {
+    let visualTheme: String
 }
 
 private extension GameSoundCue {
