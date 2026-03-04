@@ -122,3 +122,20 @@
 - The old ANSI terminal frontend was removed; the project is now graphics-only, with `--terminal` retained only as a legacy alias that falls back to the native graphics path.
 - Automation was already independent of the removed terminal frontend; launch parsing is now hardened so `--sdl` / `--graphics` / `--terminal` cannot override `--script`, `--bridge`, or `--editor` when those non-interactive modes are selected.
 - Added `scripts/sync_release_to_dist.sh` so each published GitHub release can be mirrored locally into `dist/<tag>-assets` in the same macOS/Win64 layout used for manual testing and archives.
+- Future session note: add a simple built-in screenshot/export path that can capture framebuffer images from both the native macOS frontend and the SDL frontend, so standard showcase shots (title screen, early map/first area, etc.) can be generated easily for the README and releases.
+- Future session note: make graphics assets more user-moddable, especially tiles, sprite patterns, and related presentation data, so players can swap or extend visual packs without editing core Swift code.
+
+### 2026-03-04
+
+- Added built-in framebuffer screenshots in both graphics frontends:
+  - Native AppKit path captures key-window PNGs.
+  - SDL path captures renderer output BMPs via `SDL_RenderReadPixels`.
+- Bound screenshot capture to `F12` and surfaced it in native + SDL on-screen control legends.
+- Added in-session screenshot result notices so users get immediate confirmation (saved filename or failure).
+- Added bundled `graphics_assets.json` and wired runtime graphics asset overrides for:
+  - map theme colors + floor pattern
+  - NPC/enemy/player/boss sprite patterns + colors
+  - feature sprite patterns + colors
+- Kept all existing hardcoded visuals as fallback so missing override fields do not break rendering.
+- Documented graphics-asset mod path in README (`~/Library/Application Support/Codexitma/graphics_assets.json`).
+- Switched Windows data storage to a portable EXE-relative root (`CodexitmaData`) for saves, adventures, screenshots, theme prefs, and graphics-asset overrides, with automatic fallback to `%APPDATA%\\Codexitma` when EXE-local storage is not writable.

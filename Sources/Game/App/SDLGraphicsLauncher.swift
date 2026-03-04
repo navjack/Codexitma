@@ -62,14 +62,26 @@ enum SDLGraphicsLauncher {
         var running = true
         var showingEditorPrompt = false
         var editorSession: AdventureEditorSession?
+        var pendingScreenshotLabel: String?
+        var statusLine: String?
+        var statusLineExpiry: UInt64 = 0
 
         while running {
+            let ticks = SDL_GetTicks()
+            if statusLine != nil, ticks >= statusLineExpiry {
+                statusLine = nil
+            }
+
             var event = SDL_Event()
             while SDL_PollEvent(&event) {
                 if event.type == SDL_EVENT_QUIT.rawValue {
                     running = false
                 } else if event.type == SDL_EVENT_KEY_DOWN.rawValue {
                     if event.key.repeat {
+                        continue
+                    }
+                    if event.key.key == SDLK_F12 {
+                        pendingScreenshotLabel = screenshotLabel(session: session, editorSession: editorSession)
                         continue
                     }
                     if handleEditorKey(
@@ -105,14 +117,22 @@ enum SDLGraphicsLauncher {
             }
 
             if let editorSession {
-                renderAdventureEditor(editorSession, with: renderer)
+                renderAdventureEditor(editorSession, statusLine: statusLine, with: renderer)
             } else {
                 let scene = session.sceneSnapshot
                 renderScene(
                     scene,
                     editorPromptLines: showingEditorPrompt ? session.editorConfirmationLines() : nil,
+                    statusLine: statusLine,
                     with: renderer
                 )
+            }
+
+            if let label = pendingScreenshotLabel {
+                let outcome = captureScreenshot(with: renderer, label: label)
+                statusLine = outcome
+                statusLineExpiry = SDL_GetTicks() + 2600
+                pendingScreenshotLabel = nil
             }
             _ = SDL_RenderPresent(renderer)
             SDL_Delay(16)
@@ -280,9 +300,52 @@ enum SDLGraphicsLauncher {
         }
     }
 
+    private static func screenshotLabel(
+        session: SharedGameSession,
+        editorSession: AdventureEditorSession?
+    ) -> String {
+        if let editorSession {
+            let editor = editorSession.sceneSnapshot
+            return "editor-\(editor.folderName)-\(editor.currentMapID)-\(editor.selectedContentTab.shortLabel)"
+        }
+
+        let state = session.state
+        switch state.mode {
+        case .title:
+            return "title-\(state.selectedAdventureID().rawValue)"
+        case .characterCreation:
+            return "creator-\(state.selectedHeroClass().rawValue)"
+        case .ending:
+            return "ending-\(state.currentAdventureID.rawValue)"
+        default:
+            return "\(state.currentAdventureID.rawValue)-\(state.player.currentMapID)-\(String(describing: state.mode))"
+        }
+    }
+
+    private static func captureScreenshot(with renderer: OpaquePointer, label: String) -> String {
+        guard let surface = SDL_RenderReadPixels(renderer, nil) else {
+            return "SHOT FAILED \(sdlError())"
+        }
+        defer { SDL_DestroySurface(surface) }
+
+        do {
+            let url = try ScreenshotSupport.makeScreenshotURL(prefix: "sdl", label: label, fileExtension: "bmp")
+            let saved = url.path.withCString { pointer in
+                SDL_SaveBMP(surface, pointer)
+            }
+            if saved {
+                return "SHOT SAVED \(url.lastPathComponent.uppercased())"
+            }
+            return "SHOT FAILED \(sdlError())"
+        } catch {
+            return "SHOT FAILED \(String(describing: error).uppercased())"
+        }
+    }
+
     private static func renderScene(
         _ scene: GraphicsSceneSnapshot,
         editorPromptLines: [String]?,
+        statusLine: String?,
         with renderer: OpaquePointer
     ) {
         let viewport = currentViewport(for: renderer)
@@ -324,13 +387,17 @@ enum SDLGraphicsLauncher {
         stroke(renderer, frame: panelFrame, color: .gold)
 
         renderSidebar(scene, frame: panelFrame, with: renderer)
-        renderHeader(scene, frame: viewport.headerFrame, with: renderer)
+        renderHeader(scene, frame: viewport.headerFrame, statusLine: statusLine, with: renderer)
         if let editorPromptLines {
             renderEditorPrompt(lines: editorPromptLines, viewport: viewport, with: renderer)
         }
     }
 
-    private static func renderAdventureEditor(_ editorSession: AdventureEditorSession, with renderer: OpaquePointer) {
+    private static func renderAdventureEditor(
+        _ editorSession: AdventureEditorSession,
+        statusLine: String?,
+        with renderer: OpaquePointer
+    ) {
         let editor = editorSession.sceneSnapshot
         let viewport = currentViewport(for: renderer)
         fill(renderer, x: 0, y: 0, width: viewport.width, height: viewport.height, color: .editorBackdrop)
@@ -379,6 +446,9 @@ enum SDLGraphicsLauncher {
         renderEditorSidebar(editor, frame: panelFrame, with: renderer)
         drawText("EDITOR MODE", x: viewport.headerFrame.x + 4, y: viewport.headerFrame.y, color: .editorAccent, renderer: renderer)
         drawText("GAME VIEW PAUSED", x: viewport.headerFrame.x + 120, y: viewport.headerFrame.y, color: .bright, renderer: renderer)
+        if let statusLine {
+            drawText(String(statusLine.uppercased().prefix(50)), x: viewport.headerFrame.x + max(320, viewport.headerFrame.width / 2), y: viewport.headerFrame.y, color: .gold, renderer: renderer)
+        }
         drawText(editor.title.uppercased(), x: viewport.contentFrame.x + 10, y: viewport.contentFrame.y + 8, color: .bright, renderer: renderer)
         drawText(editor.currentMapName.uppercased(), x: viewport.contentFrame.x + min(260, max(120, viewport.contentFrame.width / 3)), y: viewport.contentFrame.y + 8, color: .editorAccent, renderer: renderer)
         drawText("MAP \(editor.currentMapID.uppercased())", x: viewport.contentFrame.x + min(470, max(240, (viewport.contentFrame.width * 2) / 3)), y: viewport.contentFrame.y + 8, color: .dim, renderer: renderer)
@@ -405,7 +475,8 @@ enum SDLGraphicsLauncher {
         }
 
         drawText("A/D SELECT  N CREATE  L LOAD", x: frame.x + 18, y: frame.y + frame.height - 42, color: .bright, renderer: renderer)
-        drawText("M EDIT  T STYLE  X QUIT", x: frame.x + 18, y: frame.y + frame.height - 26, color: .bright, renderer: renderer)
+        drawText("M EDIT  T STYLE  F12 SHOT", x: frame.x + 18, y: frame.y + frame.height - 26, color: .bright, renderer: renderer)
+        drawText("X QUIT", x: frame.x + 18, y: frame.y + frame.height - 12, color: .bright, renderer: renderer)
     }
 
     private static func renderCharacterCreationScreen(_ scene: GraphicsSceneSnapshot, viewport: SDLViewport, with renderer: OpaquePointer) {
@@ -452,10 +523,18 @@ enum SDLGraphicsLauncher {
         drawText("X OR Q TO EXIT", x: frame.x + 18, y: frame.y + frame.height - 28, color: .bright, renderer: renderer)
     }
 
-    private static func renderHeader(_ scene: GraphicsSceneSnapshot, frame: SDLRect, with renderer: OpaquePointer) {
+    private static func renderHeader(
+        _ scene: GraphicsSceneSnapshot,
+        frame: SDLRect,
+        statusLine: String?,
+        with renderer: OpaquePointer
+    ) {
         drawText(scene.adventureTitle.uppercased(), x: frame.x + 4, y: frame.y, color: .gold, renderer: renderer)
         drawText(scene.visualTheme.displayName.uppercased(), x: frame.x + min(220, max(120, frame.width / 4)), y: frame.y, color: .bright, renderer: renderer)
         drawText(scene.modeLabel, x: frame.x + min(360, max(220, frame.width / 2)), y: frame.y, color: .dim, renderer: renderer)
+        if let statusLine {
+            drawText(String(statusLine.uppercased().prefix(48)), x: frame.x + max(460, (frame.width * 3) / 5), y: frame.y, color: .gold, renderer: renderer)
+        }
     }
 
     private static func renderSidebar(_ scene: GraphicsSceneSnapshot, frame: SDLRect, with renderer: OpaquePointer) {
@@ -522,7 +601,7 @@ enum SDLGraphicsLauncher {
         y += lineHeight
         drawText("Q BACK  M EDIT  X QUIT", x: frame.x + 10, y: y, color: .bright, renderer: renderer)
         y += lineHeight
-        drawText("T STYLE", x: frame.x + 10, y: y, color: .bright, renderer: renderer)
+        drawText("T STYLE  F12 SHOT", x: frame.x + 10, y: y, color: .bright, renderer: renderer)
     }
 
     private static func renderDialogueSidebar(_ scene: GraphicsSceneSnapshot, frame: SDLRect, with renderer: OpaquePointer) {
@@ -540,7 +619,7 @@ enum SDLGraphicsLauncher {
         y += 10
         drawText("E OR Q TO CLOSE", x: frame.x + 10, y: y, color: .bright, renderer: renderer)
         y += 14
-        drawText("M EDIT", x: frame.x + 10, y: y, color: .bright, renderer: renderer)
+        drawText("M EDIT  F12 SHOT", x: frame.x + 10, y: y, color: .bright, renderer: renderer)
     }
 
     private static func renderInventorySidebar(_ scene: GraphicsSceneSnapshot, frame: SDLRect, with renderer: OpaquePointer) {
@@ -566,7 +645,7 @@ enum SDLGraphicsLauncher {
         }
 
         drawText("W/S MOVE  E USE  R DROP", x: frame.x + 10, y: frame.y + frame.height - 42, color: .bright, renderer: renderer)
-        drawText("Q CLOSE  M EDIT", x: frame.x + 10, y: frame.y + frame.height - 26, color: .bright, renderer: renderer)
+        drawText("Q CLOSE  M EDIT  F12 SHOT", x: frame.x + 10, y: frame.y + frame.height - 26, color: .bright, renderer: renderer)
     }
 
     private static func renderShopSidebar(_ scene: GraphicsSceneSnapshot, frame: SDLRect, with renderer: OpaquePointer) {
@@ -596,7 +675,7 @@ enum SDLGraphicsLauncher {
         }
 
         drawText("W/S MOVE  E BUY  Q LEAVE", x: frame.x + 10, y: frame.y + frame.height - 42, color: .bright, renderer: renderer)
-        drawText("M EDIT", x: frame.x + 10, y: frame.y + frame.height - 26, color: .bright, renderer: renderer)
+        drawText("M EDIT  F12 SHOT", x: frame.x + 10, y: frame.y + frame.height - 26, color: .bright, renderer: renderer)
     }
 
     private static func renderEditorPrompt(
@@ -800,7 +879,7 @@ enum SDLGraphicsLauncher {
             drawText("R/F TOOL  C TAB", x: frame.x + 10, y: frame.y + frame.height - 42, color: .bright, renderer: renderer)
             drawText("Z/V MAP  K SAVE  P CHECK", x: frame.x + 10, y: frame.y + frame.height - 28, color: .bright, renderer: renderer)
         }
-        drawText("N NEW  Q/M/X RETURN", x: frame.x + 10, y: frame.y + frame.height - 14, color: .editorAccent, renderer: renderer)
+        drawText("N NEW  Q/M/X RETURN  F12 SHOT", x: frame.x + 10, y: frame.y + frame.height - 14, color: .editorAccent, renderer: renderer)
     }
 
     private static func renderBoard(_ scene: GraphicsSceneSnapshot, frame: SDLRect, with renderer: OpaquePointer) {
@@ -961,6 +1040,9 @@ enum SDLGraphicsLauncher {
     }
 
     private static func featureColor(for feature: MapFeature) -> SDLColor {
+        if let color = GraphicsAssetCatalog.featureSprite(for: feature.debugName)?.color {
+            return SDLColor(color)
+        }
         switch feature {
         case .none: return .bright
         case .chest: return .gold
@@ -978,10 +1060,35 @@ enum SDLGraphicsLauncher {
     private static func occupantColor(for occupant: MapOccupant) -> SDLColor {
         switch occupant {
         case .none: return .bright
-        case .player: return .bright
-        case .npc: return .blue
-        case .enemy: return .green
-        case .boss: return .violet
+        case .player:
+            if let color = GraphicsAssetCatalog.occupantSprite(for: "player")?.color {
+                return SDLColor(color)
+            }
+            return .bright
+        case .npc(let id):
+            if let color = GraphicsAssetCatalog.npcSprite(for: id)?.color {
+                return SDLColor(color)
+            }
+            if let color = GraphicsAssetCatalog.occupantSprite(for: id)?.color {
+                return SDLColor(color)
+            }
+            return .blue
+        case .enemy(let id):
+            if let color = GraphicsAssetCatalog.enemySprite(for: id)?.color {
+                return SDLColor(color)
+            }
+            if let color = GraphicsAssetCatalog.occupantSprite(for: id)?.color {
+                return SDLColor(color)
+            }
+            return .green
+        case .boss(let id):
+            if let color = GraphicsAssetCatalog.occupantSprite(for: "boss")?.color {
+                return SDLColor(color)
+            }
+            if let color = GraphicsAssetCatalog.enemySprite(for: id)?.color {
+                return SDLColor(color)
+            }
+            return .violet
         }
     }
 
@@ -1055,12 +1162,12 @@ enum SDLGraphicsLauncher {
 
     private static func billboardColor(for kind: DepthBillboardKind) -> SDLColor {
         switch kind {
-        case .npc:
-            return .blue
-        case .enemy:
-            return .green
-        case .boss:
-            return .violet
+        case .npc(let id):
+            return occupantColor(for: .npc(id))
+        case .enemy(let id):
+            return occupantColor(for: .enemy(id))
+        case .boss(let id):
+            return occupantColor(for: .boss(id))
         case .feature(let feature):
             return featureColor(for: feature)
         }
@@ -1152,6 +1259,9 @@ enum SDLGraphicsLauncher {
     }
 
     private static func featurePattern(for feature: MapFeature) -> [[Int]] {
+        if let pattern = GraphicsAssetCatalog.featureSprite(for: feature.debugName)?.pattern?.rows {
+            return pattern
+        }
         switch feature {
         case .none:
             return [[1]]
@@ -1208,16 +1318,31 @@ enum SDLGraphicsLauncher {
         case .none:
             return [[1]]
         case .player:
+            if let pattern = GraphicsAssetCatalog.occupantSprite(for: "player")?.pattern?.rows {
+                return pattern
+            }
             return [
                 [0, 1, 0],
                 [1, 1, 1],
                 [1, 0, 1]
             ]
         case .npc(let id):
+            if let pattern = GraphicsAssetCatalog.occupantSprite(for: id)?.pattern?.rows {
+                return pattern
+            }
             return npcPattern(for: id)
         case .enemy(let id):
+            if let pattern = GraphicsAssetCatalog.occupantSprite(for: id)?.pattern?.rows {
+                return pattern
+            }
             return enemyPattern(for: id)
-        case .boss:
+        case .boss(let id):
+            if let pattern = GraphicsAssetCatalog.occupantSprite(for: "boss")?.pattern?.rows {
+                return pattern
+            }
+            if let pattern = GraphicsAssetCatalog.enemySprite(for: id)?.pattern?.rows {
+                return pattern
+            }
             return [
                 [1, 0, 1],
                 [1, 1, 1],
@@ -1232,18 +1357,17 @@ enum SDLGraphicsLauncher {
             return npcPattern(for: id)
         case .enemy(let id):
             return enemyPattern(for: id)
-        case .boss:
-            return [
-                [1, 0, 1],
-                [1, 1, 1],
-                [1, 1, 1]
-            ]
+        case .boss(let id):
+            return occupantPattern(for: .boss(id))
         case .feature(let feature):
             return featurePattern(for: feature)
         }
     }
 
     private static func npcPattern(for id: String) -> [[Int]] {
+        if let pattern = GraphicsAssetCatalog.npcSprite(for: id)?.pattern?.rows {
+            return pattern
+        }
         switch id {
         case "elder":
             return [
@@ -1273,6 +1397,9 @@ enum SDLGraphicsLauncher {
     }
 
     private static func enemyPattern(for id: String) -> [[Int]] {
+        if let pattern = GraphicsAssetCatalog.enemySprite(for: id)?.pattern?.rows {
+            return pattern
+        }
         if id.hasPrefix("crow") {
             return [
                 [1, 0, 1],
@@ -1475,6 +1602,9 @@ enum SDLGraphicsLauncher {
     }
 
     private static func floorPattern(for mapID: String) -> SDLFloorPattern {
+        if let overridePattern = GraphicsAssetCatalog.floorPattern(for: mapID) {
+            return sdlFloorPattern(from: overridePattern)
+        }
         switch mapID {
         case "merrow_village":
             return .brick
@@ -1490,6 +1620,23 @@ enum SDLGraphicsLauncher {
             return .circuit
         default:
             return .brick
+        }
+    }
+
+    private static func sdlFloorPattern(from pattern: GraphicsFloorPatternName) -> SDLFloorPattern {
+        switch pattern {
+        case .brick:
+            return .brick
+        case .speckle:
+            return .speckle
+        case .weave:
+            return .weave
+        case .hash:
+            return .hash
+        case .mire:
+            return .mire
+        case .circuit:
+            return .circuit
         }
     }
 
@@ -1516,9 +1663,10 @@ enum SDLGraphicsLauncher {
 
     private static func boardTheme(for scene: GraphicsSceneSnapshot) -> SDLBoardTheme {
         let pattern = floorPattern(for: scene.currentMapID)
+        let base: SDLBoardTheme
         switch scene.visualTheme {
         case .gemstone:
-            return SDLBoardTheme(
+            base = SDLBoardTheme(
                 frameBackground: .void,
                 boardBackground: .void,
                 outerBorder: .gold,
@@ -1537,7 +1685,7 @@ enum SDLGraphicsLauncher {
                 beacon: .beacon
             )
         case .ultima:
-            return SDLBoardTheme(
+            base = SDLBoardTheme(
                 frameBackground: .ground,
                 boardBackground: .ground.withAlpha(255),
                 outerBorder: .bright.withAlpha(180),
@@ -1556,7 +1704,7 @@ enum SDLGraphicsLauncher {
                 beacon: .beacon
             )
         case .depth3D:
-            return SDLBoardTheme(
+            base = SDLBoardTheme(
                 frameBackground: .void,
                 boardBackground: .void,
                 outerBorder: .gold,
@@ -1575,6 +1723,32 @@ enum SDLGraphicsLauncher {
                 beacon: .beacon
             )
         }
+        return applyMapThemeOverrides(base: base, mapID: scene.currentMapID)
+    }
+
+    private static func applyMapThemeOverrides(base: SDLBoardTheme, mapID: String) -> SDLBoardTheme {
+        guard let override = GraphicsAssetCatalog.mapTheme(for: mapID) else {
+            return base
+        }
+
+        return SDLBoardTheme(
+            frameBackground: override.roomShadow.map(SDLColor.init) ?? base.frameBackground,
+            boardBackground: override.floor.map(SDLColor.init) ?? base.boardBackground,
+            outerBorder: override.roomBorder.map(SDLColor.init) ?? base.outerBorder,
+            innerBorder: override.roomHighlight.map(SDLColor.init) ?? base.innerBorder,
+            grid: override.roomShadow.map(SDLColor.init) ?? base.grid,
+            innerInset: base.innerInset,
+            contentInset: base.contentInset,
+            floor: override.floor.map(SDLColor.init) ?? base.floor,
+            wall: override.wall.map(SDLColor.init) ?? base.wall,
+            water: override.water.map(SDLColor.init) ?? base.water,
+            brush: override.brush.map(SDLColor.init) ?? base.brush,
+            doorLocked: override.doorLocked.map(SDLColor.init) ?? base.doorLocked,
+            doorOpen: override.doorOpen.map(SDLColor.init) ?? base.doorOpen,
+            shrine: override.shrine.map(SDLColor.init) ?? base.shrine,
+            stairs: override.stairs.map(SDLColor.init) ?? base.stairs,
+            beacon: override.beacon.map(SDLColor.init) ?? base.beacon
+        )
     }
 
     private static func floorBaseColor(for pattern: SDLFloorPattern, variant: SDLBoardVariant) -> SDLColor {
@@ -1728,6 +1902,22 @@ private struct SDLColor {
     let g: UInt8
     let b: UInt8
     let a: UInt8
+
+    init(r: UInt8, g: UInt8, b: UInt8, a: UInt8) {
+        self.r = r
+        self.g = g
+        self.b = b
+        self.a = a
+    }
+
+    init(_ color: GraphicsRGBColor) {
+        self.init(
+            r: UInt8(clamping: color.r),
+            g: UInt8(clamping: color.g),
+            b: UInt8(clamping: color.b),
+            a: 255
+        )
+    }
 
     static let background = SDLColor(r: 6, g: 6, b: 8, a: 255)
     static let panel = SDLColor(r: 18, g: 18, b: 14, a: 255)

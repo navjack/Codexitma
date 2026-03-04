@@ -20,9 +20,7 @@ final class GraphicsPreferenceStore: @unchecked Sendable {
             return
         }
 
-        let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? URL(fileURLWithPath: NSTemporaryDirectory())
-        let folder = appSupport.appendingPathComponent("Codexitma", isDirectory: true)
+        let folder = CodexitmaPaths.dataRoot(fileManager: fileManager)
         self.fileURL = folder.appendingPathComponent("graphics_theme.json")
     }
     #else

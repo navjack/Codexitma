@@ -1,0 +1,191 @@
+{
+  "mapThemes": {
+    "merrow_village": {
+      "pattern": "brick",
+      "floor": "#2e1c14",
+      "wall": "#763b1f",
+      "water": "#2a84d8",
+      "brush": "#46942a",
+      "doorLocked": "#aa761e",
+      "doorOpen": "#e6d25a",
+      "shrine": "#9046c8",
+      "stairs": "#80582c",
+      "beacon": "#f4e24a",
+      "roomBorder": "#ee8c12",
+      "roomHighlight": "#f4eeb6",
+      "roomShadow": "#1a120f"
+    },
+    "south_fields": {
+      "pattern": "speckle",
+      "floor": "#4f2d10",
+      "wall": "#6f591c",
+      "water": "#2a84d8",
+      "brush": "#52bc2b",
+      "doorLocked": "#aa761e",
+      "doorOpen": "#e6d25a",
+      "shrine": "#9046c8",
+      "stairs": "#8f6624",
+      "beacon": "#f4e24a",
+      "roomBorder": "#e6a316",
+      "roomHighlight": "#f9d65f",
+      "roomShadow": "#1a120f"
+    },
+    "sunken_orchard": {
+      "pattern": "weave",
+      "floor": "#372610",
+      "wall": "#5a661f",
+      "water": "#2f75bf",
+      "brush": "#37851f",
+      "doorLocked": "#c78f1f",
+      "doorOpen": "#e6d25a",
+      "shrine": "#9046c8",
+      "stairs": "#7c5930",
+      "beacon": "#f4e24a",
+      "roomBorder": "#4fb33c",
+      "roomHighlight": "#b8d657",
+      "roomShadow": "#17120d"
+    },
+    "hollow_barrows": {
+      "pattern": "hash",
+      "floor": "#241a1a",
+      "wall": "#807a70",
+      "water": "#2a84d8",
+      "brush": "#52bc2b",
+      "doorLocked": "#c57d26",
+      "doorOpen": "#e6d25a",
+      "shrine": "#9a64ca",
+      "stairs": "#7a5638",
+      "beacon": "#f4e24a",
+      "roomBorder": "#d2d0c4",
+      "roomHighlight": "#f5f1e5",
+      "roomShadow": "#130f10"
+    },
+    "black_fen": {
+      "pattern": "mire",
+      "floor": "#172410",
+      "wall": "#456028",
+      "water": "#2e6898",
+      "brush": "#557814",
+      "doorLocked": "#aa761e",
+      "doorOpen": "#e6d25a",
+      "shrine": "#9046c8",
+      "stairs": "#4f4024",
+      "beacon": "#f4e24a",
+      "roomBorder": "#54a636",
+      "roomHighlight": "#bad94f",
+      "roomShadow": "#0f150c"
+    },
+    "beacon_spire": {
+      "pattern": "circuit",
+      "floor": "#1a1a2e",
+      "wall": "#6e6e94",
+      "water": "#2a84d8",
+      "brush": "#52bc2b",
+      "doorLocked": "#aa761e",
+      "doorOpen": "#e6d25a",
+      "shrine": "#9046c8",
+      "stairs": "#6b4d24",
+      "beacon": "#f4e24a",
+      "roomBorder": "#3ea0e0",
+      "roomHighlight": "#e4ebf9",
+      "roomShadow": "#111225"
+    }
+  },
+  "npcSprites": {
+    "elder": {
+      "pattern": [
+        "010",
+        "111",
+        "101"
+      ],
+      "color": "#2a84d8"
+    },
+    "field_scout": {
+      "pattern": [
+        "101",
+        "010",
+        "010"
+      ],
+      "color": "#f4eeb6"
+    },
+    "orchard_guide": {
+      "pattern": [
+        "010",
+        "110",
+        "011"
+      ],
+      "color": "#52bc2b"
+    }
+  },
+  "enemySprites": {
+    "crow*": {
+      "pattern": [
+        "101",
+        "111",
+        "010"
+      ],
+      "color": "#f4eeb6"
+    },
+    "hound*": {
+      "pattern": [
+        "110",
+        "111",
+        "011"
+      ],
+      "color": "#ee8c12"
+    },
+    "wraith*": {
+      "pattern": [
+        "010",
+        "111",
+        "111"
+      ],
+      "color": "#2a84d8"
+    }
+  },
+  "featureSprites": {
+    "chest": {
+      "pattern": [
+        "0110",
+        "1111",
+        "1001"
+      ],
+      "color": "#ee8c12"
+    },
+    "beacon": {
+      "pattern": [
+        "010",
+        "111",
+        "111"
+      ],
+      "color": "#f4e24a"
+    },
+    "shrine": {
+      "pattern": [
+        "010",
+        "111",
+        "101",
+        "010"
+      ],
+      "color": "#9046c8"
+    }
+  },
+  "occupantSprites": {
+    "player": {
+      "pattern": [
+        "010",
+        "111",
+        "101"
+      ],
+      "color": "#f4eeb6"
+    },
+    "boss": {
+      "pattern": [
+        "101",
+        "111",
+        "111"
+      ],
+      "color": "#aa44c6"
+    }
+  }
+}

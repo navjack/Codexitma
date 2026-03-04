@@ -42,10 +42,7 @@ struct AdventurePackExporter {
         if let externalRootURL {
             self.externalRootURL = externalRootURL
         } else {
-            let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-                ?? URL(fileURLWithPath: NSTemporaryDirectory())
-            self.externalRootURL = appSupport
-                .appendingPathComponent("Codexitma", isDirectory: true)
+            self.externalRootURL = CodexitmaPaths.dataRoot(fileManager: fileManager)
                 .appendingPathComponent("Adventures", isDirectory: true)
         }
     }

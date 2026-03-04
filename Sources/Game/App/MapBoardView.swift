@@ -443,11 +443,12 @@ struct MapBoardView: View {
     }
 
     private func depthFeatureAppearance(for feature: MapFeature) -> (pattern: [[Int]], color: Color, scale: Double, widthScale: CGFloat)? {
+        let fallback: (pattern: [[Int]], color: Color, scale: Double, widthScale: CGFloat)?
         switch feature {
         case .none:
-            return nil
+            fallback = nil
         case .chest:
-            return (
+            fallback = (
                 [
                     [1,1,1],
                     [1,0,1]
@@ -457,7 +458,7 @@ struct MapBoardView: View {
                 0.84
             )
         case .bed:
-            return (
+            fallback = (
                 [
                     [1,1,1],
                     [1,0,0]
@@ -467,7 +468,7 @@ struct MapBoardView: View {
                 1.10
             )
         case .plateUp:
-            return (
+            fallback = (
                 [
                     [1,1],
                     [1,1]
@@ -477,7 +478,7 @@ struct MapBoardView: View {
                 1.30
             )
         case .plateDown:
-            return (
+            fallback = (
                 [
                     [1,1]
                 ],
@@ -486,7 +487,7 @@ struct MapBoardView: View {
                 1.45
             )
         case .switchIdle:
-            return (
+            fallback = (
                 [
                     [0,1,0],
                     [1,1,1],
@@ -497,7 +498,7 @@ struct MapBoardView: View {
                 0.84
             )
         case .switchLit:
-            return (
+            fallback = (
                 [
                     [1,1,1],
                     [1,1,1],
@@ -508,7 +509,7 @@ struct MapBoardView: View {
                 0.84
             )
         case .shrine:
-            return (
+            fallback = (
                 [
                     [0,1,0],
                     [1,1,1],
@@ -519,7 +520,7 @@ struct MapBoardView: View {
                 0.90
             )
         case .beacon:
-            return (
+            fallback = (
                 [
                     [0,1,0],
                     [1,1,1],
@@ -530,7 +531,7 @@ struct MapBoardView: View {
                 0.92
             )
         case .gate:
-            return (
+            fallback = (
                 [
                     [1,0,1],
                     [1,0,1],
@@ -541,6 +542,17 @@ struct MapBoardView: View {
                 1.05
             )
         }
+
+        guard let fallback else {
+            return nil
+        }
+
+        if let override = GraphicsAssetCatalog.featureSprite(for: feature.debugName) {
+            let pattern = override.pattern?.rows ?? fallback.pattern
+            let color = override.color.map(Self.swiftUIColor(from:)) ?? fallback.color
+            return (pattern, color, fallback.scale, fallback.widthScale)
+        }
+        return fallback
     }
 
     private func depthBillboardPattern(for kind: DepthBillboardKind) -> [[Int]] {
@@ -549,12 +561,14 @@ struct MapBoardView: View {
             return firstPersonNPCPattern(for: id)
         case .enemy(let id):
             return firstPersonEnemyPattern(for: id)
-        case .boss:
-            return [
-                [1,0,1],
-                [1,1,1],
-                [1,1,1]
-            ]
+        case .boss(let id):
+            return GraphicsAssetCatalog.occupantSprite(for: "boss")?.pattern?.rows
+                ?? GraphicsAssetCatalog.enemySprite(for: id)?.pattern?.rows
+                ?? [
+                    [1,0,1],
+                    [1,1,1],
+                    [1,1,1]
+                ]
         case .feature(let feature):
             return depthFeatureAppearance(for: feature)?.pattern ?? [[1]]
         }
@@ -566,8 +580,10 @@ struct MapBoardView: View {
             return firstPersonNPCColor(for: id)
         case .enemy(let id):
             return firstPersonEnemyColor(for: id)
-        case .boss:
-            return palette.accentViolet
+        case .boss(let id):
+            return GraphicsAssetCatalog.occupantSprite(for: "boss")?.color.map(Self.swiftUIColor(from:))
+                ?? GraphicsAssetCatalog.enemySprite(for: id)?.color.map(Self.swiftUIColor(from:))
+                ?? palette.accentViolet
         case .feature(let feature):
             return depthFeatureAppearance(for: feature)?.color ?? palette.text
         }
@@ -695,76 +711,14 @@ struct MapBoardView: View {
         }
     }
 
-    private func firstPersonFeature(for feature: MapFeature, theme: RegionTheme, in frame: PerspectiveFrame) -> AnyView? {
-        let color: Color
-        let pattern: [[Int]]
-
-        switch feature {
-        case .none:
+    private func firstPersonFeature(for feature: MapFeature, theme _: RegionTheme, in frame: PerspectiveFrame) -> AnyView? {
+        guard let appearance = depthFeatureAppearance(for: feature) else {
             return nil
-        case .chest:
-            color = palette.lightGold
-            pattern = [
-                [1,1,1],
-                [1,0,1]
-            ]
-        case .bed:
-            color = palette.text
-            pattern = [
-                [1,1,1],
-                [1,0,0]
-            ]
-        case .plateUp:
-            color = palette.accentViolet
-            pattern = [
-                [1,1],
-                [1,1]
-            ]
-        case .plateDown:
-            color = palette.text.opacity(0.65)
-            pattern = [
-                [1,1]
-            ]
-        case .switchIdle:
-            color = palette.accentBlue
-            pattern = [
-                [0,1,0],
-                [1,1,1],
-                [0,1,0]
-            ]
-        case .switchLit:
-            color = palette.lightGold
-            pattern = [
-                [1,1,1],
-                [1,1,1],
-                [1,1,1]
-            ]
-        case .shrine:
-            color = theme.shrine
-            pattern = [
-                [0,1,0],
-                [1,1,1],
-                [0,1,0]
-            ]
-        case .beacon:
-            color = theme.beacon
-            pattern = [
-                [0,1,0],
-                [1,1,1],
-                [1,1,1]
-            ]
-        case .gate:
-            color = theme.doorLocked
-            pattern = [
-                [1,0,1],
-                [1,0,1],
-                [1,1,1]
-            ]
         }
 
         let spriteHeight = max(12, frame.height * 0.34)
         let spriteWidth = max(12, frame.width * 0.18)
-        let view = PixelSprite(color: color, pattern: pattern)
+        let view = PixelSprite(color: appearance.color, pattern: appearance.pattern)
             .frame(width: spriteWidth, height: spriteHeight)
             .position(x: frame.center.x, y: frame.bottomLeft.y - (spriteHeight * 0.55))
         return AnyView(view)
@@ -778,8 +732,8 @@ struct MapBoardView: View {
         case .none:
             return nil
         case .player:
-            color = palette.text
-            pattern = [
+            color = GraphicsAssetCatalog.occupantSprite(for: "player")?.color.map(Self.swiftUIColor(from:)) ?? palette.text
+            pattern = GraphicsAssetCatalog.occupantSprite(for: "player")?.pattern?.rows ?? [
                 [0,1,0],
                 [1,1,1],
                 [1,0,1]
@@ -790,13 +744,17 @@ struct MapBoardView: View {
         case .enemy(let id):
             color = firstPersonEnemyColor(for: id)
             pattern = firstPersonEnemyPattern(for: id)
-        case .boss:
-            color = palette.accentViolet
-            pattern = [
-                [1,0,1],
-                [1,1,1],
-                [1,1,1]
-            ]
+        case .boss(let id):
+            color = GraphicsAssetCatalog.occupantSprite(for: "boss")?.color.map(Self.swiftUIColor(from:))
+                ?? GraphicsAssetCatalog.enemySprite(for: id)?.color.map(Self.swiftUIColor(from:))
+                ?? palette.accentViolet
+            pattern = GraphicsAssetCatalog.occupantSprite(for: "boss")?.pattern?.rows
+                ?? GraphicsAssetCatalog.enemySprite(for: id)?.pattern?.rows
+                ?? [
+                    [1,0,1],
+                    [1,1,1],
+                    [1,1,1]
+                ]
         }
 
         let spriteHeight = max(18, frame.height * 0.62)
@@ -924,6 +882,9 @@ struct MapBoardView: View {
     }
 
     private func firstPersonNPCPattern(for id: String) -> [[Int]] {
+        if let pattern = GraphicsAssetCatalog.npcSprite(for: id)?.pattern?.rows {
+            return pattern
+        }
         switch id {
         case "elder":
             return [
@@ -953,6 +914,9 @@ struct MapBoardView: View {
     }
 
     private func firstPersonNPCColor(for id: String) -> Color {
+        if let color = GraphicsAssetCatalog.npcSprite(for: id)?.color {
+            return Self.swiftUIColor(from: color)
+        }
         switch id {
         case "elder":
             return palette.accentBlue
@@ -968,6 +932,9 @@ struct MapBoardView: View {
     }
 
     private func firstPersonEnemyPattern(for id: String) -> [[Int]] {
+        if let pattern = GraphicsAssetCatalog.enemySprite(for: id)?.pattern?.rows {
+            return pattern
+        }
         if id.hasPrefix("crow") {
             return [
                 [1,0,1],
@@ -997,6 +964,9 @@ struct MapBoardView: View {
     }
 
     private func firstPersonEnemyColor(for id: String) -> Color {
+        if let color = GraphicsAssetCatalog.enemySprite(for: id)?.color {
+            return Self.swiftUIColor(from: color)
+        }
         if id.hasPrefix("crow") {
             return palette.titleGold
         }
@@ -1056,9 +1026,10 @@ struct MapBoardView: View {
     }
 
     private var regionTheme: RegionTheme {
+        let base: RegionTheme
         switch scene.currentMapID {
         case "merrow_village":
-            return RegionTheme(
+            base = RegionTheme(
                 floor: Color(red: 0.18, green: 0.11, blue: 0.08),
                 wall: Color(red: 0.46, green: 0.23, blue: 0.12),
                 water: palette.accentBlue,
@@ -1074,7 +1045,7 @@ struct MapBoardView: View {
                 pattern: .brick
             )
         case "south_fields":
-            return RegionTheme(
+            base = RegionTheme(
                 floor: Color(red: 0.31, green: 0.18, blue: 0.06),
                 wall: Color(red: 0.44, green: 0.35, blue: 0.11),
                 water: palette.accentBlue,
@@ -1090,7 +1061,7 @@ struct MapBoardView: View {
                 pattern: .speckle
             )
         case "sunken_orchard":
-            return RegionTheme(
+            base = RegionTheme(
                 floor: Color(red: 0.21, green: 0.15, blue: 0.05),
                 wall: Color(red: 0.36, green: 0.41, blue: 0.12),
                 water: Color(red: 0.18, green: 0.46, blue: 0.75),
@@ -1106,7 +1077,7 @@ struct MapBoardView: View {
                 pattern: .weave
             )
         case "hollow_barrows":
-            return RegionTheme(
+            base = RegionTheme(
                 floor: Color(red: 0.14, green: 0.10, blue: 0.10),
                 wall: Color(red: 0.50, green: 0.48, blue: 0.44),
                 water: palette.accentBlue,
@@ -1122,7 +1093,7 @@ struct MapBoardView: View {
                 pattern: .hash
             )
         case "black_fen":
-            return RegionTheme(
+            base = RegionTheme(
                 floor: Color(red: 0.09, green: 0.14, blue: 0.08),
                 wall: Color(red: 0.27, green: 0.36, blue: 0.16),
                 water: Color(red: 0.17, green: 0.43, blue: 0.60),
@@ -1138,7 +1109,7 @@ struct MapBoardView: View {
                 pattern: .mire
             )
         case "beacon_spire":
-            return RegionTheme(
+            base = RegionTheme(
                 floor: Color(red: 0.10, green: 0.10, blue: 0.18),
                 wall: Color(red: 0.43, green: 0.43, blue: 0.58),
                 water: palette.accentBlue,
@@ -1154,7 +1125,7 @@ struct MapBoardView: View {
                 pattern: .circuit
             )
         default:
-            return RegionTheme(
+            base = RegionTheme(
                 floor: palette.ground,
                 wall: palette.stone,
                 water: palette.accentBlue,
@@ -1169,6 +1140,54 @@ struct MapBoardView: View {
                 roomShadow: Color.black.opacity(0.55),
                 pattern: .brick
             )
+        }
+        return applyMapThemeOverride(base: base, mapID: scene.currentMapID)
+    }
+
+    private func applyMapThemeOverride(base: RegionTheme, mapID: String) -> RegionTheme {
+        guard let override = GraphicsAssetCatalog.mapTheme(for: mapID) else {
+            return base
+        }
+
+        return RegionTheme(
+            floor: override.floor.map(Self.swiftUIColor(from:)) ?? base.floor,
+            wall: override.wall.map(Self.swiftUIColor(from:)) ?? base.wall,
+            water: override.water.map(Self.swiftUIColor(from:)) ?? base.water,
+            brush: override.brush.map(Self.swiftUIColor(from:)) ?? base.brush,
+            doorLocked: override.doorLocked.map(Self.swiftUIColor(from:)) ?? base.doorLocked,
+            doorOpen: override.doorOpen.map(Self.swiftUIColor(from:)) ?? base.doorOpen,
+            shrine: override.shrine.map(Self.swiftUIColor(from:)) ?? base.shrine,
+            stairs: override.stairs.map(Self.swiftUIColor(from:)) ?? base.stairs,
+            beacon: override.beacon.map(Self.swiftUIColor(from:)) ?? base.beacon,
+            roomBorder: override.roomBorder.map(Self.swiftUIColor(from:)) ?? base.roomBorder,
+            roomHighlight: override.roomHighlight.map(Self.swiftUIColor(from:)) ?? base.roomHighlight,
+            roomShadow: override.roomShadow.map(Self.swiftUIColor(from:)) ?? base.roomShadow,
+            pattern: override.pattern.map(Self.chamberPattern(from:)) ?? base.pattern
+        )
+    }
+
+    private static func swiftUIColor(from color: GraphicsRGBColor) -> Color {
+        Color(
+            red: Double(color.r) / 255.0,
+            green: Double(color.g) / 255.0,
+            blue: Double(color.b) / 255.0
+        )
+    }
+
+    private static func chamberPattern(from pattern: GraphicsFloorPatternName) -> ChamberPattern {
+        switch pattern {
+        case .brick:
+            return .brick
+        case .speckle:
+            return .speckle
+        case .weave:
+            return .weave
+        case .hash:
+            return .hash
+        case .mire:
+            return .mire
+        case .circuit:
+            return .circuit
         }
     }
 }
