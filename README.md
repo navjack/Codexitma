@@ -112,6 +112,20 @@ In graphics mode, press `T` to cycle styles.
 
 On macOS, the native frontend is still the default. The SDL frontend is the cross-platform path and is what the Win64 release build uses.
 
+## Screenshots
+
+Each row below shows the same gameplay moment in both editions:
+
+- left: native macOS renderer
+- right: SDL Win64 renderer
+
+| Scene | Native macOS | SDL Win64 |
+| --- | --- | --- |
+| Title screen | ![Native title screen](screenshots/native-20260304-153851-871-title-ashesofmerrow.png) | ![SDL title screen](screenshots/sdl-20260304-154635-843-title-ashesofmerrow.png) |
+| Character creator (Warden) | ![Native character creator](screenshots/native-20260304-153903-472-creator-warden.png) | ![SDL character creator](screenshots/sdl-20260304-154658-350-creator-warden.png) |
+| Ashes of Merrow: Merrow Village exploration (view A) | ![Native Merrow Village exploration A](screenshots/native-20260304-153914-697-ashesofmerrow-merrow_village-exploration.png) | ![SDL Merrow Village exploration A](screenshots/sdl-20260304-154702-619-ashesofmerrow-merrow_village-exploration.png) |
+| Ashes of Merrow: Merrow Village exploration (view B) | ![Native Merrow Village exploration B](screenshots/native-20260304-153925-800-ashesofmerrow-merrow_village-exploration.png) | ![SDL Merrow Village exploration B](screenshots/sdl-20260304-154712-112-ashesofmerrow-merrow_village-exploration.png) |
+
 ## Controls
 
 ### General

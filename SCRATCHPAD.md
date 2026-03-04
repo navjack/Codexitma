@@ -139,3 +139,5 @@
 - Kept all existing hardcoded visuals as fallback so missing override fields do not break rendering.
 - Documented graphics-asset mod path in README (`~/Library/Application Support/Codexitma/graphics_assets.json`).
 - Switched Windows data storage to a portable EXE-relative root (`CodexitmaData`) for saves, adventures, screenshots, theme prefs, and graphics-asset overrides, with automatic fallback to `%APPDATA%\\Codexitma` when EXE-local storage is not writable.
+- Unignored the root `screenshots/` directory so capture assets can be committed and displayed in GitHub docs.
+- Added a README screenshots section with paired native vs SDL frames for title, creator, and matching Merrow Village exploration scenes.
