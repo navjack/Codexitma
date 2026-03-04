@@ -45,6 +45,13 @@ struct GameApp {
         }
     }
 
+    func runEditor() {
+        let library = self.library
+        MainActor.assumeIsolated {
+            AdventureEditorLauncher.run(library: library)
+        }
+    }
+
     func runScript(commands: [String], emitStepSnapshots: Bool) throws {
         let automation = AutomationSession(library: library, saveRepository: saves)
         try automation.runScript(commands: commands, emitStepSnapshots: emitStepSnapshots)

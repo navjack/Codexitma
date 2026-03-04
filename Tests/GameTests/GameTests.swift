@@ -352,6 +352,116 @@ import Testing
     #expect(library.content(for: externalID).title == "Stormkeep Trial")
 }
 
+@Test func contentLoaderAllowsExternalOverrideOfBundledAdventure() async throws {
+    let root = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString, isDirectory: true)
+    let packFolder = root.appendingPathComponent("ashes_override", isDirectory: true)
+    try FileManager.default.createDirectory(at: packFolder, withIntermediateDirectories: true)
+
+    try """
+    {
+      "id": "ashesOfMerrow",
+      "title": "Ashes Override",
+      "summary": "An override pack for the bundled adventure.",
+      "introLine": "The override rises from the disk.",
+      "objectivesFile": "quest_flow.json",
+      "worldFile": "world.json",
+      "dialoguesFile": "dialogues.json",
+      "encountersFile": "encounters.json",
+      "npcsFile": "npcs.json",
+      "enemiesFile": "enemies.json",
+      "shopsFile": "shops.json"
+    }
+    """.write(to: packFolder.appendingPathComponent("adventure.json"), atomically: true, encoding: .utf8)
+
+    try """
+    {
+      "stages": [
+        { "objective": "Reach the override marker.", "completeWhenFlag": "metElder" }
+      ],
+      "completionText": "Override complete."
+    }
+    """.write(to: packFolder.appendingPathComponent("quest_flow.json"), atomically: true, encoding: .utf8)
+
+    try """
+    [
+      {
+        "id": "merrow_village",
+        "name": "Override Village",
+        "layoutFile": "override_map.txt",
+        "lines": [],
+        "spawn": { "x": 1, "y": 1 },
+        "portals": [],
+        "interactables": []
+      }
+    ]
+    """.write(to: packFolder.appendingPathComponent("world.json"), atomically: true, encoding: .utf8)
+
+    try "###\n#.#\n###\n".write(to: packFolder.appendingPathComponent("override_map.txt"), atomically: true, encoding: .utf8)
+    try "[]\n".write(to: packFolder.appendingPathComponent("dialogues.json"), atomically: true, encoding: .utf8)
+    try "[]\n".write(to: packFolder.appendingPathComponent("encounters.json"), atomically: true, encoding: .utf8)
+    try "[]\n".write(to: packFolder.appendingPathComponent("npcs.json"), atomically: true, encoding: .utf8)
+    try "[]\n".write(to: packFolder.appendingPathComponent("enemies.json"), atomically: true, encoding: .utf8)
+    try "[]\n".write(to: packFolder.appendingPathComponent("shops.json"), atomically: true, encoding: .utf8)
+
+    defer {
+        try? FileManager.default.removeItem(at: root)
+    }
+
+    let library = try ContentLoader(externalRootURL: root).load()
+    #expect(library.content(for: .ashesOfMerrow).title == "Ashes Override")
+    #expect(library.entry(for: .ashesOfMerrow)?.title == "Ashes Override")
+}
+
+@Test func adventurePackExporterWritesLoadableExternalPack() async throws {
+    let root = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString, isDirectory: true)
+    defer {
+        try? FileManager.default.removeItem(at: root)
+    }
+
+    let exporter = AdventurePackExporter(externalRootURL: root)
+    let document = EditableAdventureDocument(
+        folderName: "forge_test",
+        adventureID: "forgeTest",
+        title: "Forge Test",
+        summary: "A test adventure exported by the editor.",
+        introLine: "The forge hums.",
+        maps: [
+            EditableMap(
+                id: "merrow_village",
+                name: "Forge Room",
+                lines: [
+                    "#####",
+                    "#...#",
+                    "#####"
+                ],
+                spawn: Position(x: 1, y: 1),
+                portals: [],
+                interactables: []
+            )
+        ],
+        selectedMapIndex: 0,
+        questFlow: QuestFlowDefinition(
+            stages: [
+                QuestStageDefinition(objective: "Test the export.", completeWhenFlag: .metElder)
+            ],
+            completionText: "Done."
+        ),
+        dialogues: [],
+        encounters: [],
+        npcs: [],
+        enemies: [],
+        shops: []
+    )
+
+    let packURL = try exporter.save(document: document)
+    #expect(FileManager.default.fileExists(atPath: packURL.appendingPathComponent("adventure.json").path))
+
+    let library = try ContentLoader(externalRootURL: root).load()
+    let adventureID = AdventureID(rawValue: "forgeTest")
+    #expect(library.contains(adventureID))
+    #expect(library.content(for: adventureID).maps["merrow_village"]?.name == "Forge Room")
+}
+
 @Test func equippedItemsAffectDerivedStats() async throws {
     let player = PlayerState(
         name: "Mira",
@@ -404,4 +514,9 @@ import Testing
     #expect(options.target == .script)
     #expect(options.commands == ["new", "right", "e"])
     #expect(options.emitStepSnapshots == true)
+}
+
+@Test func launchOptionsParseEditorMode() async throws {
+    let options = try LaunchOptions.parse(arguments: ["Game", "--editor"])
+    #expect(options.target == .editor)
 }

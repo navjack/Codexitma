@@ -64,10 +64,13 @@ struct ContentLoader {
         }
 
         for entry in try loadExternalAdventureEntries() {
-            guard adventures[entry.id] == nil else { continue }
             let pack: AdventurePackDefinition = try decodeJSON("adventure.json", from: .filesystem(baseURL: externalPackURL(for: entry)))
             let content = try buildContent(from: pack, entry: entry, source: .filesystem(baseURL: externalPackURL(for: entry)))
-            catalog.append(entry)
+            if let existingIndex = catalog.firstIndex(where: { $0.id == entry.id }) {
+                catalog[existingIndex] = entry
+            } else {
+                catalog.append(entry)
+            }
             adventures[entry.id] = content
         }
 

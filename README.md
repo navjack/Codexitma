@@ -29,6 +29,12 @@ Run the retro ANSI terminal mode instead:
 swift run Game --terminal
 ```
 
+Run the graphical adventure editor instead:
+
+```sh
+swift run Game --editor
+```
+
 After successful local builds, a runnable copy is also kept at the project root:
 
 ```sh
@@ -45,7 +51,14 @@ After successful local builds, a runnable copy is also kept at the project root:
 - `L`: load
 - `Q`: cancel / back
 - `X`: quit
-- `T` in graphics mode: cycle the visual theme (`Gemstone` / `Ultima`)
+- `T` in graphics mode: cycle the visual theme (`Gemstone` / `Ultima` / `Depth 3D`)
+
+When `Depth 3D` is active:
+
+- `W` / Up: move forward
+- `S` / Down: step backward
+- `A`: turn left
+- `D`: turn right
 
 When a merchant is open:
 
@@ -96,6 +109,10 @@ Required minimum files:
 - one or more map `.txt` files referenced by `world.json`
 
 The external `adventure.json` manifest includes metadata (`id`, `title`, `summary`, `introLine`) plus filenames for the content files. External packs are added to the title-screen adventure list automatically on launch.
+
+If an external pack uses the same `id` as a bundled adventure, the external pack now overrides the bundled one. That makes full-pack overrides the supported mod path for changing the shipped adventures without patching the app bundle.
+
+The new graphical editor exports packs directly into this folder. Keep the same adventure `id` to build an override mod, or change the `id` to publish a separate new adventure.
 
 ## Automation
 

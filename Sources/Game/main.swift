@@ -11,6 +11,8 @@ do {
         case .terminal:
             try app.runTerminal()
         }
+    case .editor:
+        app.runEditor()
     case .script:
         try app.runScript(commands: options.commands, emitStepSnapshots: options.emitStepSnapshots)
     case .bridge:

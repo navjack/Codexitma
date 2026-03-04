@@ -2,6 +2,7 @@ import Foundation
 
 enum LaunchTarget: Equatable {
     case interactive(LaunchMode)
+    case editor
     case script
     case bridge
 }
@@ -38,6 +39,8 @@ struct LaunchOptions: Equatable {
                 target = .interactive(.terminal)
             case "--graphics":
                 target = .interactive(.graphics)
+            case "--editor":
+                target = .editor
             case "--bridge":
                 target = .bridge
             case "--step-json":

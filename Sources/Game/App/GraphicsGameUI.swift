@@ -976,7 +976,7 @@ private struct MapBoardView: View {
             x: Double(state.player.position.x) + 0.5,
             y: Double(state.player.position.y) + 0.5
         )
-        let caster = DepthRaycaster(origin: origin, facing: state.player.facing) { position in
+        let caster = DepthRaycaster(origin: origin, facing: state.player.facing, fov: depthFieldOfView) { position in
             tile(at: position)
         }
         return caster.castSamples(columns: columns, maxDistance: maxDistance)
@@ -990,6 +990,7 @@ private struct MapBoardView: View {
     ) {
         drawDepthBackdrop(into: &context, size: size, theme: theme)
         drawDepthWalls(into: &context, size: size, samples: samples, theme: theme)
+        drawDepthBillboards(into: &context, size: size, samples: samples, theme: theme)
         drawDepthReticleGlow(into: &context, size: size)
     }
 
@@ -1118,6 +1119,71 @@ private struct MapBoardView: View {
         }
     }
 
+    private func drawDepthBillboards(
+        into context: inout GraphicsContext,
+        size: CGSize,
+        samples: [DepthRaySample],
+        theme: RegionTheme
+    ) {
+        guard !samples.isEmpty else { return }
+
+        let zBuffer = samples.map(\.correctedDistance)
+        let billboards = depthBillboards(maxDistance: samples.first?.maxDistance ?? 9.0)
+            .sorted { $0.distance > $1.distance }
+        let horizon = size.height * 0.5
+        let columnWidth = size.width / CGFloat(samples.count)
+
+        for billboard in billboards {
+            let screenCenter = ((billboard.angleOffset / depthFieldOfView) + 0.5) * size.width
+            let projectedHeight = min(
+                size.height * 0.88,
+                CGFloat((size.height * billboard.scale) / max(0.16, billboard.distance))
+            )
+            let aspect = CGFloat(max(1, billboard.pattern.first?.count ?? 1)) / CGFloat(max(1, billboard.pattern.count))
+            let projectedWidth = max(10, projectedHeight * aspect * billboard.widthScale)
+            let left = screenCenter - (projectedWidth / 2)
+            let top = horizon - (projectedHeight * 0.5)
+            let cellWidth = projectedWidth / CGFloat(max(1, billboard.pattern.first?.count ?? 1))
+            let cellHeight = projectedHeight / CGFloat(max(1, billboard.pattern.count))
+            let shade = max(0.28, 1.0 - ((billboard.distance / billboard.maxDistance) * 0.72))
+            let color = billboard.color.opacity(shade)
+
+            for patternColumn in 0..<max(1, billboard.pattern.first?.count ?? 1) {
+                let stripeMinX = left + (CGFloat(patternColumn) * cellWidth)
+                let stripeMaxX = stripeMinX + cellWidth
+                let startSample = max(0, Int(floor(stripeMinX / columnWidth)))
+                let endSample = min(samples.count - 1, Int(floor(max(stripeMinX, stripeMaxX - 1) / columnWidth)))
+                if startSample > endSample {
+                    continue
+                }
+
+                var visible = false
+                for sampleIndex in startSample...endSample where billboard.distance <= (zBuffer[sampleIndex] + 0.06) {
+                    visible = true
+                    break
+                }
+                if !visible {
+                    continue
+                }
+
+                for patternRow in 0..<billboard.pattern.count where billboard.pattern[patternRow][patternColumn] == 1 {
+                    let rect = CGRect(
+                        x: stripeMinX,
+                        y: top + (CGFloat(patternRow) * cellHeight),
+                        width: max(1, cellWidth),
+                        height: max(1, cellHeight)
+                    )
+                    context.fill(Path(rect), with: .color(color))
+
+                    if patternColumn == 0 || patternColumn == (billboard.pattern.first?.count ?? 1) - 1 {
+                        let edge = CGRect(x: rect.minX, y: rect.minY, width: 1, height: rect.height)
+                        context.fill(Path(edge), with: .color(Color.black.opacity(0.18)))
+                    }
+                }
+            }
+        }
+    }
+
     private func drawDepthReticleGlow(
         into context: inout GraphicsContext,
         size: CGSize
@@ -1129,6 +1195,236 @@ private struct MapBoardView: View {
             height: 6
         )
         context.fill(Path(ellipseIn: glow), with: .color(palette.lightGold.opacity(0.05)))
+    }
+
+    private func depthBillboards(maxDistance: Double) -> [DepthBillboard] {
+        guard let map = state.world.maps[state.player.currentMapID] else { return [] }
+
+        let playerCenter = CGPoint(
+            x: Double(state.player.position.x) + 0.5,
+            y: Double(state.player.position.y) + 0.5
+        )
+        let forward = facingUnitVector
+        let right = rightUnitVector
+        var billboards: [DepthBillboard] = []
+
+        for y in 0..<map.lines.count {
+            let line = Array(map.lines[y])
+            for x in 0..<line.count {
+                let position = Position(x: x, y: y)
+                if position == state.player.position {
+                    continue
+                }
+
+                let worldX = Double(x) + 0.5
+                let worldY = Double(y) + 0.5
+                let dx = worldX - playerCenter.x
+                let dy = worldY - playerCenter.y
+                let forwardDistance = (dx * forward.x) + (dy * forward.y)
+                if forwardDistance <= 0.05 {
+                    continue
+                }
+
+                let sideDistance = (dx * right.x) + (dy * right.y)
+                let distance = hypot(dx, dy)
+                if distance > maxDistance {
+                    continue
+                }
+
+                let angleOffset = atan2(sideDistance, forwardDistance)
+                if abs(angleOffset) > (depthFieldOfView * 0.65) {
+                    continue
+                }
+
+                if let billboard = depthBillboard(at: position, distance: distance, angleOffset: angleOffset, maxDistance: maxDistance) {
+                    billboards.append(billboard)
+                }
+            }
+        }
+
+        return billboards
+    }
+
+    private func depthBillboard(
+        at position: Position,
+        distance: Double,
+        angleOffset: Double,
+        maxDistance: Double
+    ) -> DepthBillboard? {
+        if let enemy = state.world.enemies.first(where: {
+            $0.active && $0.mapID == state.player.currentMapID && $0.position == position
+        }) {
+            return DepthBillboard(
+                id: "enemy:\(enemy.id):\(position.x):\(position.y)",
+                pattern: firstPersonEnemyPattern(for: enemy.id),
+                color: firstPersonEnemyColor(for: enemy.id),
+                distance: distance,
+                angleOffset: angleOffset,
+                maxDistance: maxDistance,
+                scale: 0.78,
+                widthScale: 0.70
+            )
+        }
+
+        if let npc = state.world.npcs.first(where: {
+            $0.mapID == state.player.currentMapID && $0.position == position
+        }) {
+            return DepthBillboard(
+                id: "npc:\(npc.id):\(position.x):\(position.y)",
+                pattern: firstPersonNPCPattern(for: npc.id),
+                color: firstPersonNPCColor(for: npc.id),
+                distance: distance,
+                angleOffset: angleOffset,
+                maxDistance: maxDistance,
+                scale: 0.72,
+                widthScale: 0.68
+            )
+        }
+
+        let feature = feature(at: position)
+        guard feature != .none else { return nil }
+        guard let appearance = depthFeatureAppearance(for: feature) else { return nil }
+        return DepthBillboard(
+            id: "feature:\(position.x):\(position.y):\(feature.debugName)",
+            pattern: appearance.pattern,
+            color: appearance.color,
+            distance: distance,
+            angleOffset: angleOffset,
+            maxDistance: maxDistance,
+            scale: appearance.scale,
+            widthScale: appearance.widthScale
+        )
+    }
+
+    private func depthFeatureAppearance(for feature: MapFeature) -> (pattern: [[Int]], color: Color, scale: Double, widthScale: CGFloat)? {
+        switch feature {
+        case .none:
+            return nil
+        case .chest:
+            return (
+                [
+                    [1,1,1],
+                    [1,0,1]
+                ],
+                palette.lightGold,
+                0.44,
+                0.84
+            )
+        case .bed:
+            return (
+                [
+                    [1,1,1],
+                    [1,0,0]
+                ],
+                palette.text,
+                0.34,
+                1.10
+            )
+        case .plateUp:
+            return (
+                [
+                    [1,1],
+                    [1,1]
+                ],
+                palette.accentViolet,
+                0.22,
+                1.30
+            )
+        case .plateDown:
+            return (
+                [
+                    [1,1]
+                ],
+                palette.text.opacity(0.65),
+                0.16,
+                1.45
+            )
+        case .switchIdle:
+            return (
+                [
+                    [0,1,0],
+                    [1,1,1],
+                    [0,1,0]
+                ],
+                palette.accentBlue,
+                0.28,
+                0.84
+            )
+        case .switchLit:
+            return (
+                [
+                    [1,1,1],
+                    [1,1,1],
+                    [1,1,1]
+                ],
+                palette.lightGold,
+                0.28,
+                0.84
+            )
+        case .shrine:
+            return (
+                [
+                    [0,1,0],
+                    [1,1,1],
+                    [0,1,0]
+                ],
+                regionTheme.shrine,
+                0.46,
+                0.90
+            )
+        case .beacon:
+            return (
+                [
+                    [0,1,0],
+                    [1,1,1],
+                    [1,1,1]
+                ],
+                regionTheme.beacon,
+                0.54,
+                0.92
+            )
+        case .gate:
+            return (
+                [
+                    [1,0,1],
+                    [1,0,1],
+                    [1,1,1]
+                ],
+                regionTheme.doorLocked,
+                0.62,
+                1.05
+            )
+        }
+    }
+
+    private var depthFieldOfView: Double {
+        .pi / 3.1
+    }
+
+    private var facingUnitVector: (x: Double, y: Double) {
+        switch state.player.facing {
+        case .up:
+            return (0, -1)
+        case .down:
+            return (0, 1)
+        case .left:
+            return (-1, 0)
+        case .right:
+            return (1, 0)
+        }
+    }
+
+    private var rightUnitVector: (x: Double, y: Double) {
+        switch state.player.facing {
+        case .up:
+            return (1, 0)
+        case .down:
+            return (-1, 0)
+        case .left:
+            return (0, -1)
+        case .right:
+            return (0, 1)
+        }
     }
 
     private var usesSkyBackdrop: Bool {
@@ -1720,6 +2016,21 @@ private enum MapFeature {
     case shrine
     case beacon
     case gate
+
+    var debugName: String {
+        switch self {
+        case .none: return "none"
+        case .chest: return "chest"
+        case .bed: return "bed"
+        case .plateUp: return "plate_up"
+        case .plateDown: return "plate_down"
+        case .switchIdle: return "switch_idle"
+        case .switchLit: return "switch_lit"
+        case .shrine: return "shrine"
+        case .beacon: return "beacon"
+        case .gate: return "gate"
+        }
+    }
 }
 
 private struct CorridorSlice {
@@ -1767,6 +2078,17 @@ struct DepthRaySample {
     let maxDistance: Double
     let hitTile: Tile
     let hitAxis: DepthHitAxis
+}
+
+struct DepthBillboard {
+    let id: String
+    let pattern: [[Int]]
+    let color: Color
+    let distance: Double
+    let angleOffset: Double
+    let maxDistance: Double
+    let scale: Double
+    let widthScale: CGFloat
 }
 
 struct DepthRaycaster {
