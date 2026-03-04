@@ -44,6 +44,7 @@
 - Fixed the in-game editor window close path so closing the editor after launching it from a live adventure no longer releases the controller during AppKit's close callback.
 - Made the editor and graphics UI layouts responsive: both now keep their wide-screen layouts when there is room, but fall back to stacked/scrollable arrangements inside smaller normal windows instead of overflowing.
 - Started `codex/refactor-modules` and split the largest monolithic source files into smaller, logical Swift files: model types, graphics runtime, map renderer support, editor runtime/store/content/style, and the test suite now live in separate modules instead of a few giant files.
+- Completed the second `codex/refactor-modules` pass: `GameEngine` is now split by behavior domain, `AdventureEditorStore` is split into document/canvas/content/helper extensions, and the editor chrome panels were extracted into dedicated SwiftUI subviews to reduce root-view context size.
 
 ## Current Notes
 
@@ -59,7 +60,7 @@
 - Content authoring should now default to the JSON packs in `Sources/Game/ContentData`; only core rules, state transitions, and rendering logic should require Swift changes.
 - External content packs can now extend the title menu without modifying the app bundle, as long as they follow the expected manifest and JSON file layout.
 - The editor and graphics shells now intentionally use `ViewThatFits` plus scroll-backed fallbacks; keep future panel additions responsive instead of adding more fixed-width rows.
-- The biggest remaining refactor hotspots are `AdventureEditorStore.swift`, `AdventureEditorUI.swift`, and `GameEngine.swift`; future passes should break those by behavior-focused extensions or extracted subviews rather than by adding more top-level bulk.
+- The remaining refactor hotspots have shifted to `AdventureEditorStore+Helpers.swift`, `AdventureEditorRootView+Panels.swift`, and `GraphicsGameUI.swift`; future passes should keep extracting by behavior-specific helpers and dedicated subviews instead of rebuilding large mixed-purpose files.
 
 ## Next Build Targets
 
