@@ -27,6 +27,22 @@ What it can do right now:
 - Duplicate maps
 - Edit map id and map name
 - Paint terrain tiles on the active map from a fixed tile palette
+- Switch between explicit tool modes:
+  - `Terrain`
+  - `NPC`
+  - `Enemy`
+  - `Interactable`
+  - `Portal`
+  - `Spawn`
+  - `Erase`
+  - `Select`
+- Place layered NPC, enemy, interactable, portal, and spawn data directly on the map canvas
+- Select placed objects on the canvas and inspect them in a right-side panel
+- Perform a first pass of inspector editing for:
+  - NPC ids, names, and dialogue ids
+  - Enemy ids, names, and core combat stats
+  - Interactable ids, titles, and kinds
+  - Portal destination map retargeting
 - Export a full external content pack into `~/Library/Application Support/Codexitma/Adventures`
 
 ## Current Export Behavior
@@ -69,18 +85,21 @@ The current UI does not yet expose most of the authored content model.
 
 Missing GUI authoring features:
 
-- Visual NPC placement
-- Visual enemy placement
-- Visual interactable placement
-- Visual portal placement
-- Spawn-point editing
 - Dialogue editing
 - Quest-stage editing
 - Encounter-table editing
 - Shop editing
 - Assigning a shop to an NPC
-- Assigning dialogue ids to NPCs
 - Assigning flags, rewards, or quest hooks through an inspector
+- Editing portal coordinates directly beyond map-retargeting
+- Rich inspector editing for:
+  - quest flag requirements
+  - quest flag grants
+  - reward items
+  - reward marks
+  - merchant bindings
+  - AI settings
+- Visual list management for non-map records such as dialogues, encounters, and shops
 
 Right now, those structures exist in the editor document and exporter, but most of them are not editable through the GUI.
 
@@ -224,11 +243,19 @@ Required validation examples:
 
 ### Milestone 1: Object Placement
 
+Status:
+
+- Implemented
+
 - Add `Terrain`, `NPC`, `Enemy`, `Interactable`, `Portal`, `Spawn`, `Erase`, and `Select` tool modes
 - Add visual placement and deletion for layered entities
 - Add selection outlines and coordinate readouts
 
 ### Milestone 2: Inspector
+
+Status:
+
+- In progress
 
 - Add a right-side inspector panel
 - Allow editing of the selected object's fields

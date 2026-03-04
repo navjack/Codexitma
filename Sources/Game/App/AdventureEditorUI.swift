@@ -250,6 +250,31 @@ final class AdventureEditorStore: ObservableObject {
         return "NPC \(npcCount)  ENM \(enemyCount)  INT \(interactableCount)  PORT \(portalCount)"
     }
 
+    var selectedNPC: NPCState? {
+        guard case .npc(let id) = selectedCanvasSelection?.kind else { return nil }
+        return document.npcs.first(where: { $0.id == id })
+    }
+
+    var selectedEnemy: EnemyState? {
+        guard case .enemy(let id) = selectedCanvasSelection?.kind else { return nil }
+        return document.enemies.first(where: { $0.id == id })
+    }
+
+    var selectedInteractable: InteractableDefinition? {
+        guard case .interactable(let id) = selectedCanvasSelection?.kind else { return nil }
+        return currentMap?.interactables.first(where: { $0.id == id })
+    }
+
+    var selectedPortal: Portal? {
+        guard case .portal(let index) = selectedCanvasSelection?.kind,
+              let map = currentMap,
+              index >= 0,
+              index < map.portals.count else {
+            return nil
+        }
+        return map.portals[index]
+    }
+
     func selectCatalogAdventure(_ adventureID: AdventureID) {
         selectedCatalogID = adventureID
         let entry = library.entry(for: adventureID) ?? AdventureCatalogEntry(
@@ -446,6 +471,190 @@ final class AdventureEditorStore: ObservableObject {
         currentMap?.spawn == Position(x: x, y: y)
     }
 
+    func updateSelectedNPCID(_ value: String) {
+        guard case .npc(let oldID) = selectedCanvasSelection?.kind,
+              let index = document.npcs.firstIndex(where: { $0.id == oldID }) else {
+            return
+        }
+        let newID = nextIdentifier(prefix: value, existing: document.npcs.enumerated().compactMap { offset, npc in
+            offset == index ? nil : npc.id
+        })
+        let npc = document.npcs[index]
+        document.npcs[index] = NPCState(
+            id: newID,
+            name: npc.name,
+            position: npc.position,
+            mapID: npc.mapID,
+            dialogueID: npc.dialogueID,
+            glyphSymbol: npc.glyphSymbol,
+            glyphColor: npc.glyphColor,
+            dialogueState: npc.dialogueState
+        )
+        document.shops = document.shops.map { shop in
+            guard shop.merchantID == oldID else { return shop }
+            return ShopDefinition(
+                id: shop.id,
+                merchantID: newID,
+                merchantName: shop.merchantName,
+                introLine: shop.introLine,
+                offers: shop.offers
+            )
+        }
+        selectedCanvasSelection = EditorCanvasSelection(kind: .npc(id: newID), position: npc.position)
+    }
+
+    func updateSelectedNPCName(_ value: String) {
+        guard let index = selectedNPCIndex else { return }
+        document.npcs[index].name = value
+    }
+
+    func updateSelectedNPCDialogueID(_ value: String) {
+        guard let index = selectedNPCIndex else { return }
+        let newID = sanitizeIdentifier(value)
+        document.npcs[index].dialogueID = newID
+        if !document.dialogues.contains(where: { $0.id == newID }) {
+            document.dialogues.append(
+                DialogueNode(
+                    id: newID,
+                    speaker: document.npcs[index].name,
+                    lines: ["A placeholder dialogue waits for its final script."]
+                )
+            )
+        }
+    }
+
+    func updateSelectedEnemyID(_ value: String) {
+        guard case .enemy(let oldID) = selectedCanvasSelection?.kind,
+              let index = document.enemies.firstIndex(where: { $0.id == oldID }) else {
+            return
+        }
+        let newID = nextIdentifier(prefix: value, existing: document.enemies.enumerated().compactMap { offset, enemy in
+            offset == index ? nil : enemy.id
+        })
+        let enemy = document.enemies[index]
+        document.enemies[index] = EnemyState(
+            id: newID,
+            name: enemy.name,
+            position: enemy.position,
+            hp: enemy.hp,
+            maxHP: max(enemy.maxHP, enemy.hp),
+            attack: enemy.attack,
+            defense: enemy.defense,
+            ai: enemy.ai,
+            glyph: enemy.glyph,
+            color: enemy.color,
+            mapID: enemy.mapID,
+            active: enemy.active
+        )
+        selectedCanvasSelection = EditorCanvasSelection(kind: .enemy(id: newID), position: enemy.position)
+    }
+
+    func updateSelectedEnemyName(_ value: String) {
+        guard let index = selectedEnemyIndex else { return }
+        document.enemies[index].name = value
+    }
+
+    func updateSelectedEnemyHP(_ value: Int) {
+        guard let index = selectedEnemyIndex else { return }
+        let clamped = max(1, value)
+        document.enemies[index].hp = clamped
+        document.enemies[index].maxHP = max(document.enemies[index].maxHP, clamped)
+    }
+
+    func updateSelectedEnemyAttack(_ value: Int) {
+        guard let index = selectedEnemyIndex else { return }
+        document.enemies[index].attack = max(0, value)
+    }
+
+    func updateSelectedEnemyDefense(_ value: Int) {
+        guard let index = selectedEnemyIndex else { return }
+        document.enemies[index].defense = max(0, value)
+    }
+
+    func updateSelectedInteractableID(_ value: String) {
+        guard case .interactable(let oldID) = selectedCanvasSelection?.kind,
+              let index = selectedInteractableIndex else {
+            return
+        }
+        let newID = nextIdentifier(
+            prefix: value,
+            existing: document.maps
+                .flatMap { $0.interactables.map(\.id) }
+                .filter { $0 != oldID }
+        )
+        let interactable = document.maps[document.selectedMapIndex].interactables[index]
+        document.maps[document.selectedMapIndex].interactables[index] = InteractableDefinition(
+            id: newID,
+            kind: interactable.kind,
+            position: interactable.position,
+            title: interactable.title,
+            lines: interactable.lines,
+            rewardItem: interactable.rewardItem,
+            requiredFlag: interactable.requiredFlag,
+            grantsFlag: interactable.grantsFlag
+        )
+        selectedCanvasSelection = EditorCanvasSelection(kind: .interactable(id: newID), position: interactable.position)
+    }
+
+    func updateSelectedInteractableTitle(_ value: String) {
+        guard let index = selectedInteractableIndex else { return }
+        let interactable = document.maps[document.selectedMapIndex].interactables[index]
+        document.maps[document.selectedMapIndex].interactables[index] = InteractableDefinition(
+            id: interactable.id,
+            kind: interactable.kind,
+            position: interactable.position,
+            title: value,
+            lines: interactable.lines,
+            rewardItem: interactable.rewardItem,
+            requiredFlag: interactable.requiredFlag,
+            grantsFlag: interactable.grantsFlag
+        )
+    }
+
+    func updateSelectedInteractableKind(_ kind: InteractableKind) {
+        guard let index = selectedInteractableIndex else { return }
+        let interactable = document.maps[document.selectedMapIndex].interactables[index]
+        document.maps[document.selectedMapIndex].interactables[index] = InteractableDefinition(
+            id: interactable.id,
+            kind: kind,
+            position: interactable.position,
+            title: interactable.title,
+            lines: kind.defaultLines,
+            rewardItem: kind == .chest ? .healingTonic : nil,
+            requiredFlag: interactable.requiredFlag,
+            grantsFlag: interactable.grantsFlag
+        )
+        selectedInteractableKind = kind
+    }
+
+    func updateSelectedPortalDestinationMap(_ mapID: String) {
+        guard let index = selectedPortalIndex,
+              let destinationMap = document.maps.first(where: { $0.id == mapID }) else {
+            return
+        }
+        let portal = document.maps[document.selectedMapIndex].portals[index]
+        document.maps[document.selectedMapIndex].portals[index] = Portal(
+            from: portal.from,
+            toMap: destinationMap.id,
+            toPosition: destinationMap.spawn,
+            requiredFlag: portal.requiredFlag,
+            blockedMessage: portal.blockedMessage
+        )
+    }
+
+    func syncSelectedPortalToDestinationSpawn() {
+        guard let index = selectedPortalIndex else { return }
+        let portal = document.maps[document.selectedMapIndex].portals[index]
+        guard let destinationMap = document.maps.first(where: { $0.id == portal.toMap }) else { return }
+        document.maps[document.selectedMapIndex].portals[index] = Portal(
+            from: portal.from,
+            toMap: destinationMap.id,
+            toPosition: destinationMap.spawn,
+            requiredFlag: portal.requiredFlag,
+            blockedMessage: portal.blockedMessage
+        )
+    }
+
     private func sanitizeIdentifier(_ value: String) -> String {
         let filtered = value
             .lowercased()
@@ -464,6 +673,27 @@ final class AdventureEditorStore: ObservableObject {
     private func sanitizeFolderName(_ value: String) -> String {
         let safe = sanitizeIdentifier(value)
         return safe.isEmpty ? "new_adventure" : safe
+    }
+
+    private var selectedNPCIndex: Int? {
+        guard case .npc(let id) = selectedCanvasSelection?.kind else { return nil }
+        return document.npcs.firstIndex(where: { $0.id == id })
+    }
+
+    private var selectedEnemyIndex: Int? {
+        guard case .enemy(let id) = selectedCanvasSelection?.kind else { return nil }
+        return document.enemies.firstIndex(where: { $0.id == id })
+    }
+
+    private var selectedInteractableIndex: Int? {
+        guard case .interactable(let id) = selectedCanvasSelection?.kind else { return nil }
+        return document.maps[document.selectedMapIndex].interactables.firstIndex(where: { $0.id == id })
+    }
+
+    private var selectedPortalIndex: Int? {
+        guard case .portal(let index) = selectedCanvasSelection?.kind else { return nil }
+        guard index >= 0, index < document.maps[document.selectedMapIndex].portals.count else { return nil }
+        return index
     }
 
     private func placeNPC(at position: Position) {
@@ -1385,6 +1615,11 @@ struct AdventureEditorRootView: View {
                 Divider()
                     .overlay(palette.border)
 
+                inspectorFields
+
+                Divider()
+                    .overlay(palette.border)
+
                 Text("ACTIVE TOOL")
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
                     .foregroundStyle(palette.label)
@@ -1398,6 +1633,122 @@ struct AdventureEditorRootView: View {
                     .foregroundStyle(palette.text.opacity(0.80))
                     .fixedSize(horizontal: false, vertical: true)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var inspectorFields: some View {
+        if let npc = store.selectedNPC {
+            Text("NPC INSPECTOR")
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundStyle(palette.label)
+
+            labeledField("NPC ID", text: Binding(
+                get: { store.selectedNPC?.id ?? npc.id },
+                set: { store.updateSelectedNPCID($0) }
+            ))
+
+            labeledField("NAME", text: Binding(
+                get: { store.selectedNPC?.name ?? npc.name },
+                set: { store.updateSelectedNPCName($0) }
+            ))
+
+            labeledField("DIALOGUE", text: Binding(
+                get: { store.selectedNPC?.dialogueID ?? npc.dialogueID },
+                set: { store.updateSelectedNPCDialogueID($0) }
+            ))
+        } else if let enemy = store.selectedEnemy {
+            Text("ENEMY INSPECTOR")
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundStyle(palette.label)
+
+            labeledField("ENEMY ID", text: Binding(
+                get: { store.selectedEnemy?.id ?? enemy.id },
+                set: { store.updateSelectedEnemyID($0) }
+            ))
+
+            labeledField("NAME", text: Binding(
+                get: { store.selectedEnemy?.name ?? enemy.name },
+                set: { store.updateSelectedEnemyName($0) }
+            ))
+
+            HStack(spacing: 8) {
+                labeledStepper("HP", value: Binding(
+                    get: { store.selectedEnemy?.hp ?? enemy.hp },
+                    set: { store.updateSelectedEnemyHP($0) }
+                ), range: 1...99)
+
+                labeledStepper("ATK", value: Binding(
+                    get: { store.selectedEnemy?.attack ?? enemy.attack },
+                    set: { store.updateSelectedEnemyAttack($0) }
+                ), range: 0...25)
+
+                labeledStepper("DEF", value: Binding(
+                    get: { store.selectedEnemy?.defense ?? enemy.defense },
+                    set: { store.updateSelectedEnemyDefense($0) }
+                ), range: 0...25)
+            }
+        } else if let interactable = store.selectedInteractable {
+            Text("INTERACTABLE INSPECTOR")
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundStyle(palette.label)
+
+            labeledField("OBJECT ID", text: Binding(
+                get: { store.selectedInteractable?.id ?? interactable.id },
+                set: { store.updateSelectedInteractableID($0) }
+            ))
+
+            labeledField("TITLE", text: Binding(
+                get: { store.selectedInteractable?.title ?? interactable.title },
+                set: { store.updateSelectedInteractableTitle($0) }
+            ))
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("KIND")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundStyle(palette.label)
+
+                Picker("Kind", selection: Binding(
+                    get: { store.selectedInteractable?.kind ?? interactable.kind },
+                    set: { store.updateSelectedInteractableKind($0) }
+                )) {
+                    ForEach(editorInteractablePalette, id: \.kind) { choice in
+                        Text(choice.label).tag(choice.kind)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+            }
+        } else if let portal = store.selectedPortal {
+            Text("PORTAL INSPECTOR")
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundStyle(palette.label)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("DESTINATION MAP")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundStyle(palette.label)
+
+                Picker("Destination Map", selection: Binding(
+                    get: { store.selectedPortal?.toMap ?? portal.toMap },
+                    set: { store.updateSelectedPortalDestinationMap($0) }
+                )) {
+                    ForEach(store.document.maps, id: \.id) { map in
+                        Text(map.name.uppercased()).tag(map.id)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+            }
+
+            Button("SYNC TO MAP SPAWN") {
+                store.syncSelectedPortalToDestinationSpawn()
+            }
+            .buttonStyle(EditorButtonStyle(background: palette.panelAlt))
+        } else {
+            Text("NO EDITABLE OBJECT IS SELECTED.")
+                .font(.system(size: 10, weight: .regular, design: .monospaced))
+                .foregroundStyle(palette.text.opacity(0.80))
         }
     }
 
@@ -1426,6 +1777,27 @@ struct AdventureEditorRootView: View {
                 .padding(6)
                 .background(palette.panelAlt)
                 .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func labeledStepper(_ label: String, value: Binding<Int>, range: ClosedRange<Int>) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label)
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundStyle(palette.label)
+
+            HStack(spacing: 6) {
+                Stepper("", value: value, in: range)
+                    .labelsHidden()
+                Text("\(value.wrappedValue)")
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundStyle(palette.text)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(6)
+            .background(palette.panelAlt)
+            .overlay(Rectangle().stroke(palette.border, lineWidth: 1))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

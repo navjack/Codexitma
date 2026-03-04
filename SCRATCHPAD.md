@@ -36,6 +36,7 @@
 - Added wall-occluded billboard projection for visible enemies, NPCs, and interactables in `Depth 3D`, and introduced a dedicated `--editor` graphical adventure editor that exports full external packs or override mods.
 - Started `codex/editor-suite` to focus the editor buildout and documented the current editor scope, data model, gaps, and implementation milestones in `EDITOR_ROADMAP.md`.
 - Completed the first editor interaction pass: added explicit editor tools (`Terrain`, `NPC`, `Enemy`, `Interactable`, `Portal`, `Spawn`, `Erase`, `Select`), layered object placement on the map canvas, selection summaries, and map-id rename cascading for layered references.
+- Began the first real inspector pass in the editor: selected NPCs, enemies, interactables, and portals can now be edited from the right-side panel instead of only being summarized.
 
 ## Current Notes
 

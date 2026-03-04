@@ -583,3 +583,49 @@ import Testing
         #expect(store.document.enemies.isEmpty)
     }
 }
+
+@Test func editorStoreInspectorMutatesSelectedObjects() async throws {
+    let library = try ContentLoader().load()
+    let store = await MainActor.run {
+        let store = AdventureEditorStore(library: library)
+        store.createBlankAdventure()
+        return store
+    }
+
+    await MainActor.run {
+        store.selectTool(.npc)
+        store.handleCanvasClick(x: 4, y: 4)
+        store.updateSelectedNPCID("bazaar speaker")
+        store.updateSelectedNPCName("Bazaar Speaker")
+        store.updateSelectedNPCDialogueID("bazaar_intro")
+
+        #expect(store.document.npcs[0].id == "bazaar_speaker")
+        #expect(store.document.npcs[0].name == "Bazaar Speaker")
+        #expect(store.document.npcs[0].dialogueID == "bazaar_intro")
+        #expect(store.document.dialogues.contains(where: { $0.id == "bazaar_intro" }))
+
+        store.selectTool(.enemy)
+        store.handleCanvasClick(x: 5, y: 4)
+        store.updateSelectedEnemyID("gate guard")
+        store.updateSelectedEnemyName("Gate Guard")
+        store.updateSelectedEnemyHP(14)
+        store.updateSelectedEnemyAttack(6)
+        store.updateSelectedEnemyDefense(4)
+
+        #expect(store.document.enemies[0].id == "gate_guard")
+        #expect(store.document.enemies[0].name == "Gate Guard")
+        #expect(store.document.enemies[0].hp == 14)
+        #expect(store.document.enemies[0].attack == 6)
+        #expect(store.document.enemies[0].defense == 4)
+
+        store.selectTool(.interactable)
+        store.handleCanvasClick(x: 6, y: 4)
+        store.updateSelectedInteractableID("signal plate")
+        store.updateSelectedInteractableTitle("Signal Plate")
+        store.updateSelectedInteractableKind(.switchRune)
+
+        #expect(store.document.maps[0].interactables[0].id == "signal_plate")
+        #expect(store.document.maps[0].interactables[0].title == "Signal Plate")
+        #expect(store.document.maps[0].interactables[0].kind == .switchRune)
+    }
+}
