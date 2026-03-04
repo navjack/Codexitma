@@ -3,8 +3,8 @@ name: macOS Package Build
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
+    tags:
+      - "v*"
 
 jobs:
   macos-package:

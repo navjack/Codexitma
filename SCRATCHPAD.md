@@ -116,3 +116,4 @@
 - The first macOS Actions run failed because `macos-14` defaulted to Swift 5.10; the workflow now bootstraps the same Swift 6.3 snapshot family used by the Windows lane before packaging.
 - The second macOS Actions run exposed stricter Swift 6.3 actor-isolation checks in the native SwiftUI layer; the affected editor/game root views are now explicitly `@MainActor`, matching the `@MainActor` stores/controllers they observe.
 - The macOS workflow now explicitly pins `gha-setup-swift` to `build_arch: arm64`; relying on the action default (`amd64`) on `macos-14` was the wrong assumption and makes the runner setup ambiguous.
+- After publishing `v0.2.0`, both CI packaging lanes were narrowed to `workflow_dispatch` plus `v*` tag pushes only; normal `main` commits should no longer trigger full macOS/Windows rebuilds.
