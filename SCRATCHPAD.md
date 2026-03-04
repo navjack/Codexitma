@@ -34,6 +34,7 @@
 - Added real dungeon-crawler controls for `Depth 3D`: turn in place left/right and move forward/back without forcing the camera to rotate.
 - Replaced the old hallway-only `Depth 3D` presentation with a tile-accurate raycast view, including draw distance plus floor and sky/ceiling depth cues for better spatial reading.
 - Added wall-occluded billboard projection for visible enemies, NPCs, and interactables in `Depth 3D`, and introduced a dedicated `--editor` graphical adventure editor that exports full external packs or override mods.
+- Started `codex/editor-suite` to focus the editor buildout and documented the current editor scope, data model, gaps, and implementation milestones in `EDITOR_ROADMAP.md`.
 
 ## Current Notes
 
