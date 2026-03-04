@@ -7,6 +7,7 @@ import SwiftUI
 struct GameRootView: View {
     @ObservedObject var session: GameSessionController
     @State private var showingEditorConfirm = false
+    @State private var showDebugLightingOverlay = false
     @State private var screenshotNotice: String?
     @State private var screenshotNoticeWorkItem: DispatchWorkItem?
 
@@ -31,6 +32,9 @@ struct GameRootView: View {
                 },
                 onScreenshotRequest: {
                     captureScreenshot()
+                },
+                onDebugOverlayToggle: {
+                    toggleDebugOverlay()
                 }
             )
                 .frame(width: 1, height: 1)
@@ -147,6 +151,7 @@ struct GameRootView: View {
                     Text("E TALK OR USE   I OPEN PACK")
                     Text("J SHOW GOAL   K SAVE   L LOAD   T SWITCH STYLE")
                     Text("M OPENS EDITOR   F12 SAVES SCREENSHOT PNG")
+                    Text("CMD/CTRL+SHIFT+D TOGGLES LIGHT DEBUG")
                     Text("Q BACKS OUT OF MENUS")
                     Text("--BRIDGE / --SCRIPT FOR HEADLESS CONTROL")
                 }
@@ -343,7 +348,8 @@ struct GameRootView: View {
                     state: session.state,
                     scene: session.sceneSnapshot,
                     palette: palette,
-                    visualTheme: session.visualTheme
+                    visualTheme: session.visualTheme,
+                    showLightingDebug: showDebugLightingOverlay
                 )
             }
 
@@ -514,6 +520,9 @@ struct GameRootView: View {
                     .font(.system(size: 10, weight: .regular, design: .monospaced))
                     .foregroundStyle(palette.text)
                 Text(inputQuaternaryLine)
+                    .font(.system(size: 10, weight: .regular, design: .monospaced))
+                    .foregroundStyle(palette.text)
+                Text(inputQuinaryLine)
                     .font(.system(size: 10, weight: .regular, design: .monospaced))
                     .foregroundStyle(palette.text)
 
@@ -754,6 +763,10 @@ struct GameRootView: View {
         "F12 SAVES SCREENSHOT PNG"
     }
 
+    private var inputQuinaryLine: String {
+        "CMD/CTRL+SHIFT+D DEBUG"
+    }
+
     private var editorConfirmOverlay: some View {
         ZStack {
             Color.black.opacity(0.74)
@@ -824,6 +837,12 @@ struct GameRootView: View {
         }
         screenshotNoticeWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.6, execute: workItem)
+    }
+
+    private func toggleDebugOverlay() {
+        showDebugLightingOverlay.toggle()
+        let state = showDebugLightingOverlay ? "ON" : "OFF"
+        postScreenshotNotice("LIGHT DEBUG \(state)")
     }
 }
 #endif

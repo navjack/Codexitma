@@ -130,6 +130,7 @@ struct PixelKeyCapture: NSViewRepresentable {
     let onThemeToggle: () -> Void
     let onEditorRequest: () -> Void
     let onScreenshotRequest: () -> Void
+    let onDebugOverlayToggle: () -> Void
 
     func makeNSView(context: Context) -> KeyCaptureView {
         let view = KeyCaptureView()
@@ -137,6 +138,7 @@ struct PixelKeyCapture: NSViewRepresentable {
         view.onThemeToggle = onThemeToggle
         view.onEditorRequest = onEditorRequest
         view.onScreenshotRequest = onScreenshotRequest
+        view.onDebugOverlayToggle = onDebugOverlayToggle
         DispatchQueue.main.async {
             view.window?.makeFirstResponder(view)
         }
@@ -148,6 +150,7 @@ struct PixelKeyCapture: NSViewRepresentable {
         nsView.onThemeToggle = onThemeToggle
         nsView.onEditorRequest = onEditorRequest
         nsView.onScreenshotRequest = onScreenshotRequest
+        nsView.onDebugOverlayToggle = onDebugOverlayToggle
         DispatchQueue.main.async {
             nsView.window?.makeFirstResponder(nsView)
         }
@@ -159,6 +162,7 @@ final class KeyCaptureView: NSView {
     var onThemeToggle: (() -> Void)?
     var onEditorRequest: (() -> Void)?
     var onScreenshotRequest: (() -> Void)?
+    var onDebugOverlayToggle: (() -> Void)?
 
     override var acceptsFirstResponder: Bool { true }
 
@@ -169,6 +173,8 @@ final class KeyCaptureView: NSView {
             onEditorRequest?()
         } else if isScreenshotRequest(event) {
             onScreenshotRequest?()
+        } else if isDebugOverlayToggle(event) {
+            onDebugOverlayToggle?()
         } else if let command = parse(event) {
             onCommand?(command)
         } else {
@@ -194,6 +200,17 @@ final class KeyCaptureView: NSView {
 
     private func isScreenshotRequest(_ event: NSEvent) -> Bool {
         event.keyCode == 111 // F12
+    }
+
+    private func isDebugOverlayToggle(_ event: NSEvent) -> Bool {
+        guard let chars = event.charactersIgnoringModifiers?.lowercased(),
+              chars == "d" else {
+            return false
+        }
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        let hasShift = flags.contains(.shift)
+        let hasCommandOrControl = flags.contains(.command) || flags.contains(.control)
+        return hasShift && hasCommandOrControl
     }
 
     private func parse(_ event: NSEvent) -> ActionCommand? {

@@ -119,6 +119,23 @@ struct DepthFloorLightingSnapshot {
     }
 }
 
+struct DepthTileLightingSnapshot {
+    let width: Int
+    let height: Int
+    let ambient: Double
+    let values: [[Double]]
+
+    func level(at position: Position) -> Double {
+        guard position.x >= 0,
+              position.y >= 0,
+              position.y < values.count,
+              position.x < values[position.y].count else {
+            return ambient
+        }
+        return values[position.y][position.x]
+    }
+}
+
 struct DepthSceneSnapshot {
     let facing: Direction
     let fieldOfView: Double
@@ -127,6 +144,7 @@ struct DepthSceneSnapshot {
     let samples: [DepthRaySample]
     let billboards: [DepthBillboardSnapshot]
     let floorLighting: DepthFloorLightingSnapshot
+    let tileLighting: DepthTileLightingSnapshot
 }
 
 struct InventoryEntrySnapshot {
@@ -153,6 +171,7 @@ struct GraphicsSceneSnapshot {
     let currentMapID: String
     let board: MapBoardSnapshot
     let depth: DepthSceneSnapshot?
+    let mapLighting: DepthTileLightingSnapshot?
     let messages: [String]
     let player: PlayerState
     let quests: QuestState
@@ -267,6 +286,7 @@ enum GraphicsSceneSnapshotBuilder {
     static func build(state: GameState, visualTheme: GraphicsVisualTheme) -> GraphicsSceneSnapshot {
         let board = makeBoard(from: state)
         let depth = visualTheme == .depth3D ? makeDepthScene(from: state, board: board) : nil
+        let mapLighting = depth?.tileLighting ?? makeMapLighting(from: state, board: board)
         let selectedHeroClass = state.selectedHeroClass()
         let selectedHeroTemplate = heroTemplate(for: selectedHeroClass)
 
@@ -278,6 +298,7 @@ enum GraphicsSceneSnapshotBuilder {
             currentMapID: state.player.currentMapID,
             board: board,
             depth: depth,
+            mapLighting: mapLighting,
             messages: state.messages,
             player: state.player,
             quests: state.quests,
@@ -432,6 +453,7 @@ enum GraphicsSceneSnapshotBuilder {
             columns: profile.columns,
             bands: profile.floorLightBands
         )
+        let tileLighting = makeDepthTileLighting(board: board, lightField: lightField)
 
         return DepthSceneSnapshot(
             facing: state.player.facing,
@@ -440,8 +462,24 @@ enum GraphicsSceneSnapshotBuilder {
             usesSkyBackdrop: skyBackdrop,
             samples: samples,
             billboards: billboards,
-            floorLighting: floorLighting
+            floorLighting: floorLighting,
+            tileLighting: tileLighting
         )
+    }
+
+    private static func makeMapLighting(from state: GameState, board: MapBoardSnapshot) -> DepthTileLightingSnapshot? {
+        guard board.width > 0, board.height > 0 else {
+            return nil
+        }
+        let mapID = state.player.currentMapID
+        let profile = depthRenderProfile(for: mapID, usesSkyBackdrop: usesSkyBackdrop(for: mapID))
+        let lightField = makeDepthLightField(
+            from: state,
+            board: board,
+            ambient: profile.ambientLight,
+            subdivisions: profile.lightSubdivisions
+        )
+        return makeDepthTileLighting(board: board, lightField: lightField)
     }
 
     private static func makeDepthBillboards(
@@ -529,6 +567,23 @@ enum GraphicsSceneSnapshotBuilder {
         return DepthFloorLightingSnapshot(
             columns: safeColumns,
             bands: safeBands,
+            ambient: lightField.ambient,
+            values: values
+        )
+    }
+
+    private static func makeDepthTileLighting(
+        board: MapBoardSnapshot,
+        lightField: DepthLightField
+    ) -> DepthTileLightingSnapshot {
+        let values = board.rows.map { row in
+            row.map { cell in
+                max(lightField.ambient, min(1.0, lightField.level(at: cell.position)))
+            }
+        }
+        return DepthTileLightingSnapshot(
+            width: board.width,
+            height: board.height,
             ambient: lightField.ambient,
             values: values
         )

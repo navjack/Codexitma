@@ -163,3 +163,8 @@
 - Reworked depth LOS checks to world-space stepping (instead of tile-center-only Bresenham) with edge-neighbor blocking checks, reducing light leakage around internal wall corners and making cast shadows read more consistently.
 - Switched wall lighting to sample at exact ray hit world coordinates (not just hit tile center), improving wall-face shadow transitions.
 - Disabled player lantern light in Depth3D by default (opt-in via `lantern_enabled` world flag) so torch/environment lighting remains the dominant source unless explicitly enabled.
+- Added native graphics debug-light toggle on `CMD/CTRL+SHIFT+D` and surfaced it in the on-screen input help text.
+- Added a Depth3D debug overlay panel (key-combo gated) with live light stats (ambient/min/max/avg), player pose, and a top-down lightmap preview that marks torches and walls.
+- Extended top-down map rendering to optionally apply the same runtime lighting field as an overlay, so lighting behavior can be verified from overhead view without switching tools.
+- Completed and wired `DepthTileLightingSnapshot` generation (`makeDepthTileLighting`) and added a shared `mapLighting` snapshot path so non-depth themes can still consume lightmap data.
+- Tuned textured floor perspective sampling in native Depth3D with a depth-based warp and variable strip density so near-floor texels read larger and distant tiles compress more naturally.

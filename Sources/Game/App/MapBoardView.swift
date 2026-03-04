@@ -111,6 +111,7 @@ struct MapBoardView: View {
     let scene: GraphicsSceneSnapshot
     let palette: UltimaPalette
     let visualTheme: GraphicsVisualTheme
+    let showLightingDebug: Bool
 
     private let cell: CGFloat = 14
     private static let depthTextureAtlas = DepthTextureAtlas.load()
@@ -128,6 +129,23 @@ struct MapBoardView: View {
         let boardScale = visualTheme == .gemstone ? 2.0 : 1.84
         let boardWidth = CGFloat(board.width) * cell
         let boardHeight = CGFloat(board.height) * cell
+        let lighting = scene.mapLighting
+        let boardContent = AnyView(
+            ZStack {
+                VStack(spacing: 0) {
+                    ForEach(Array(board.rows.enumerated()), id: \.offset) { _, row in
+                        HStack(spacing: 0) {
+                            ForEach(row, id: \.position) { cellSnapshot in
+                                tileView(for: cellSnapshot, theme: theme)
+                            }
+                        }
+                    }
+                }
+                if showLightingDebug, let lighting {
+                    topDownLightingOverlay(board: board, lighting: lighting, theme: theme)
+                }
+            }
+        )
 
         return ZStack(alignment: .topLeading) {
             if visualTheme == .gemstone {
@@ -136,32 +154,24 @@ struct MapBoardView: View {
                     .offset(x: 3, y: 3)
             }
 
-            VStack(spacing: 0) {
-                ForEach(Array(board.rows.enumerated()), id: \.offset) { _, row in
-                    HStack(spacing: 0) {
-                        ForEach(row, id: \.position) { cellSnapshot in
-                            tileView(for: cellSnapshot, theme: theme)
-                        }
-                    }
-                }
-            }
-            .padding(boardPadding)
-            .background(visualTheme == .gemstone ? Color.black : theme.floor.opacity(0.22))
-            .overlay(
-                Rectangle()
-                    .stroke(
-                        visualTheme == .gemstone ? theme.roomHighlight : palette.lightGold.opacity(0.75),
-                        lineWidth: visualTheme == .gemstone ? 2 : 1
-                    )
-                    .padding(visualTheme == .gemstone ? 3 : 0)
-            )
-            .overlay(
-                Rectangle()
-                    .stroke(
-                        visualTheme == .gemstone ? theme.roomBorder : palette.lightGold,
-                        lineWidth: visualTheme == .gemstone ? 4 : 2
-                    )
-            )
+            boardContent
+                .padding(boardPadding)
+                .background(visualTheme == .gemstone ? Color.black : theme.floor.opacity(0.22))
+                .overlay(
+                    Rectangle()
+                        .stroke(
+                            visualTheme == .gemstone ? theme.roomHighlight : palette.lightGold.opacity(0.75),
+                            lineWidth: visualTheme == .gemstone ? 2 : 1
+                        )
+                        .padding(visualTheme == .gemstone ? 3 : 0)
+                )
+                .overlay(
+                    Rectangle()
+                        .stroke(
+                            visualTheme == .gemstone ? theme.roomBorder : palette.lightGold,
+                            lineWidth: visualTheme == .gemstone ? 4 : 2
+                        )
+                )
         }
         .scaleEffect(boardScale, anchor: .topLeading)
         .frame(
@@ -189,10 +199,41 @@ struct MapBoardView: View {
         .frame(width: cell, height: cell)
     }
 
+    private func topDownLightingOverlay(
+        board: MapBoardSnapshot,
+        lighting: DepthTileLightingSnapshot,
+        theme: RegionTheme
+    ) -> some View {
+        VStack(spacing: 0) {
+            ForEach(Array(board.rows.enumerated()), id: \.offset) { _, row in
+                HStack(spacing: 0) {
+                    ForEach(row, id: \.position) { cellSnapshot in
+                        let light = lighting.level(at: cellSnapshot.position)
+                        let lift = max(0.0, light - lighting.ambient)
+                        let dim = max(0.0, lighting.ambient - light)
+                        ZStack {
+                            if lift > 0.01 {
+                                Rectangle()
+                                    .fill(theme.roomHighlight.opacity(min(0.54, 0.10 + (lift * 0.85))))
+                            }
+                            if dim > 0.01 {
+                                Rectangle()
+                                    .fill(Color.black.opacity(min(0.54, 0.08 + (dim * 0.92))))
+                            }
+                        }
+                        .frame(width: cell, height: cell)
+                    }
+                }
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
     private func firstPersonView(theme: RegionTheme) -> some View {
         GeometryReader { proxy in
             let depthScene = scene.depth
             let raySamples = depthScene?.samples ?? []
+            let lighting = depthScene?.tileLighting ?? scene.mapLighting
             ZStack {
                 Canvas { context, canvasSize in
                     drawDepthScene(into: &context, size: canvasSize, samples: raySamples, theme: theme)
@@ -217,6 +258,12 @@ struct MapBoardView: View {
 
                 CrosshairView(color: palette.text.opacity(0.65))
                     .frame(width: 26, height: 26)
+
+                if showLightingDebug, let lighting {
+                    depthDebugOverlay(board: scene.board, lighting: lighting, theme: theme)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                        .padding(10)
+                }
             }
             .overlay(
                 Rectangle()
@@ -230,6 +277,103 @@ struct MapBoardView: View {
             .drawingGroup(opaque: false)
         }
         .frame(width: 584, height: 356)
+    }
+
+    private func depthDebugOverlay(
+        board: MapBoardSnapshot,
+        lighting: DepthTileLightingSnapshot,
+        theme: RegionTheme
+    ) -> some View {
+        let levels = lighting.values.flatMap { $0 }
+        let minLevel = levels.min() ?? lighting.ambient
+        let maxLevel = levels.max() ?? lighting.ambient
+        let avgLevel = levels.isEmpty ? lighting.ambient : (levels.reduce(0, +) / Double(levels.count))
+
+        return VStack(alignment: .leading, spacing: 6) {
+            Text("DEBUG LIGHT")
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .foregroundStyle(palette.lightGold)
+            Text("AMB \(lightValueString(lighting.ambient))")
+                .font(.system(size: 8, weight: .regular, design: .monospaced))
+                .foregroundStyle(palette.text.opacity(0.90))
+            Text("MIN \(lightValueString(minLevel)) MAX \(lightValueString(maxLevel))")
+                .font(.system(size: 8, weight: .regular, design: .monospaced))
+                .foregroundStyle(palette.text.opacity(0.90))
+            Text("AVG \(lightValueString(avgLevel))")
+                .font(.system(size: 8, weight: .regular, design: .monospaced))
+                .foregroundStyle(palette.text.opacity(0.90))
+            Text("P \(scene.player.position.x),\(scene.player.position.y) \(scene.player.facing.shortLabel)")
+                .font(.system(size: 8, weight: .regular, design: .monospaced))
+                .foregroundStyle(palette.text.opacity(0.90))
+
+            Canvas { context, size in
+                guard board.width > 0, board.height > 0 else {
+                    return
+                }
+
+                let stepX = size.width / CGFloat(board.width)
+                let stepY = size.height / CGFloat(board.height)
+                for row in board.rows {
+                    for cell in row {
+                        let rect = CGRect(
+                            x: CGFloat(cell.position.x) * stepX,
+                            y: CGFloat(cell.position.y) * stepY,
+                            width: max(1, stepX),
+                            height: max(1, stepY)
+                        )
+                        let level = lighting.level(at: cell.position)
+                        let normalized = max(0.0, min(1.0, (level - lighting.ambient) * 1.8 + 0.26))
+                        var color = Color(
+                            red: 0.08 + (normalized * 0.88),
+                            green: 0.08 + (normalized * 0.78),
+                            blue: 0.09 + (normalized * 0.64)
+                        )
+                        if !cell.tile.walkable {
+                            color = Color(
+                                red: 0.10 + (normalized * 0.32),
+                                green: 0.10 + (normalized * 0.28),
+                                blue: 0.12 + (normalized * 0.24)
+                            )
+                        }
+                        context.fill(Path(rect), with: .color(color))
+
+                        if !cell.tile.walkable {
+                            context.stroke(
+                                Path(rect),
+                                with: .color(Color.black.opacity(0.42)),
+                                lineWidth: max(1, min(stepX, stepY) * 0.14)
+                            )
+                        }
+
+                        if cell.feature == .torchFloor || cell.feature == .torchWall {
+                            let dot = CGRect(
+                                x: rect.midX - (stepX * 0.18),
+                                y: rect.midY - (stepY * 0.18),
+                                width: stepX * 0.36,
+                                height: stepY * 0.36
+                            )
+                            context.fill(Path(ellipseIn: dot), with: .color(palette.lightGold))
+                        }
+                    }
+                }
+
+                let playerRect = CGRect(
+                    x: CGFloat(scene.player.position.x) * stepX,
+                    y: CGFloat(scene.player.position.y) * stepY,
+                    width: max(1, stepX),
+                    height: max(1, stepY)
+                ).insetBy(dx: stepX * 0.16, dy: stepY * 0.16)
+                context.fill(Path(playerRect), with: .color(palette.accentBlue))
+            }
+            .frame(width: 168, height: 110)
+            .background(Color.black.opacity(0.46))
+            .overlay(Rectangle().stroke(theme.roomHighlight.opacity(0.58), lineWidth: 1))
+        }
+        .padding(8)
+        .background(Color.black.opacity(0.76))
+        .overlay(Rectangle().stroke(theme.roomBorder.opacity(0.82), lineWidth: 2))
+        .overlay(Rectangle().inset(by: 3).stroke(theme.roomHighlight.opacity(0.44), lineWidth: 1))
+        .allowsHitTesting(false)
     }
 
     private func drawDepthScene(
@@ -410,10 +554,15 @@ struct MapBoardView: View {
         let rowScreenY = max(horizon + 1, rect.midY)
         let rowDepth = max(1.0, Double(rowScreenY - horizon))
         let posZ = Double(canvasSize.height) * 0.50
-        let rowDistance = posZ / rowDepth
-
-        let stripCount = max(96, Int(canvasSize.width / 2.0))
         let bandNorm = (Double(bandIndex) + 0.5) / Double(max(1, floorBands))
+        let normalizedScreenDepth = max(
+            0.0,
+            min(1.0, Double((rowScreenY - horizon) / max(1.0, canvasSize.height - horizon)))
+        )
+        let perspectiveWarp = 0.72 + (pow(1.0 - normalizedScreenDepth, 1.55) * 0.65)
+        let rowDistance = (posZ / rowDepth) * perspectiveWarp
+        let stripScale = 0.78 + (pow(1.0 - bandNorm, 1.2) * 0.72)
+        let stripCount = max(96, Int((Double(canvasSize.width) * 0.52) * stripScale))
 
         context.withCGContext { cgContext in
             cgContext.interpolationQuality = .none
@@ -1250,6 +1399,10 @@ struct MapBoardView: View {
         case .right:
             return (0, 1)
         }
+    }
+
+    private func lightValueString(_ value: Double) -> String {
+        String(format: "%.2f", value)
     }
 
     private func fract(_ value: Double) -> CGFloat {
