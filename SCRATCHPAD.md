@@ -189,3 +189,4 @@
 - Removed screen-space wall-contact shadow anchoring passes in native and SDL and switched floor/wall shading to the shared world shadow mask, reducing detached/peter-panning artifacts.
 - Added a lightweight 3x3 softening filter on the shadow mask cache to reduce stair-stepped shadow edges while preserving occlusion structure.
 - Extended `DepthRaySample` with per-hit `shadowLevel` so wall shading can use the same world-space shadow source as the floor.
+- Replaced light LOS sampling with a supercover-style grid traversal (Amanatides/Woo corner-aware stepping) to reduce corner leakage and improve shadow stability around wall edges.

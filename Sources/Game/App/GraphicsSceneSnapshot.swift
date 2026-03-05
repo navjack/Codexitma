@@ -1285,54 +1285,139 @@ enum GraphicsSceneSnapshotBuilder {
             return true
         }
 
-        let startTile = Position(
-            x: Int(floor(startX)),
-            y: Int(floor(startY))
-        )
-        let endTile = Position(
-            x: Int(floor(endX)),
-            y: Int(floor(endY))
-        )
+        let startTileX = Int(floor(startX))
+        let startTileY = Int(floor(startY))
+        let endTileX = Int(floor(endX))
+        let endTileY = Int(floor(endY))
 
-        let steps = max(2, Int(ceil(distance / 0.18)))
-        for index in 1..<steps {
-            let t = Double(index) / Double(steps)
-            let worldX = startX + (dx * t)
-            let worldY = startY + (dy * t)
-            let baseX = Int(floor(worldX))
-            let baseY = Int(floor(worldY))
-            let fracX = worldX - floor(worldX)
-            let fracY = worldY - floor(worldY)
+        var tileX = startTileX
+        var tileY = startTileY
 
-            var candidates: [Position] = [Position(x: baseX, y: baseY)]
+        let stepX = dx > 0 ? 1 : (dx < 0 ? -1 : 0)
+        let stepY = dy > 0 ? 1 : (dy < 0 ? -1 : 0)
 
-            if fracX < 0.08 {
-                candidates.append(Position(x: baseX - 1, y: baseY))
-            } else if fracX > 0.92 {
-                candidates.append(Position(x: baseX + 1, y: baseY))
+        let tDeltaX = stepX == 0 ? Double.greatestFiniteMagnitude : abs(1.0 / dx)
+        let tDeltaY = stepY == 0 ? Double.greatestFiniteMagnitude : abs(1.0 / dy)
+
+        let tMaxX: Double = {
+            if stepX > 0 {
+                return (Double(tileX + 1) - startX) / dx
             }
-
-            if fracY < 0.08 {
-                candidates.append(Position(x: baseX, y: baseY - 1))
-            } else if fracY > 0.92 {
-                candidates.append(Position(x: baseX, y: baseY + 1))
+            if stepX < 0 {
+                return (startX - Double(tileX)) / -dx
             }
+            return Double.greatestFiniteMagnitude
+        }()
 
-            let deduped = Array(Set(candidates))
-            for tile in deduped {
-                if tile == startTile || tile == endTile {
-                    continue
-                }
-                guard let cell = board.cell(at: tile) else {
+        let tMaxY: Double = {
+            if stepY > 0 {
+                return (Double(tileY + 1) - startY) / dy
+            }
+            if stepY < 0 {
+                return (startY - Double(tileY)) / -dy
+            }
+            return Double.greatestFiniteMagnitude
+        }()
+
+        var rayTMaxX = tMaxX
+        var rayTMaxY = tMaxY
+
+        while tileX != endTileX || tileY != endTileY {
+            if rayTMaxX < rayTMaxY {
+                tileX += stepX
+                rayTMaxX += tDeltaX
+                if isBlockingLightTile(
+                    x: tileX,
+                    y: tileY,
+                    startX: startTileX,
+                    startY: startTileY,
+                    endX: endTileX,
+                    endY: endTileY,
+                    board: board
+                ) {
                     return false
                 }
-                if !cell.tile.walkable {
+            } else if rayTMaxY < rayTMaxX {
+                tileY += stepY
+                rayTMaxY += tDeltaY
+                if isBlockingLightTile(
+                    x: tileX,
+                    y: tileY,
+                    startX: startTileX,
+                    startY: startTileY,
+                    endX: endTileX,
+                    endY: endTileY,
+                    board: board
+                ) {
+                    return false
+                }
+            } else {
+                // Supercover corner crossing: test both orthogonal neighbors plus the diagonal.
+                let nextX = tileX + stepX
+                let nextY = tileY + stepY
+
+                if isBlockingLightTile(
+                    x: nextX,
+                    y: tileY,
+                    startX: startTileX,
+                    startY: startTileY,
+                    endX: endTileX,
+                    endY: endTileY,
+                    board: board
+                ) {
+                    return false
+                }
+                if isBlockingLightTile(
+                    x: tileX,
+                    y: nextY,
+                    startX: startTileX,
+                    startY: startTileY,
+                    endX: endTileX,
+                    endY: endTileY,
+                    board: board
+                ) {
+                    return false
+                }
+
+                tileX = nextX
+                tileY = nextY
+                rayTMaxX += tDeltaX
+                rayTMaxY += tDeltaY
+
+                if isBlockingLightTile(
+                    x: tileX,
+                    y: tileY,
+                    startX: startTileX,
+                    startY: startTileY,
+                    endX: endTileX,
+                    endY: endTileY,
+                    board: board
+                ) {
                     return false
                 }
             }
         }
 
         return true
+    }
+
+    private static func isBlockingLightTile(
+        x: Int,
+        y: Int,
+        startX: Int,
+        startY: Int,
+        endX: Int,
+        endY: Int,
+        board: MapBoardSnapshot
+    ) -> Bool {
+        if (x == startX && y == startY) || (x == endX && y == endY) {
+            return false
+        }
+
+        guard let cell = board.cell(at: Position(x: x, y: y)) else {
+            return true
+        }
+        return !cell.tile.walkable
     }
 
     private static func resolved(_ raw: Character, state: GameState) -> Character {
