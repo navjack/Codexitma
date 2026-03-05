@@ -20,6 +20,10 @@ It is deliberately styled after early Apple II and Ultima-era computer RPGs, wit
 - External JSON adventure packs and override mods
 - Headless automation bridge for scripted runs and regression testing
 
+## Project Provenance
+
+See [HOW_IT_WAS_MADE.md](HOW_IT_WAS_MADE.md) for a direct account of how the project was developed with Codex, how the user steered it, and which major ideas were primarily user-driven, Codex-originated, or collaborative.
+
 ## Current State
 
 The project is beyond prototype status. The engine, save/load flow, combat, quests, exploration, shops, class-based hero starts, graphics themes, editor, external content loading, native macOS frontend, and Win64 SDL packaging are all working.
