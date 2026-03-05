@@ -12,7 +12,21 @@ These notes track the modularization work that was done to reduce edit-time cont
 - Graphics app:
   - `Sources/Game/App/GraphicsRuntime.swift`
   - `Sources/Game/App/GraphicsGameUI.swift`
+  - `Sources/Game/App/GraphicsGameUI+Screens.swift`
+  - `Sources/Game/App/GraphicsGameUI+Panels.swift`
+  - `Sources/Game/App/GraphicsGameUI+Support.swift`
+  - `Sources/Game/App/GraphicsSceneSnapshot.swift`
+  - `Sources/Game/App/GraphicsSceneSnapshot+Builder.swift`
+  - `Sources/Game/App/GraphicsSceneSnapshot+Lighting.swift`
+  - `Sources/Game/App/SDLGraphicsLauncher.swift`
+  - `Sources/Game/App/SDLGraphicsLauncher+Input.swift`
+  - `Sources/Game/App/SDLGraphicsLauncher+SceneRendering.swift`
+  - `Sources/Game/App/SDLGraphicsLauncher+DepthRendering.swift`
+  - `Sources/Game/App/SDLGraphicsLauncher+Support.swift`
   - `Sources/Game/App/MapBoardView.swift`
+  - `Sources/Game/App/MapBoardView+DepthRendering.swift`
+  - `Sources/Game/App/MapBoardView+DepthAppearance.swift`
+  - `Sources/Game/App/MapBoardView+DepthSupport.swift`
   - `Sources/Game/App/DepthRaycasting.swift`
   - `Sources/Game/App/GraphicsTileViews.swift`
   - `Sources/Game/App/GraphicsSupport.swift`
@@ -49,6 +63,14 @@ These notes track the modularization work that was done to reduce edit-time cont
 
 ## Remaining Hotspots
 
+- `Sources/Game/App/SDLGraphicsLauncher+DepthRendering.swift`
+  - Now the biggest SDL-specific graphics file.
+  - Best next split: pull editor-overlay color helpers and board-only pattern helpers away from the depth floor/wall renderer, or extract shared projection math with the native depth path.
+
+- `Sources/Game/App/MapBoardView+DepthSupport.swift`
+  - Still broad because it mixes billboard queries, corridor fallback, projection math, world lookup helpers, and region-theme resolution.
+  - Best next split: separate projection/world-query helpers from region-theme resolution if native depth work keeps growing.
+
 - `Sources/Game/App/AdventureEditorStore+Helpers.swift`
   - Still broad because it mixes selection helpers, editor placement factories, color helpers, and blank-pack builders.
   - Best next split: separate editor selection/computed accessors from pack factory utilities.
@@ -56,10 +78,6 @@ These notes track the modularization work that was done to reduce edit-time cont
 - `Sources/Game/App/AdventureEditorRootView+Panels.swift`
   - Still large because it owns most content-specific panel layouts in one file.
   - Best next split: extract standalone panel views (`DialoguePanels`, `EncounterPanels`, `ShopPanels`, etc.).
-
-- `Sources/Game/App/GraphicsGameUI.swift`
-  - Still carries a large amount of runtime presentation logic even after the responsive layout and pause/menu work.
-  - Best next split: separate HUD/layout flow from mode-specific panels and theme-specific rendering sections.
 
 ## Refactor Rule
 
