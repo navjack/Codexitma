@@ -225,6 +225,13 @@ struct ShopOfferSnapshot {
     let soldOut: Bool
 }
 
+struct PauseOptionSnapshot {
+    let index: Int
+    let label: String
+    let detail: String
+    let isSelected: Bool
+}
+
 struct GraphicsSceneSnapshot {
     let mode: GameMode
     let visualTheme: GraphicsVisualTheme
@@ -258,6 +265,8 @@ struct GraphicsSceneSnapshot {
     let shopOffers: [ShopOfferSnapshot]
     let shopSelectionIndex: Int
     let shopDetail: String?
+    let pauseOptions: [PauseOptionSnapshot]
+    let pauseDetail: String?
 }
 
 enum GraphicsSceneSnapshotBuilder {
@@ -428,7 +437,9 @@ enum GraphicsSceneSnapshotBuilder {
             shopLines: state.shopLines,
             shopOffers: shopOffers(from: state),
             shopSelectionIndex: state.shopSelectionIndex,
-            shopDetail: state.shopDetail
+            shopDetail: state.shopDetail,
+            pauseOptions: pauseOptions(from: state),
+            pauseDetail: pauseDetail(from: state)
         )
     }
 
@@ -487,6 +498,24 @@ enum GraphicsSceneSnapshotBuilder {
                 soldOut: soldOut
             )
         }
+    }
+
+    private static func pauseOptions(from state: GameState) -> [PauseOptionSnapshot] {
+        PauseMenuOption.allCases.enumerated().map { index, option in
+            PauseOptionSnapshot(
+                index: index,
+                label: option.label,
+                detail: option.detail,
+                isSelected: index == state.pauseSelectionIndex
+            )
+        }
+    }
+
+    private static func pauseDetail(from state: GameState) -> String? {
+        guard state.mode == .pause else {
+            return nil
+        }
+        return state.selectedPauseOption().detail
     }
 
     private static func makeBoard(from state: GameState) -> MapBoardSnapshot {

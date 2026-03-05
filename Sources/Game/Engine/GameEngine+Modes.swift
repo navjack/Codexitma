@@ -114,7 +114,8 @@ extension GameEngine {
             saveAtRestPoint()
         case .cancel:
             state.mode = .pause
-            state.log("Press X to quit, or move to continue.")
+            state.pauseSelectionIndex = 0
+            state.log("Pause menu open. Resume, save and return, or leave the road.")
         case .quit:
             state.shouldQuit = true
         case .load:

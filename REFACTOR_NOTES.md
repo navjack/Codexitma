@@ -1,6 +1,6 @@
 # Refactor Notes
 
-This branch exists to reduce edit-time context pressure by breaking large Swift files into smaller modules without changing runtime behavior.
+These notes track the modularization work that was done to reduce edit-time context pressure by breaking large Swift files into smaller modules without changing runtime behavior.
 
 ## Completed Splits
 
@@ -37,6 +37,7 @@ This branch exists to reduce edit-time context pressure by breaking large Swift 
 - Engine:
   - `Sources/Game/Engine/GameEngine.swift`
   - `Sources/Game/Engine/GameEngine+Modes.swift`
+  - `Sources/Game/Engine/GameEngine+Pause.swift`
   - `Sources/Game/Engine/GameEngine+WorldFlow.swift`
   - `Sources/Game/Engine/GameEngine+InventoryAdventure.swift`
   - `Sources/Game/Engine/GameEngine+QueriesShop.swift`
@@ -57,8 +58,8 @@ This branch exists to reduce edit-time context pressure by breaking large Swift 
   - Best next split: extract standalone panel views (`DialoguePanels`, `EncounterPanels`, `ShopPanels`, etc.).
 
 - `Sources/Game/App/GraphicsGameUI.swift`
-  - Still carries a large amount of runtime presentation logic.
-  - Best next split: separate HUD/layout flow from theme-specific rendering sections.
+  - Still carries a large amount of runtime presentation logic even after the responsive layout and pause/menu work.
+  - Best next split: separate HUD/layout flow from mode-specific panels and theme-specific rendering sections.
 
 ## Refactor Rule
 

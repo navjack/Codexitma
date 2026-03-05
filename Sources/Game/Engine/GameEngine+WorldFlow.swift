@@ -1,6 +1,35 @@
 import Foundation
 
 extension GameEngine {
+    @discardableResult
+    func persistCurrentRun(
+        updateRestPoint: Bool,
+        successMessage: String,
+        failureMessage: String
+    ) -> Bool {
+        if updateRestPoint {
+            state.player.lastSavePosition = state.player.position
+            state.player.lastSaveMapID = state.player.currentMapID
+        }
+
+        do {
+            try saveRepository.save(
+                SaveGame(
+                    player: state.player,
+                    world: state.world,
+                    quests: state.quests,
+                    playTimeSeconds: state.playTimeSeconds,
+                    adventureID: state.currentAdventureID
+                )
+            )
+            state.log(successMessage)
+            return true
+        } catch {
+            state.log(failureMessage)
+            return false
+        }
+    }
+
     func movePlayer(_ direction: Direction, preserveFacing: Bool = false) {
         guard let map = state.world.maps[state.player.currentMapID] else { return }
         if !preserveFacing {
@@ -52,22 +81,11 @@ extension GameEngine {
             state.log("Only beds and beacons hold a safe memory.")
             return
         }
-        state.player.lastSavePosition = state.player.position
-        state.player.lastSaveMapID = state.player.currentMapID
-        do {
-            try saveRepository.save(
-                SaveGame(
-                    player: state.player,
-                    world: state.world,
-                    quests: state.quests,
-                    playTimeSeconds: state.playTimeSeconds,
-                    adventureID: state.currentAdventureID
-                )
-            )
-            state.log("The ember of memory is sealed.")
-        } catch {
-            state.log("The save ritual failed.")
-        }
+        _ = persistCurrentRun(
+            updateRestPoint: true,
+            successMessage: "The ember of memory is sealed.",
+            failureMessage: "The save ritual failed."
+        )
     }
 
     func useSelectedInventoryItem() {

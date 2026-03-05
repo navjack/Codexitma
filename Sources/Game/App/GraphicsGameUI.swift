@@ -3,6 +3,74 @@ import AppKit
 import Foundation
 import SwiftUI
 
+private enum WorldDashboardLayoutMetrics {
+    static let outerPadding: CGFloat = 18
+    static let columnSpacing: CGFloat = 12
+    static let panelSpacing: CGFloat = 10
+    static let sidebarPanelWidth: CGFloat = 180
+    static let primaryColumnWidth: CGFloat = 612
+    static let wideLayoutMinimumWidth: CGFloat = 1120
+    static let wideLayoutMinimumHeight: CGFloat = 720
+    static let maximumScale: CGFloat = 1.0
+}
+
+private struct DashboardMeasuredSizeKey: PreferenceKey {
+    static let defaultValue: CGSize = .zero
+
+    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
+        let next = nextValue()
+        guard next.width > 0, next.height > 0 else {
+            return
+        }
+        value = next
+    }
+}
+
+private struct FittedDashboardView<Content: View>: View {
+    let availableSize: CGSize
+    let maxScale: CGFloat
+    @ViewBuilder let content: () -> Content
+
+    @State private var measuredSize: CGSize = .zero
+
+    private var contentSize: CGSize {
+        guard measuredSize.width > 0, measuredSize.height > 0 else {
+            return availableSize
+        }
+        return measuredSize
+    }
+
+    private var scale: CGFloat {
+        let widthScale = availableSize.width / max(contentSize.width, 1)
+        let heightScale = availableSize.height / max(contentSize.height, 1)
+        return max(0.1, min(maxScale, min(widthScale, heightScale)))
+    }
+
+    var body: some View {
+        let scaledWidth = contentSize.width * scale
+        let scaledHeight = contentSize.height * scale
+
+        content()
+            .fixedSize(horizontal: true, vertical: true)
+            .background(
+                GeometryReader { proxy in
+                    Color.clear.preference(key: DashboardMeasuredSizeKey.self, value: proxy.size)
+                }
+            )
+            .onPreferenceChange(DashboardMeasuredSizeKey.self) { newSize in
+                guard newSize.width > 0, newSize.height > 0 else {
+                    return
+                }
+                if abs(newSize.width - measuredSize.width) > 0.5 || abs(newSize.height - measuredSize.height) > 0.5 {
+                    measuredSize = newSize
+                }
+            }
+            .scaleEffect(scale, anchor: .topLeading)
+            .frame(width: scaledWidth, height: scaledHeight, alignment: .topLeading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+    }
+}
+
 @MainActor
 struct GameRootView: View {
     @ObservedObject var session: GameSessionController
@@ -53,8 +121,13 @@ struct GameRootView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay {
-            if showingEditorConfirm {
-                editorConfirmOverlay
+            ZStack {
+                if session.state.mode == .pause && !showingEditorConfirm {
+                    pauseOverlay
+                }
+                if showingEditorConfirm {
+                    editorConfirmOverlay
+                }
             }
         }
         .overlay(alignment: .topTrailing) {
@@ -282,66 +355,88 @@ struct GameRootView: View {
     }
 
     private var worldView: some View {
-        let sidebarPanelWidth: CGFloat = 192
-
         return GeometryReader { proxy in
-            ScrollView([.vertical, .horizontal], showsIndicators: false) {
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .top, spacing: 14) {
-                        primaryWorldColumn
-                            .frame(width: 620, alignment: .leading)
+            let availableSize = CGSize(
+                width: max(320, proxy.size.width - (WorldDashboardLayoutMetrics.outerPadding * 2)),
+                height: max(320, proxy.size.height - (WorldDashboardLayoutMetrics.outerPadding * 2))
+            )
+            let useWideLayout = availableSize.width >= WorldDashboardLayoutMetrics.wideLayoutMinimumWidth
+                && availableSize.height >= WorldDashboardLayoutMetrics.wideLayoutMinimumHeight
 
-                        VStack(alignment: .leading, spacing: 10) {
-                            HStack(alignment: .top, spacing: 10) {
-                                statusPanel
-                                    .frame(width: sidebarPanelWidth)
-                                commercePanel
-                                    .frame(width: sidebarPanelWidth)
-                            }
-
-                            HStack(alignment: .top, spacing: 10) {
-                                paperDollPanel
-                                    .frame(width: sidebarPanelWidth)
-                                inputPanel
-                                    .frame(width: sidebarPanelWidth)
-                            }
-
-                            HStack(alignment: .top, spacing: 10) {
-                                legendPanel
-                                    .frame(width: sidebarPanelWidth)
-                                traitsPanel
-                                    .frame(width: sidebarPanelWidth)
-                            }
-                        }
-                        .frame(width: (sidebarPanelWidth * 2) + 10, alignment: .leading)
-                    }
-                    .frame(minWidth: 1048, alignment: .topLeading)
-
-                    VStack(alignment: .leading, spacing: 14) {
-                        primaryWorldColumn
-
-                        LazyVGrid(
-                            columns: [GridItem(.adaptive(minimum: 220), spacing: 10)],
-                            alignment: .leading,
-                            spacing: 10
-                        ) {
-                            statusPanel
-                            commercePanel
-                            paperDollPanel
-                            inputPanel
-                            legendPanel
-                            traitsPanel
-                        }
-                    }
-                    .frame(maxWidth: 860, alignment: .leading)
+            FittedDashboardView(
+                availableSize: availableSize,
+                maxScale: WorldDashboardLayoutMetrics.maximumScale
+            ) {
+                if useWideLayout {
+                    wideWorldDashboard(availableHeight: availableSize.height)
+                } else {
+                    compactWorldDashboard
                 }
-                .padding(18)
-                .frame(minHeight: proxy.size.height, alignment: .topLeading)
             }
+            .padding(WorldDashboardLayoutMetrics.outerPadding)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         }
     }
 
-    private var primaryWorldColumn: some View {
+    private func wideWorldDashboard(availableHeight: CGFloat) -> some View {
+        let sidebarPanelWidth = WorldDashboardLayoutMetrics.sidebarPanelWidth
+
+        return HStack(alignment: .top, spacing: WorldDashboardLayoutMetrics.columnSpacing) {
+            primaryWorldColumn(expandedLog: true)
+                .frame(width: WorldDashboardLayoutMetrics.primaryColumnWidth, alignment: .leading)
+                .frame(minHeight: availableHeight, alignment: .topLeading)
+
+            VStack(alignment: .leading, spacing: WorldDashboardLayoutMetrics.panelSpacing) {
+                HStack(alignment: .top, spacing: WorldDashboardLayoutMetrics.panelSpacing) {
+                    statusPanel
+                        .frame(width: sidebarPanelWidth)
+                    commercePanel
+                        .frame(width: sidebarPanelWidth)
+                }
+
+                HStack(alignment: .top, spacing: WorldDashboardLayoutMetrics.panelSpacing) {
+                    paperDollPanel
+                        .frame(width: sidebarPanelWidth)
+                    inputPanel
+                        .frame(width: sidebarPanelWidth)
+                }
+
+                HStack(alignment: .top, spacing: WorldDashboardLayoutMetrics.panelSpacing) {
+                    legendPanel
+                        .frame(width: sidebarPanelWidth)
+                    traitsPanel
+                        .frame(width: sidebarPanelWidth)
+                }
+            }
+            .frame(width: (sidebarPanelWidth * 2) + WorldDashboardLayoutMetrics.panelSpacing, alignment: .leading)
+        }
+    }
+
+    private var compactWorldDashboard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            primaryWorldColumn(expandedLog: false)
+                .frame(width: WorldDashboardLayoutMetrics.primaryColumnWidth, alignment: .leading)
+
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(minimum: 0, maximum: .infinity), spacing: WorldDashboardLayoutMetrics.panelSpacing),
+                    GridItem(.flexible(minimum: 0, maximum: .infinity), spacing: WorldDashboardLayoutMetrics.panelSpacing)
+                ],
+                alignment: .leading,
+                spacing: WorldDashboardLayoutMetrics.panelSpacing
+            ) {
+                statusPanel
+                commercePanel
+                paperDollPanel
+                inputPanel
+                legendPanel
+                traitsPanel
+            }
+            .frame(width: WorldDashboardLayoutMetrics.primaryColumnWidth, alignment: .leading)
+        }
+    }
+
+    private func primaryWorldColumn(expandedLog: Bool) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             PixelPanel(title: mapPanelTitle, palette: palette) {
                 MapBoardView(
@@ -353,16 +448,33 @@ struct GameRootView: View {
                 )
             }
 
-            PixelPanel(title: "LOG", palette: palette) {
-                VStack(alignment: .leading, spacing: 3) {
-                    ForEach(Array(session.state.messages.suffix(4).enumerated()), id: \.offset) { _, line in
-                        Text(line.uppercased())
-                            .font(.system(size: 10, weight: .regular, design: .monospaced))
-                            .foregroundStyle(palette.text)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+            if expandedLog {
+                PixelPanel(title: "LOG", palette: palette) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        ForEach(Array(session.state.messages.suffix(10).enumerated()), id: \.offset) { _, line in
+                            Text(line.uppercased())
+                                .font(.system(size: 10, weight: .regular, design: .monospaced))
+                                .foregroundStyle(palette.text)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+
+                        Spacer(minLength: 0)
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxHeight: .infinity, alignment: .top)
+            } else {
+                PixelPanel(title: "LOG", palette: palette) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        ForEach(Array(session.state.messages.suffix(4).enumerated()), id: \.offset) { _, line in
+                            Text(line.uppercased())
+                                .font(.system(size: 10, weight: .regular, design: .monospaced))
+                                .foregroundStyle(palette.text)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
         }
     }
@@ -527,26 +639,44 @@ struct GameRootView: View {
                     .foregroundStyle(palette.text)
 
                 VStack(spacing: 8) {
-                    HStack(spacing: 8) {
-                        menuButton("I") { session.send(.openInventory) }
-                        menuButton("J") { session.send(.help) }
-                        menuButton("E") { session.send(.interact) }
-                    }
-                    HStack(spacing: 8) {
-                        if session.state.mode == .inventory {
-                            menuButton("R") { session.send(.dropInventoryItem) }
-                            menuButton("K") { session.send(.save) }
+                    if session.state.mode == .pause {
+                        HStack(spacing: 8) {
+                            menuButton("UP") { session.send(.move(.up)) }
+                            menuButton("DOWN") { session.send(.move(.down)) }
+                            menuButton("E") { session.send(.confirm) }
+                        }
+                        HStack(spacing: 8) {
                             menuButton("Q") { session.send(.cancel) }
-                        } else {
                             menuButton("K") { session.send(.save) }
-                            menuButton("L") { session.send(.load) }
                             menuButton("X") { session.send(.quit) }
                         }
-                    }
-                    HStack(spacing: 8) {
-                        menuButton("M") { requestEditor() }
-                        menuButton("T") { session.cycleVisualTheme() }
-                        menuButton("SHOT") { captureScreenshot() }
+                        HStack(spacing: 8) {
+                            menuButton("T") { session.cycleVisualTheme() }
+                            menuButton("M") { requestEditor() }
+                            menuButton("SHOT") { captureScreenshot() }
+                        }
+                    } else {
+                        HStack(spacing: 8) {
+                            menuButton("I") { session.send(.openInventory) }
+                            menuButton("J") { session.send(.help) }
+                            menuButton("E") { session.send(.interact) }
+                        }
+                        HStack(spacing: 8) {
+                            if session.state.mode == .inventory {
+                                menuButton("R") { session.send(.dropInventoryItem) }
+                                menuButton("K") { session.send(.save) }
+                                menuButton("Q") { session.send(.cancel) }
+                            } else {
+                                menuButton("K") { session.send(.save) }
+                                menuButton("L") { session.send(.load) }
+                                menuButton("X") { session.send(.quit) }
+                            }
+                        }
+                        HStack(spacing: 8) {
+                            menuButton("M") { requestEditor() }
+                            menuButton("T") { session.cycleVisualTheme() }
+                            menuButton("SHOT") { captureScreenshot() }
+                        }
                     }
                 }
             }
@@ -677,6 +807,9 @@ struct GameRootView: View {
     }
 
     private var movementHintLine: String {
+        if session.state.mode == .pause {
+            return "W/S OR A/D MENU"
+        }
         if session.state.mode == .shop || session.state.mode == .inventory {
             return "ARROWS/WASD BROWSE"
         }
@@ -722,6 +855,8 @@ struct GameRootView: View {
 
     private var inputPrimaryLine: String {
         switch session.state.mode {
+        case .pause:
+            return "E CHOOSE  Q RESUME  K SAVE"
         case .shop:
             return "E BUY   J INFO   Q LEAVE"
         case .inventory:
@@ -730,12 +865,14 @@ struct GameRootView: View {
             if session.visualTheme == .depth3D {
                 return "A/D TURN  E ACT  I PACK"
             }
-            return "E ACT   I PACK   Q BACK"
+            return "E ACT   I PACK   Q MENU"
         }
     }
 
     private var inputSecondaryLine: String {
         switch session.state.mode {
+        case .pause:
+            return "SAVE+TITLE / TITLE / QUIT"
         case .shop:
             return "K SAVE  L LOAD  X QUIT"
         case .inventory:
@@ -747,13 +884,15 @@ struct GameRootView: View {
 
     private var inputTertiaryLine: String {
         switch session.state.mode {
+        case .pause:
+            return "M EDIT  T STYLE  X QUIT"
         case .shop:
             return "T STYLE  I ALSO LEAVES"
         case .inventory:
             return "T STYLE  I ALSO LEAVES"
         default:
             if session.visualTheme == .depth3D {
-                return "Q BACK  M EDIT  X QUIT"
+                return "Q MENU  M EDIT  X QUIT"
             }
             return "T STYLE  M EDIT  X QUIT"
         }
@@ -794,6 +933,60 @@ struct GameRootView: View {
                             showingEditorConfirm = false
                         }
                     }
+                }
+                .frame(maxWidth: 520, alignment: .leading)
+            }
+            .frame(maxWidth: 580)
+        }
+    }
+
+    private var pauseOverlay: some View {
+        let options = PauseMenuOption.allCases
+
+        return ZStack {
+            Color.black.opacity(0.68)
+                .ignoresSafeArea()
+
+            PixelPanel(title: "LEAVE ROAD?", palette: palette) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("YOU CAN RETURN TO THE TITLE SCREEN TO LOAD A DIFFERENT ADVENTURE.")
+                        .font(.system(size: 10, weight: .regular, design: .monospaced))
+                        .foregroundStyle(palette.text)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text("CHOOSE WHETHER TO RESUME, SAVE, OR STEP BACK TO TITLE.")
+                        .font(.system(size: 10, weight: .regular, design: .monospaced))
+                        .foregroundStyle(palette.text.opacity(0.88))
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(Array(options.enumerated()), id: \.offset) { index, option in
+                            let selected = index == session.state.pauseSelectionIndex
+                            VStack(alignment: .leading, spacing: 3) {
+                                HStack(spacing: 6) {
+                                    Text(selected ? ">" : " ")
+                                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                        .foregroundStyle(selected ? palette.background : palette.text)
+                                    Text(option.label.uppercased())
+                                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                        .foregroundStyle(selected ? palette.background : palette.lightGold)
+                                }
+
+                                Text(option.detail.uppercased())
+                                    .font(.system(size: 9, weight: .regular, design: .monospaced))
+                                    .foregroundStyle(selected ? palette.background.opacity(0.92) : palette.text.opacity(0.82))
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .padding(.leading, 16)
+                            }
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 5)
+                            .background(selected ? palette.lightGold : .clear)
+                        }
+                    }
+
+                    Text("W/S OR A/D MOVE   E SELECT   Q RESUME   K SAVE")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundStyle(palette.lightGold)
                 }
                 .frame(maxWidth: 520, alignment: .leading)
             }

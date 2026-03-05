@@ -1,5 +1,38 @@
 import Foundation
 
+enum PauseMenuOption: CaseIterable {
+    case resume
+    case saveAndReturnToTitle
+    case returnToTitle
+    case quitGame
+
+    var label: String {
+        switch self {
+        case .resume:
+            return "Resume Journey"
+        case .saveAndReturnToTitle:
+            return "Save + Title"
+        case .returnToTitle:
+            return "Title Without Save"
+        case .quitGame:
+            return "Quit Game"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .resume:
+            return "Return to the current run immediately."
+        case .saveAndReturnToTitle:
+            return "Write a full save now, then return to the title screen."
+        case .returnToTitle:
+            return "Return to the title screen without writing a save."
+        case .quitGame:
+            return "Close Codexitma from the current run."
+        }
+    }
+}
+
 struct GameContent: @unchecked Sendable {
     let id: AdventureID
     let title: String
@@ -59,6 +92,7 @@ struct GameState {
     var shopDetail: String?
     var selectedHeroIndex = 0
     var selectedAdventureIndex = 0
+    var pauseSelectionIndex = 0
 
     mutating func log(_ message: String) {
         messages.append(message)
@@ -90,6 +124,24 @@ struct GameState {
         shopLines = []
         shopOffers = []
         shopDetail = nil
+    }
+
+    mutating func clampPauseSelection() {
+        let options = PauseMenuOption.allCases
+        guard !options.isEmpty else {
+            pauseSelectionIndex = 0
+            return
+        }
+        pauseSelectionIndex = max(0, min(pauseSelectionIndex, options.count - 1))
+    }
+
+    func selectedPauseOption() -> PauseMenuOption {
+        let options = PauseMenuOption.allCases
+        guard !options.isEmpty else {
+            return .resume
+        }
+        let index = max(0, min(pauseSelectionIndex, options.count - 1))
+        return options[index]
     }
 
     func selectedHeroClass() -> HeroClass {

@@ -51,6 +51,8 @@ Supported command tokens:
   - aliases: `goto`, `teleport`, `tp`
   - facings: `n/u/up`, `s/down`, `w/l/left`, `e/r/right`
 
+During an active run, `cancel` / `q` now opens the in-game pause/menu state. Use `quit` / `x` when the script should request a full app quit instead of a menu transition.
+
 Coordinate warp examples:
 
 ```sh
@@ -90,6 +92,8 @@ To rebuild the stable README image set after visual changes:
 ```sh
 ./scripts/update_readme_screenshots.sh
 ```
+
+That script is intended to be rerun whenever renderer-facing UI or visual output changes so the checked-in README gallery stays aligned with the current build.
 
 ## Bridge Mode
 

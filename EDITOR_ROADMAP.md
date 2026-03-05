@@ -1,6 +1,6 @@
 # Codexitma Editor Roadmap
 
-This document captures the current state of the in-game adventure editor, the real data model it sits on top of, and the next implementation targets required to turn it into a full authoring suite.
+This document captures the current state of the in-game adventure editor, the real data model it sits on top of, and the remaining implementation targets after the editor crossed from scaffolding into a real authoring suite.
 
 It should be treated as the editor-specific companion to `PLAN.md`, not a replacement for it.
 
@@ -11,7 +11,7 @@ The editor is now a full current-model authoring tool for the data structures Co
 Entry point:
 
 - Launch with `--editor`
-- Primary implementation lives in `Sources/Game/App/AdventureEditorUI.swift`
+- Primary implementation is split across the `AdventureEditor*` files under `Sources/Game/App/`
 
 What it can do right now:
 
@@ -54,7 +54,10 @@ What it can do right now:
   - `Enemy Roster`
 - Save and immediately launch a live playtest session with `SAVE + PLAYTEST`
 - Open the editor directly from the graphics title screen or an active run with an in-game confirmation prompt
-- Export a full external content pack into `~/Library/Application Support/Codexitma/Adventures`
+- Export a full external content pack into the standard external adventure folder:
+  - macOS: `~/Library/Application Support/Codexitma/Adventures`
+  - Windows portable default: `<folder next to Codexitma.exe>/CodexitmaData/Adventures`
+  - Windows fallback: `%APPDATA%\\Codexitma\\Adventures`
 
 ## Current Export Behavior
 
@@ -97,13 +100,18 @@ This means the editor already has the correct high-level shape for future expans
 
 ## What Is Not Yet Implemented
 
-The editor now covers the full currently-shipped content model at a practical level, but a few advanced authoring fields are still missing.
+The editor now covers the full currently-shipped content model at a practical level, but a few higher-end authoring helpers are still missing.
 
 Remaining gaps:
 
 - Enemy respawn / one-shot authoring beyond the current `active` default
 - Richer encounter-to-map placement workflows beyond the current record editor
 - Deeper validation helpers such as auto-fix suggestions or direct jump-to-error navigation
+
+Cross-platform note:
+
+- The native macOS editor remains the richer path.
+- The SDL editor is intentionally usable and broad in feature coverage, but still has less refined editing ergonomics than the native editor.
 
 These are refinements on top of a working authoring suite, not foundational editor gaps.
 

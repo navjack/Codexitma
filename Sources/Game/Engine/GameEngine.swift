@@ -93,6 +93,8 @@ final class GameEngine {
             handleInventory(command)
         case .shop:
             handleShop(command)
+        case .pause:
+            handlePause(command)
         case .ending:
             if command == .quit || command == .cancel { state.shouldQuit = true }
         default:

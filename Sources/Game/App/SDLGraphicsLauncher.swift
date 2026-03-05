@@ -432,7 +432,7 @@ enum SDLGraphicsLauncher {
         let boardFrame = viewport.boardFrame
         let panelFrame = viewport.panelFrame
 
-        if scene.visualTheme == .depth3D, let depth = scene.depth, scene.mode == .exploration {
+        if scene.visualTheme == .depth3D, let depth = scene.depth, scene.mode == .exploration || scene.mode == .pause {
             renderDepth(
                 depth,
                 scene: scene,
@@ -449,6 +449,9 @@ enum SDLGraphicsLauncher {
 
         renderSidebar(scene, frame: panelFrame, with: renderer)
         renderHeader(scene, frame: viewport.headerFrame, statusLine: statusLine, with: renderer)
+        if scene.mode == .pause {
+            renderPauseOverlay(scene, viewport: viewport, with: renderer)
+        }
         if let editorPromptLines {
             renderEditorPrompt(lines: editorPromptLines, viewport: viewport, with: renderer)
         }
@@ -609,6 +612,9 @@ enum SDLGraphicsLauncher {
         case .dialogue:
             renderDialogueSidebar(scene, frame: frame, with: renderer)
             return
+        case .pause:
+            renderPauseSidebar(scene, frame: frame, with: renderer)
+            return
         default:
             break
         }
@@ -683,6 +689,33 @@ enum SDLGraphicsLauncher {
         drawText("M EDIT  F10 DBG  F12 SHOT", x: frame.x + 10, y: y, color: .bright, renderer: renderer)
     }
 
+    private static func renderPauseSidebar(_ scene: GraphicsSceneSnapshot, frame: SDLRect, with renderer: OpaquePointer) {
+        var y = frame.y + 10
+        let lineHeight = 12
+
+        drawText("PAUSE", x: frame.x + 10, y: y, color: .gold, renderer: renderer)
+        y += 18
+        drawWrappedText("LEAVE THIS ROAD OR RETURN TO IT.".uppercased(), x: frame.x + 10, y: y, width: 30, color: .bright, renderer: renderer)
+        y += 34
+
+        for option in scene.pauseOptions {
+            let prefix = option.isSelected ? ">" : " "
+            drawText("\(prefix) \(option.label.uppercased())", x: frame.x + 10, y: y, color: option.isSelected ? .gold : .bright, renderer: renderer)
+            y += lineHeight
+        }
+
+        if let detail = scene.pauseDetail {
+            y += 12
+            drawText("DETAIL", x: frame.x + 10, y: y, color: .gold, renderer: renderer)
+            y += 16
+            _ = drawWrappedText(detail.uppercased(), x: frame.x + 10, y: y, width: 30, color: .bright, renderer: renderer)
+        }
+
+        drawText("W/S MENU  E CHOOSE  Q RESUME", x: frame.x + 10, y: frame.y + frame.height - 42, color: .bright, renderer: renderer)
+        drawText("K SAVE  M EDIT  X QUIT", x: frame.x + 10, y: frame.y + frame.height - 26, color: .bright, renderer: renderer)
+        drawText("T STYLE  F10 DBG  F12 SHOT", x: frame.x + 10, y: frame.y + frame.height - 12, color: .bright, renderer: renderer)
+    }
+
     private static func renderInventorySidebar(_ scene: GraphicsSceneSnapshot, frame: SDLRect, with renderer: OpaquePointer) {
         var y = frame.y + 10
         drawText("PACK", x: frame.x + 10, y: y, color: .gold, renderer: renderer)
@@ -737,6 +770,30 @@ enum SDLGraphicsLauncher {
 
         drawText("W/S MOVE  E BUY  Q LEAVE", x: frame.x + 10, y: frame.y + frame.height - 42, color: .bright, renderer: renderer)
         drawText("M EDIT  F10 DBG  F12 SHOT", x: frame.x + 10, y: frame.y + frame.height - 26, color: .bright, renderer: renderer)
+    }
+
+    private static func renderPauseOverlay(_ scene: GraphicsSceneSnapshot, viewport: SDLViewport, with renderer: OpaquePointer) {
+        let frame = viewport.boardFrame.insetBy(dx: 68, dy: 52)
+        let panel = SDLRect(x: frame.x, y: frame.y, width: frame.width, height: min(frame.height, 240))
+
+        fill(renderer, x: panel.x, y: panel.y, width: panel.width, height: panel.height, color: .overlay)
+        stroke(renderer, frame: panel, color: .gold)
+
+        drawText("LEAVE ROAD?", x: panel.x + 16, y: panel.y + 14, color: .gold, renderer: renderer)
+        var y = panel.y + 38
+        y = drawWrappedText("YOU CAN RETURN TO THE TITLE SCREEN TO LOAD A DIFFERENT ADVENTURE.", x: panel.x + 16, y: y, width: 54, color: .bright, renderer: renderer)
+        y += 10
+
+        for option in scene.pauseOptions {
+            let prefix = option.isSelected ? ">" : " "
+            drawText("\(prefix) \(option.label.uppercased())", x: panel.x + 16, y: y, color: option.isSelected ? .gold : .bright, renderer: renderer)
+            y += 16
+        }
+
+        if let detail = scene.pauseDetail {
+            y += 10
+            _ = drawWrappedText(detail.uppercased(), x: panel.x + 16, y: y, width: 54, color: .dim, renderer: renderer)
+        }
     }
 
     private static func renderEditorPrompt(

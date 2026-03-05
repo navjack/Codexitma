@@ -1,4 +1,24 @@
-# Plan: `Ashes of Merrow` - Swift Terminal RPG for macOS
+# Plan (Archived): `Ashes of Merrow` - Swift Terminal RPG for macOS
+
+## Status
+
+This file is the original greenfield project plan that kicked off `Codexitma`.
+
+It is no longer an exact description of the shipped codebase. The project moved well beyond this terminal-first proposal into a graphics-first RPG engine with:
+
+- a native macOS frontend
+- an SDL3 cross-platform frontend and Win64 release build
+- built-in audio, screenshot automation, and a headless bridge
+- a first-class adventure editor
+- external JSON adventure packs and overrides
+- multiple adventures, visual themes, and a `Depth 3D` renderer
+
+The historical design intent here is still useful, but the implementation details below should be read as archival planning, not current architecture.
+
+For the current project surface, see:
+
+- `README.md`
+- `SCRATCHPAD.md`
 
 ## Summary
 
@@ -311,6 +331,8 @@ All game content loads at startup and is validated before the title screen. Fata
 
 ## Implementation Phases
 
+These phase notes are historical. In practice, the project has already moved through and past them, with major scope additions not captured in this original plan.
+
 ### Phase 1: Foundation
 - Initialize Swift package executable
 - Implement terminal raw mode handling and cleanup
@@ -358,4 +380,3 @@ All game content loads at startup and is validated before the title screen. Fata
 - The chosen aesthetic is a **DOS/Apple II-inspired hybrid**, but implemented with modern Swift and ANSI terminal control.
 - Single save slot is sufficient for v1.
 - All story, naming, and art direction are fully delegated, so this plan locks them without further approval.
-

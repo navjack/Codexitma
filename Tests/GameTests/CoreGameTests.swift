@@ -210,6 +210,55 @@ import Testing
     }
 }
 
+@Test func pauseModeConsumesMovementInsteadOfMovingThePlayer() async throws {
+    let library = try ContentLoader().load()
+    let saveURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString).appendingPathExtension("json")
+    let engine = GameEngine(library: library, saveRepository: SaveRepository(fileURL: saveURL))
+
+    engine.handle(.newGame)
+    engine.handle(.confirm)
+
+    let startPosition = engine.state.player.position
+    engine.handle(.cancel)
+
+    #expect(engine.state.mode == .pause)
+    #expect(engine.state.pauseSelectionIndex == 0)
+
+    engine.handle(.move(.down))
+
+    #expect(engine.state.mode == .pause)
+    #expect(engine.state.player.position == startPosition)
+    #expect(engine.state.pauseSelectionIndex == 1)
+
+    engine.handle(.cancel)
+
+    #expect(engine.state.mode == .exploration)
+    #expect(engine.state.player.position == startPosition)
+}
+
+@Test func pauseMenuCanSaveAndReturnToTitle() async throws {
+    let library = try ContentLoader().load()
+    let saveURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString).appendingPathExtension("json")
+    let repository = SaveRepository(fileURL: saveURL)
+    let engine = GameEngine(library: library, saveRepository: repository)
+
+    engine.handle(.newGame)
+    engine.handle(.confirm)
+    let currentAdventureID = engine.state.currentAdventureID
+    let currentPosition = engine.state.player.position
+
+    engine.handle(.cancel)
+    engine.handle(.move(.down))
+    engine.handle(.confirm)
+
+    #expect(engine.state.mode == .title)
+    #expect(engine.state.selectedAdventureID() == currentAdventureID)
+
+    let save = try repository.load()
+    #expect(save.adventureID == currentAdventureID)
+    #expect(save.player.position == currentPosition)
+}
+
 @Test func sharedGameSessionUsesSelectedOrCurrentAdventureForEditorTarget() async throws {
     let library = try ContentLoader().load()
     let saveURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString).appendingPathExtension("json")

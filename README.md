@@ -34,6 +34,8 @@ What is still evolving is depth and content scale:
 
 The core engine and tooling are already real and usable.
 
+Recent gameplay UX work also includes a real in-game pause/menu flow, so active runs can now safely resume, save back to title, abandon to title, or quit without closing the whole app just to switch adventures.
+
 ## Requirements
 
 For local development:
@@ -139,13 +141,24 @@ Each row below shows the same gameplay moment in both editions:
 - `J` or `H`: show objective / inspect selected entry
 - `K`: save
 - `L`: load
-- `Q`: cancel / back
+- `Q`: cancel / back, or open the pause menu during live gameplay
 - `X`: quit
 - `T`: cycle graphics theme
 - `M`: open the editor (graphics mode)
 - `F12`: save a framebuffer screenshot (`.png` in native and SDL modes)
 - `Cmd/Ctrl+Shift+D`: toggle native lighting debug overlay
 - `F10`: toggle SDL lighting debug overlay
+
+### Pause Menu
+
+Press `Q` during a live run to open the pause menu.
+
+Pause options:
+
+- `Resume`
+- `Save + Title`
+- `Title Without Save`
+- `Quit Game`
 
 ### Depth 3D
 
@@ -289,14 +302,14 @@ That keeps routine development pushes cheap while still allowing reproducible re
 To mirror a published GitHub release back into the local ignored `dist/` folder, run:
 
 ```sh
-./scripts/sync_release_to_dist.sh v0.2.1
+./scripts/sync_release_to_dist.sh v0.2.3
 ```
 
 If you omit the tag, the script pulls the latest published release.
 
 ## Repository Notes
 
-- [PLAN.md](PLAN.md) contains the original project plan and scope.
+- [PLAN.md](PLAN.md) contains the original project plan and is now preserved as a historical baseline rather than an exact description of the current implementation.
 - [SCRATCHPAD.md](SCRATCHPAD.md) is the running development notebook.
 - `main` is the canonical development branch.
 
@@ -313,7 +326,7 @@ The project is organized as a Swift Package with:
 - executable target: `Game`
 - test target: `GameTests`
 
-To create a release build through GitHub Actions, tag the release commit with a version tag such as `v0.2.1` and push the tag.
+To create a release build through GitHub Actions, tag the release commit with a version tag such as `v0.2.3` and push the tag.
 
 ## Road Ahead
 
