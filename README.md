@@ -140,7 +140,7 @@ Each row below shows the same gameplay moment in both editions:
 - `X`: quit
 - `T`: cycle graphics theme
 - `M`: open the editor (graphics mode)
-- `F12`: save a framebuffer screenshot (`.png` in native mode, `.bmp` in SDL mode)
+- `F12`: save a framebuffer screenshot (`.png` in native and SDL modes)
 
 ### Depth 3D
 
@@ -248,6 +248,7 @@ Examples:
 ```sh
 swift run Game --script "new,e,state"
 swift run Game --script "right,new,e,state"
+swift run Game --script "new,e,warp:merrow_village:10:5:w,state"
 swift run Game --script-file path/to/commands.txt --step-json
 swift run Game --bridge
 ```

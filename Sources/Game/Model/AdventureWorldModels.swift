@@ -399,6 +399,13 @@ enum InteractableKind: String, Codable {
     case beacon
     case plate
     case switchRune
+    case torchFloor
+    case torchWall
+}
+
+enum DepthBackdropStyle: String, Codable {
+    case sky
+    case ceiling
 }
 
 struct InteractableDefinition: Codable {
@@ -416,11 +423,32 @@ struct InteractableDefinition: Codable {
 struct MapDefinition: Codable {
     let id: String
     let name: String
+    let depthBackdrop: DepthBackdropStyle?
     let layoutFile: String
     let lines: [String]
     let spawn: Position
     let portals: [Portal]
     let interactables: [InteractableDefinition]
+
+    init(
+        id: String,
+        name: String,
+        depthBackdrop: DepthBackdropStyle? = nil,
+        layoutFile: String,
+        lines: [String],
+        spawn: Position,
+        portals: [Portal],
+        interactables: [InteractableDefinition]
+    ) {
+        self.id = id
+        self.name = name
+        self.depthBackdrop = depthBackdrop
+        self.layoutFile = layoutFile
+        self.lines = lines
+        self.spawn = spawn
+        self.portals = portals
+        self.interactables = interactables
+    }
 }
 
 struct DialogueNode: Codable {
@@ -562,4 +590,3 @@ struct SaveGame: Codable {
         try container.encode(adventureID, forKey: .adventureID)
     }
 }
-

@@ -118,6 +118,7 @@ struct ContentLoader {
             let resolved = MapDefinition(
                 id: map.id,
                 name: map.name,
+                depthBackdrop: map.depthBackdrop,
                 layoutFile: map.layoutFile,
                 lines: lines,
                 spawn: map.spawn,

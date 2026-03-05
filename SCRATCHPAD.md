@@ -141,3 +141,56 @@
 - Switched Windows data storage to a portable EXE-relative root (`CodexitmaData`) for saves, adventures, screenshots, theme prefs, and graphics-asset overrides, with automatic fallback to `%APPDATA%\\Codexitma` when EXE-local storage is not writable.
 - Unignored the root `screenshots/` directory so capture assets can be committed and displayed in GitHub docs.
 - Added a README screenshots section with paired native vs SDL frames for title, creator, and matching Merrow Village exploration scenes.
+- Started `codex/depth3d-experiments` for a dedicated first-person rendering pass.
+- Added an adaptive depth render profile in the shared scene snapshot so `Depth 3D` can vary field-of-view, ray columns, draw distance, and ambient baseline by map context (tight indoor vs open sky maps).
+- Added runtime light probes for `Depth 3D`: emissive world features (beacons/shrines/switches/open doors), boss glow, and player lantern now feed a per-tile light field with simple line-of-sight attenuation.
+- Extended depth ray samples and billboards with calculated light levels and used those values in both native and SDL frontends for darker occluded spaces, brighter lit zones, and more grounded billboard shading.
+- Upgraded depth backdrops in both renderers with stronger floor/sky depth cues, fog blending, and vignette-style contrast to improve readability and depth perception.
+- Updated depth UI legends to show the active dynamic range value instead of a hardcoded distance.
+- Added explicit torch authoring support across the data model/editor/renderers (`torchFloor`, `torchWall`) so adventures can place authored light sources instead of relying only on inferred map lighting.
+- Extended Depth 3D billboard generation to render more non-wall map tiles (stairs, shrine/beacon, brush, open doors) and torch interactables, reducing cases where meaningful world objects appeared missing in first-person view.
+- Added authored torch placements to both bundled adventures (`world.json` and `world_starfall.json`) across village, field, dungeon, fen, and spire maps so the runtime light-probe effect is visible during normal progression.
+- Added depth lightmap caching in the snapshot builder (static map light field + player-lantern composite cache) to keep the new lighting pass cheap when no relevant light inputs changed.
+- Increased depth-light fidelity from per-tile sampling to an 8x subdivided light field with bilinear world-position sampling, then projected that into a per-band/per-column floor-light buffer so the ground plane reacts to torches and lanterns instead of staying mostly flat.
+- Tuned light strength/falloff to be less subtle: torchs and lantern now have larger radii and stronger intensity, and both native + SDL depth backdrops now blend local floor glow/shadow patches from the cached floor-light buffer.
+- Pulled in an external CC0 tileset for Depth3D texturing (`PUNY DUNGEON | 16x16 dungeon tilemap` by cpz) under `Sources/Game/ContentData/DepthTextures/`, with source/license metadata tracked in `PUNY_DUNGEON_LICENSE.txt`.
+- Upgraded native Depth3D wall rendering to use real texture-mapped wall slices (ray hit `u` coordinate per column) instead of flat color bands, then applied lighting/fog as post overlays.
+- Replaced the native floor's patchy light rectangles with perspective-sampled textured floor strips plus bilinear floor-light interpolation, reducing block-grid artifacts in torch-lit scenes.
+- Fixed a Depth3D texture loading regression: SwiftPM flattens processed `ContentData` resources in `Game_Game.bundle`, so the texture loader now checks root resource paths before subdirectory fallbacks.
+- Reduced masking overlays in textured native Depth3D (lighter tint/stripe overlays and no synthetic vertical wall stripe pass when textured walls are active) so texture detail remains visible.
+- Added explicit torch-style occlusion shadows in the depth light field: each light now has blocked transmission and shadow strength parameters, and blocked rays can actively darken samples behind walls instead of only dimming additive light.
+- Tuned light source profiles so torches cast the strongest occlusion shadows, while shrine/beacon/boss lights remain softer and mostly volumetric.
+- Reworked depth LOS checks to world-space stepping (instead of tile-center-only Bresenham) with edge-neighbor blocking checks, reducing light leakage around internal wall corners and making cast shadows read more consistently.
+- Switched wall lighting to sample at exact ray hit world coordinates (not just hit tile center), improving wall-face shadow transitions.
+- Disabled player lantern light in Depth3D by default (opt-in via `lantern_enabled` world flag) so torch/environment lighting remains the dominant source unless explicitly enabled.
+- Added native graphics debug-light toggle on `CMD/CTRL+SHIFT+D` and surfaced it in the on-screen input help text.
+- Added a Depth3D debug overlay panel (key-combo gated) with live light stats (ambient/min/max/avg), player pose, and a top-down lightmap preview that marks torches and walls.
+- Extended top-down map rendering to optionally apply the same runtime lighting field as an overlay, so lighting behavior can be verified from overhead view without switching tools.
+- Completed and wired `DepthTileLightingSnapshot` generation (`makeDepthTileLighting`) and added a shared `mapLighting` snapshot path so non-depth themes can still consume lightmap data.
+- Tuned textured floor perspective sampling in native Depth3D with a depth-based warp and variable strip density so near-floor texels read larger and distant tiles compress more naturally.
+- Added `DepthWorldLightingSnapshot` to the shared depth scene so both native and SDL renderers can sample lighting directly in world-space from the high-resolution light field instead of only column/band buckets.
+- Switched native floor shading to consume world-space lighting samples at each projected floor strip (`worldX/worldY`), which better anchors cast-shadow transitions to geometry.
+- Reworked SDL depth floor shading to use cached floor-projection geometry (band/strip ray factors) plus world-space light sampling per strip, reducing per-step math and improving visual shadow contact alignment.
+- Added a wall-contact shadow pass in SDL depth mode to keep wall/floor intersections visually grounded and reduce detached-looking shadow edges.
+- Increased shared depth light-field density from 8x to 12x sub-tiles per map tile to reduce visible lighting discontinuities at occlusion edges.
+- Added strip-level light smoothing in both native and SDL depth floor passes so shadow/light transitions are less stair-stepped across adjacent strips.
+- Increased floor-band density in both renderers to reduce horizontal banding and better preserve shadow continuity while moving/turning.
+- Added native wall-contact floor shading (matching the SDL grounding pass concept) so wall shadows visually attach to the wall base more reliably.
+- Added a cached floor projection model in native Depth3D (per frame geometry/facing/FOV key) so floor strip rays and row-distance math are reused instead of recomputed each frame.
+- Added depth-aware floor contact dimming in both native and SDL: each floor strip now references the nearest wall ray distance (`zBuffer`) and darkens near wall-contact depth to reduce detached/peter-panning shadow edges at oblique angles.
+- Reduced native floor strip density cap and lowered excess floor band expansion to recover performance while keeping the new shadow-attachment behavior.
+- Added SDL parity for depth-light debugging: `F10` now toggles an in-view debug lighting overlay (ambient/min/max/avg + map preview with torches/walls/player) with status-line feedback.
+- Switched SDL framebuffer capture from BMP to PNG (`F12`) to match native output and simplify screenshot workflows.
+- Extended automation parser with coordinate warp directives (`warp/goto/teleport/tp`) in all supported forms (`x:y`, `x:y:facing`, `map:x:y`, `map:x:y:facing`) and added parser tests for coordinate + facing cases.
+- Normalized warp-facing semantics to cardinal directions (`n/s/e/w`) rather than WASD movement aliases so scripted camera setup for lighting repros is less ambiguous.
+- Fixed automation tokenizer handling for full-line `# ...` comments in script files and added regression coverage; reusable checkpoint scripts can now include descriptive headers safely.
+- Added `scripts/lighting_checkpoints_ashes.txt` as a deterministic coordinate baseline for lighting/shadow repro runs.
+- Refactored Depth3D lighting into a shared world-space model with an explicit high-resolution shadow mask (`shadowValues`) alongside light values, sampled bilinearly in both native and SDL.
+- Removed screen-space wall-contact shadow anchoring passes in native and SDL and switched floor/wall shading to the shared world shadow mask, reducing detached/peter-panning artifacts.
+- Added a lightweight 3x3 softening filter on the shadow mask cache to reduce stair-stepped shadow edges while preserving occlusion structure.
+- Extended `DepthRaySample` with per-hit `shadowLevel` so wall shading can use the same world-space shadow source as the floor.
+- Replaced light LOS sampling with a supercover-style grid traversal (Amanatides/Woo corner-aware stepping) to reduce corner leakage and improve shadow stability around wall edges.
+- Added an explicit per-map `depthBackdrop` content attribute (`sky` or `ceiling`) through the model/content/editor pipeline so Depth3D backdrop behavior is authored instead of inferred only from map IDs.
+- Authored `depthBackdrop` values across bundled adventure maps (`world.json`, `world_starfall.json`) to mark indoor maps as ceiling-backed and outdoor maps as sky-backed.
+- Added sky emissive ambient support to Depth3D lighting snapshots (`sky` maps raise base ambient; `ceiling` maps do not) so open maps behave as globally lit by the sky.
+- Added ceiling shadow rendering in both native and SDL Depth3D paths: non-sky maps now project and shade ceiling bands from the shared world light/shadow field, mirroring floor-space occlusion behavior.

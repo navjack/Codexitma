@@ -229,6 +229,10 @@ extension AdventureEditorRootView {
             return Color(red: 0.72, green: 0.72, blue: 0.72)
         case .switchRune:
             return Color(red: 0.28, green: 0.74, blue: 0.90)
+        case .torchFloor:
+            return Color(red: 0.99, green: 0.66, blue: 0.18)
+        case .torchWall:
+            return Color(red: 0.98, green: 0.78, blue: 0.22)
         }
     }
 }

@@ -2,6 +2,7 @@
   {
     "id": "merrow_village",
     "name": "Village of Merrow",
+    "depthBackdrop": "sky",
     "layoutFile": "merrow_village.txt",
     "lines": [],
     "spawn": { "x": 3, "y": 5 },
@@ -24,12 +25,33 @@
         "rewardItem": null,
         "requiredFlag": null,
         "grantsFlag": null
+      },
+      {
+        "id": "village_torch_west",
+        "kind": "torchWall",
+        "position": { "x": 6, "y": 2 },
+        "title": "Dock Sconce",
+        "lines": ["Pitch smoke curls along the timber wall."],
+        "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": null
+      },
+      {
+        "id": "village_torch_east",
+        "kind": "torchWall",
+        "position": { "x": 14, "y": 2 },
+        "title": "Watch Sconce",
+        "lines": ["The watchfire burns with a steady amber pulse."],
+        "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": null
       }
     ]
   },
   {
     "id": "south_fields",
     "name": "South Fields",
+    "depthBackdrop": "sky",
     "layoutFile": "south_fields.txt",
     "lines": [],
     "spawn": { "x": 1, "y": 5 },
@@ -69,12 +91,23 @@
         "rewardItem": null,
         "requiredFlag": "metElder",
         "grantsFlag": "southShrineLit"
+      },
+      {
+        "id": "south_torch_road",
+        "kind": "torchFloor",
+        "position": { "x": 8, "y": 5 },
+        "title": "Road Brazier",
+        "lines": ["A roadside brazier snaps in the field wind."],
+        "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": null
       }
     ]
   },
   {
     "id": "sunken_orchard",
     "name": "Sunken Orchard",
+    "depthBackdrop": "sky",
     "layoutFile": "sunken_orchard.txt",
     "lines": [],
     "spawn": { "x": 1, "y": 5 },
@@ -124,12 +157,23 @@
         "rewardItem": "healingTonic",
         "requiredFlag": null,
         "grantsFlag": null
+      },
+      {
+        "id": "orchard_torch_bridge",
+        "kind": "torchWall",
+        "position": { "x": 12, "y": 3 },
+        "title": "Bridge Sconce",
+        "lines": ["A rain-hardened torch throws narrow light over the flooded roots."],
+        "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": null
       }
     ]
   },
   {
     "id": "hollow_barrows",
     "name": "Hollow Barrows",
+    "depthBackdrop": "ceiling",
     "layoutFile": "hollow_barrows.txt",
     "lines": [],
     "spawn": { "x": 1, "y": 5 },
@@ -169,12 +213,23 @@
         "rewardItem": "healingTonic",
         "requiredFlag": null,
         "grantsFlag": null
+      },
+      {
+        "id": "barrow_torch_nave",
+        "kind": "torchWall",
+        "position": { "x": 9, "y": 5 },
+        "title": "Crypt Sconce",
+        "lines": ["A stubborn flame clings to the barrow stone."],
+        "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": null
       }
     ]
   },
   {
     "id": "black_fen",
     "name": "Black Fen",
+    "depthBackdrop": "sky",
     "layoutFile": "black_fen.txt",
     "lines": [],
     "spawn": { "x": 1, "y": 5 },
@@ -224,12 +279,23 @@
         "rewardItem": "fenLance",
         "requiredFlag": null,
         "grantsFlag": null
+      },
+      {
+        "id": "fen_torch_causeway",
+        "kind": "torchFloor",
+        "position": { "x": 10, "y": 5 },
+        "title": "Causeway Brazier",
+        "lines": ["The brazier hisses where rain meets oil."],
+        "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": null
       }
     ]
   },
   {
     "id": "beacon_spire",
     "name": "Beacon Spire",
+    "depthBackdrop": "ceiling",
     "layoutFile": "beacon_spire.txt",
     "lines": [],
     "spawn": { "x": 1, "y": 5 },
@@ -292,6 +358,26 @@
         "rewardItem": null,
         "requiredFlag": null,
         "grantsFlag": "beaconLit"
+      },
+      {
+        "id": "spire_torch_left",
+        "kind": "torchWall",
+        "position": { "x": 7, "y": 1 },
+        "title": "Mirror Sconce",
+        "lines": ["A mirrored torch paints copper lines across the chamber."],
+        "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": null
+      },
+      {
+        "id": "spire_torch_right",
+        "kind": "torchWall",
+        "position": { "x": 13, "y": 1 },
+        "title": "Mirror Sconce",
+        "lines": ["The flame catches on polished glass and doubles itself."],
+        "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": null
       }
     ]
   }

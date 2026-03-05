@@ -19,6 +19,7 @@ struct EditableAdventureDocument {
 struct EditableMap: Identifiable {
     var id: String
     var name: String
+    var depthBackdrop: DepthBackdropStyle? = nil
     var lines: [String]
     var spawn: Position
     var portals: [Portal]
@@ -86,6 +87,7 @@ struct AdventurePackExporter {
             let mapDefinition = MapDefinition(
                 id: map.id,
                 name: map.name,
+                depthBackdrop: map.depthBackdrop,
                 layoutFile: "maps/\(sanitizePathComponent(map.id)).txt",
                 lines: map.lines,
                 spawn: map.spawn,
@@ -215,6 +217,7 @@ struct AdventurePackExporter {
             MapDefinition(
                 id: map.id,
                 name: map.name,
+                depthBackdrop: map.depthBackdrop,
                 layoutFile: "maps/\(sanitizePathComponent(map.id)).txt",
                 lines: map.lines,
                 spawn: map.spawn,

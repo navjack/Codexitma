@@ -256,6 +256,22 @@ struct LowResTileView: View {
                     [0,1,0]
                 ])
                 .frame(width: size * 0.48, height: size * 0.48)
+            case .torchFloor:
+                PixelSprite(color: palette.titleGold, pattern: [
+                    [0,1,0],
+                    [1,1,1],
+                    [0,1,0],
+                    [0,1,0]
+                ])
+                .frame(width: size * 0.50, height: size * 0.62)
+            case .torchWall:
+                PixelSprite(color: palette.lightGold, pattern: [
+                    [1,1,1],
+                    [0,1,0],
+                    [1,1,1],
+                    [0,1,0]
+                ])
+                .frame(width: size * 0.50, height: size * 0.62)
             case .shrine:
                 PixelSprite(color: palette.accentViolet, pattern: [
                     [0,1,0],
@@ -295,6 +311,10 @@ struct LowResTileView: View {
             Rectangle().fill(palette.accentBlue).frame(width: size * 0.20, height: size * 0.20)
         case .switchLit:
             Rectangle().fill(palette.lightGold).frame(width: size * 0.20, height: size * 0.20)
+        case .torchFloor:
+            Rectangle().fill(palette.titleGold).frame(width: size * 0.22, height: size * 0.30)
+        case .torchWall:
+            Rectangle().fill(palette.lightGold).frame(width: size * 0.22, height: size * 0.30)
         case .shrine:
             Rectangle().fill(palette.accentViolet).frame(width: size * 0.26, height: size * 0.42)
         case .beacon:

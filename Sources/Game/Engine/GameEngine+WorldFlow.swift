@@ -268,6 +268,8 @@ extension GameEngine {
             resolvePressurePlate(interactable)
         case .switchRune:
             resolveSwitchRune(interactable)
+        case .torchFloor, .torchWall:
+            state.log(interactable.lines.first ?? "The torch sputters and holds.")
         }
     }
 

@@ -2,6 +2,7 @@
   {
     "id": "merrow_village",
     "name": "Cinder Wharf",
+    "depthBackdrop": "sky",
     "layoutFile": "starfall_cinder_wharf.txt",
     "lines": [],
     "spawn": { "x": 3, "y": 5 },
@@ -38,12 +39,23 @@
         "rewardItem": null,
         "requiredFlag": null,
         "grantsFlag": null
+      },
+      {
+        "id": "wharf_torch_watch",
+        "kind": "torchWall",
+        "position": { "x": 15, "y": 2 },
+        "title": "Wharf Watchfire",
+        "lines": ["The watchfire throws long shadows over the tide chains."],
+        "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": null
       }
     ]
   },
   {
     "id": "signal_bazaar",
     "name": "Signal Bazaar",
+    "depthBackdrop": "sky",
     "layoutFile": "starfall_signal_bazaar.txt",
     "lines": [],
     "spawn": { "x": 10, "y": 7 },
@@ -86,12 +98,33 @@
         "rewardItem": null,
         "requiredFlag": null,
         "grantsFlag": null
+      },
+      {
+        "id": "bazaar_torch_left",
+        "kind": "torchWall",
+        "position": { "x": 6, "y": 2 },
+        "title": "Signal Sconce",
+        "lines": ["A bright signal flame jitters against brass mirrors."],
+        "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": null
+      },
+      {
+        "id": "bazaar_torch_right",
+        "kind": "torchWall",
+        "position": { "x": 12, "y": 2 },
+        "title": "Signal Sconce",
+        "lines": ["A paired sconce keeps the bazaar's map wall lit."],
+        "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": null
       }
     ]
   },
   {
     "id": "forge_annex",
     "name": "Breaker Forge",
+    "depthBackdrop": "ceiling",
     "layoutFile": "starfall_breaker_forge.txt",
     "lines": [],
     "spawn": { "x": 18, "y": 3 },
@@ -124,12 +157,23 @@
         "rewardItem": "ashenBlade",
         "requiredFlag": null,
         "grantsFlag": null
+      },
+      {
+        "id": "forge_brazier",
+        "kind": "torchFloor",
+        "position": { "x": 8, "y": 4 },
+        "title": "Forge Brazier",
+        "lines": ["Coals pop and spit in the forge-side brazier."],
+        "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": null
       }
     ]
   },
   {
     "id": "south_fields",
     "name": "Salt Causeway",
+    "depthBackdrop": "sky",
     "layoutFile": "starfall_salt_causeway.txt",
     "lines": [],
     "spawn": { "x": 1, "y": 5 },
@@ -185,6 +229,7 @@
   {
     "id": "sunken_orchard",
     "name": "Glass Marsh",
+    "depthBackdrop": "sky",
     "layoutFile": "starfall_glass_marsh.txt",
     "lines": [],
     "spawn": { "x": 1, "y": 5 },
@@ -257,6 +302,7 @@
   {
     "id": "maelstrom_archive",
     "name": "Maelstrom Archive",
+    "depthBackdrop": "ceiling",
     "layoutFile": "starfall_maelstrom_archive.txt",
     "lines": [],
     "spawn": { "x": 10, "y": 7 },
@@ -289,12 +335,23 @@
         "rewardItem": "healingTonic",
         "requiredFlag": null,
         "grantsFlag": null
+      },
+      {
+        "id": "archive_torch_sconce",
+        "kind": "torchWall",
+        "position": { "x": 10, "y": 3 },
+        "title": "Archive Sconce",
+        "lines": ["A sealed sconce burns with calm, dry light."],
+        "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": null
       }
     ]
   },
   {
     "id": "hollow_barrows",
     "name": "Reliquary Vault",
+    "depthBackdrop": "ceiling",
     "layoutFile": "starfall_reliquary_vault.txt",
     "lines": [],
     "spawn": { "x": 1, "y": 5 },
@@ -350,6 +407,7 @@
   {
     "id": "black_fen",
     "name": "Thunder Shoals",
+    "depthBackdrop": "sky",
     "layoutFile": "starfall_thunder_shoals.txt",
     "lines": [],
     "spawn": { "x": 1, "y": 5 },
@@ -422,6 +480,7 @@
   {
     "id": "storm_nest",
     "name": "Storm Nest",
+    "depthBackdrop": "sky",
     "layoutFile": "starfall_storm_nest.txt",
     "lines": [],
     "spawn": { "x": 10, "y": 7 },
@@ -454,12 +513,23 @@
         "rewardItem": "lanternOil",
         "requiredFlag": null,
         "grantsFlag": null
+      },
+      {
+        "id": "nest_brazier_perch",
+        "kind": "torchFloor",
+        "position": { "x": 10, "y": 5 },
+        "title": "Perch Brazier",
+        "lines": ["A wind-cut brazier burns with a stubborn blue edge."],
+        "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": null
       }
     ]
   },
   {
     "id": "beacon_spire",
     "name": "The Sky Engine",
+    "depthBackdrop": "ceiling",
     "layoutFile": "starfall_sky_engine.txt",
     "lines": [],
     "spawn": { "x": 1, "y": 5 },
@@ -532,6 +602,26 @@
         "rewardItem": null,
         "requiredFlag": null,
         "grantsFlag": "beaconLit"
+      },
+      {
+        "id": "sky_engine_torch_left",
+        "kind": "torchWall",
+        "position": { "x": 7, "y": 1 },
+        "title": "Engine Sconce",
+        "lines": ["A copper sconce paints the dials in hot gold."],
+        "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": null
+      },
+      {
+        "id": "sky_engine_torch_right",
+        "kind": "torchWall",
+        "position": { "x": 13, "y": 1 },
+        "title": "Engine Sconce",
+        "lines": ["The paired sconce flickers across the lens carriage."],
+        "rewardItem": null,
+        "requiredFlag": null,
+        "grantsFlag": null
       }
     ]
   }

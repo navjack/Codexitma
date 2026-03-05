@@ -305,7 +305,7 @@ import Testing
 }
 
 @Test func automationTokenizerSplitsScriptsAndComments() async throws {
-    let tokens = AutomationTokenizer.tokens(from: "new, right  # comment\nleft\nstate")
+    let tokens = AutomationTokenizer.tokens(from: "# header comment\nnew, right  # comment\nleft\nstate")
     #expect(tokens == ["new", "right", "left", "state"])
 }
 

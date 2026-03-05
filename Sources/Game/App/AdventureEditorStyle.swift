@@ -125,5 +125,17 @@ let editorInteractablePalette: [EditorInteractableChoice] = [
         label: "RUNE",
         color: Color(red: 0.28, green: 0.74, blue: 0.90)
     ),
+    EditorInteractableChoice(
+        kind: .torchFloor,
+        glyph: "t",
+        label: "T-FLR",
+        color: Color(red: 0.99, green: 0.66, blue: 0.18)
+    ),
+    EditorInteractableChoice(
+        kind: .torchWall,
+        glyph: "T",
+        label: "T-WAL",
+        color: Color(red: 0.98, green: 0.78, blue: 0.22)
+    ),
 ]
 #endif

@@ -17,24 +17,44 @@ struct DepthRaySample {
     let correctedDistance: Double
     let rawDistance: Double
     let maxDistance: Double
+    let hitPosition: Position?
     let hitTile: Tile
     let hitAxis: DepthHitAxis
+    let textureU: Double
+    let lightLevel: Double
+    let shadowLevel: Double
 }
 
 struct DepthRaycaster {
     let origin: DepthPoint
     let facing: Direction
     let tileAt: (Position) -> Tile
+    let lightAt: (Position) -> Double
+    let lightAtWorld: (Double, Double) -> Double
+    let shadowAtWorld: (Double, Double) -> Double
     let fov: Double
 
     init(
         origin: DepthPoint,
         facing: Direction,
         fov: Double = .pi / 3.1,
+        lightAt: @escaping (Position) -> Double = { _ in 1.0 },
+        lightAtWorld: ((Double, Double) -> Double)? = nil,
+        shadowAtWorld: ((Double, Double) -> Double)? = nil,
         tileAt: @escaping (Position) -> Tile
     ) {
         self.origin = origin
         self.facing = facing
+        self.lightAt = lightAt
+        self.lightAtWorld = lightAtWorld ?? { x, y in
+            lightAt(
+                Position(
+                    x: Int(floor(x)),
+                    y: Int(floor(y))
+                )
+            )
+        }
+        self.shadowAtWorld = shadowAtWorld ?? { _, _ in 0.0 }
         self.tileAt = tileAt
         self.fov = fov
     }
@@ -116,11 +136,34 @@ struct DepthRaycaster {
                 correctedDistance: maxDistance,
                 rawDistance: maxDistance,
                 maxDistance: maxDistance,
+                hitPosition: nil,
                 hitTile: hitTile,
-                hitAxis: .none
+                hitAxis: .none,
+                textureU: 0.0,
+                lightLevel: 1.0,
+                shadowLevel: 0.0
             )
         }
 
+        let hitPosition = Position(x: mapX, y: mapY)
+        let hitWorldX = originX + (rawDistance * rayX)
+        let hitWorldY = originY + (rawDistance * rayY)
+        let lightLevel = max(0.03, min(1.0, lightAtWorld(hitWorldX, hitWorldY)))
+        let shadowLevel = max(0.0, min(1.0, shadowAtWorld(hitWorldX, hitWorldY)))
+        let wallCoordinate: Double
+        switch hitAxis {
+        case .vertical:
+            wallCoordinate = originY + (rawDistance * rayY)
+        case .horizontal, .none:
+            wallCoordinate = originX + (rawDistance * rayX)
+        }
+        var textureU = wallCoordinate - floor(wallCoordinate)
+        if hitAxis == .vertical, rayX > 0 {
+            textureU = 1.0 - textureU
+        }
+        if hitAxis == .horizontal, rayY < 0 {
+            textureU = 1.0 - textureU
+        }
         let corrected = max(0.05, rawDistance * cos(angle - baseAngle))
         return DepthRaySample(
             column: column,
@@ -128,8 +171,12 @@ struct DepthRaycaster {
             correctedDistance: corrected,
             rawDistance: rawDistance,
             maxDistance: maxDistance,
+            hitPosition: hitPosition,
             hitTile: hitTile,
-            hitAxis: hitAxis
+            hitAxis: hitAxis,
+            textureU: max(0.0, min(0.999, textureU)),
+            lightLevel: lightLevel,
+            shadowLevel: shadowLevel
         )
     }
 
