@@ -9,6 +9,12 @@ do {
             playtestAdventureID: options.playtestAdventureID,
             backend: options.graphicsBackend
         )
+    case .graphicsScript:
+        try app.runGraphics(
+            playtestAdventureID: options.playtestAdventureID,
+            backend: options.graphicsBackend,
+            automationCommands: options.commands
+        )
     case .editor:
         app.runEditor()
     case .script:

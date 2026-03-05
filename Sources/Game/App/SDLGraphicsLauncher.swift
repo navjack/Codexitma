@@ -52,7 +52,10 @@ enum SDLGraphicsLauncher {
     static func run(
         library: GameContentLibrary,
         saveRepository: SaveRepository,
-        playtestAdventureID: AdventureID? = nil
+        playtestAdventureID: AdventureID? = nil,
+        preferenceStore: GraphicsPreferenceStore = .shared,
+        soundEngine: any GameSoundPlayback = defaultGraphicsSoundEngine(),
+        automationCommands: [String] = []
     ) throws {
         guard SDL_Init(SDL_INIT_VIDEO) else {
             throw GraphicsBackendError.sdlInitializationFailed(sdlError())
@@ -81,9 +84,11 @@ enum SDLGraphicsLauncher {
             library: library,
             saveRepository: saveRepository,
             playtestAdventureID: playtestAdventureID,
-            preferenceStore: .shared,
-            soundEngine: defaultGraphicsSoundEngine()
+            preferenceStore: preferenceStore,
+            soundEngine: soundEngine
         )
+        let automationRunner = try automationCommands.isEmpty ? nil : GraphicsAutomationRunner(tokens: automationCommands)
+        let suppressScreenshotStatusLine = automationRunner != nil
         var running = true
         var showingEditorPrompt = false
         var editorSession: AdventureEditorSession?
@@ -148,6 +153,17 @@ enum SDLGraphicsLauncher {
                 running = false
             }
 
+            if let automationRunner, editorSession == nil, !showingEditorPrompt, pendingScreenshotLabel == nil, running {
+                automationRunner.step(
+                    sendCommand: { session.send($0) },
+                    cycleTheme: { session.cycleVisualTheme() },
+                    selectTheme: { session.selectVisualTheme($0) },
+                    captureScreenshot: { label in
+                        pendingScreenshotLabel = label ?? screenshotLabel(session: session, editorSession: nil)
+                    }
+                )
+            }
+
             if let editorSession {
                 renderAdventureEditor(editorSession, statusLine: statusLine, with: renderer)
             } else {
@@ -163,11 +179,16 @@ enum SDLGraphicsLauncher {
 
             if let label = pendingScreenshotLabel {
                 let outcome = captureScreenshot(with: renderer, label: label)
-                statusLine = outcome
-                statusLineExpiry = SDL_GetTicks() + 2600
+                if !suppressScreenshotStatusLine {
+                    statusLine = outcome
+                    statusLineExpiry = SDL_GetTicks() + 2600
+                }
                 pendingScreenshotLabel = nil
             }
             _ = SDL_RenderPresent(renderer)
+            if let automationRunner, automationRunner.isFinished, pendingScreenshotLabel == nil {
+                running = false
+            }
             SDL_Delay(16)
         }
     }
@@ -345,13 +366,13 @@ enum SDLGraphicsLauncher {
         let state = session.state
         switch state.mode {
         case .title:
-            return "title-\(state.selectedAdventureID().rawValue)"
+            return ScreenshotSupport.defaultGameLabel(for: state)
         case .characterCreation:
-            return "creator-\(state.selectedHeroClass().rawValue)"
+            return ScreenshotSupport.defaultGameLabel(for: state)
         case .ending:
-            return "ending-\(state.currentAdventureID.rawValue)"
+            return ScreenshotSupport.defaultGameLabel(for: state)
         default:
-            return "\(state.currentAdventureID.rawValue)-\(state.player.currentMapID)-\(String(describing: state.mode))"
+            return ScreenshotSupport.defaultGameLabel(for: state)
         }
     }
 

@@ -194,3 +194,8 @@
 - Authored `depthBackdrop` values across bundled adventure maps (`world.json`, `world_starfall.json`) to mark indoor maps as ceiling-backed and outdoor maps as sky-backed.
 - Added sky emissive ambient support to Depth3D lighting snapshots (`sky` maps raise base ambient; `ceiling` maps do not) so open maps behave as globally lit by the sky.
 - Added ceiling shadow rendering in both native and SDL Depth3D paths: non-sky maps now project and shade ceiling bands from the shared world light/shadow field, mirroring floor-space occlusion behavior.
+- Added graphics automation mode (`--graphics-script` / `--graphics-script-file`) so the real native and SDL frontends can consume scripted input sequences one command per frame instead of relying on external key injection.
+- Added graphics-only automation directives for screenshot capture and theme control (`shot[:label]`, `style`, `theme:<name>`), plus parser and launch-option test coverage.
+- Added `CODEXITMA_SCREENSHOT_DIR` override support so scripted screenshot runs can write to deterministic staging folders instead of the per-user screenshots directory.
+- Added `scripts/readme_screenshots.txt` and `scripts/update_readme_screenshots.sh` to rebuild the stable README gallery from the real native + SDL renderers after visual changes.
+- Switched README screenshot references to stable asset names under `screenshots/` and regenerated the gallery locally; corrected the scripted `view B` path to explicitly enter `Depth 3D` before `W, D`, then return to `Gemstone` for `view A`.

@@ -16,7 +16,7 @@ final class GameSessionController: ObservableObject {
         saveRepository: SaveRepository,
         playtestAdventureID: AdventureID? = nil,
         preferenceStore: GraphicsPreferenceStore = .shared,
-        soundEngine: AppleIISoundEngine = .shared
+        soundEngine: any GameSoundPlayback = defaultGraphicsSoundEngine()
     ) {
         self.library = library
         let core = SharedGameSession(
@@ -84,16 +84,22 @@ enum GraphicsGameLauncher {
     static func run(
         library: GameContentLibrary,
         saveRepository: SaveRepository,
-        playtestAdventureID: AdventureID? = nil
-    ) {
+        playtestAdventureID: AdventureID? = nil,
+        preferenceStore: GraphicsPreferenceStore = .shared,
+        soundEngine: any GameSoundPlayback = defaultGraphicsSoundEngine(),
+        automationCommands: [String] = []
+    ) throws {
         let app = NSApplication.shared
         app.setActivationPolicy(.regular)
         let session = GameSessionController(
             library: library,
             saveRepository: saveRepository,
-            playtestAdventureID: playtestAdventureID
+            playtestAdventureID: playtestAdventureID,
+            preferenceStore: preferenceStore,
+            soundEngine: soundEngine
         )
-        let delegate = GraphicsAppDelegate(session: session)
+        let automationRunner = try automationCommands.isEmpty ? nil : GraphicsAutomationRunner(tokens: automationCommands)
+        let delegate = GraphicsAppDelegate(session: session, automationRunner: automationRunner)
         retainedDelegate = delegate
         app.delegate = delegate
         app.activate(ignoringOtherApps: true)
@@ -101,12 +107,16 @@ enum GraphicsGameLauncher {
     }
 }
 
+@MainActor
 final class GraphicsAppDelegate: NSObject, NSApplicationDelegate {
     private let session: GameSessionController
+    private let automationRunner: GraphicsAutomationRunner?
     private var window: NSWindow?
+    private var automationTimer: Timer?
 
-    init(session: GameSessionController) {
+    init(session: GameSessionController, automationRunner: GraphicsAutomationRunner? = nil) {
         self.session = session
+        self.automationRunner = automationRunner
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -123,10 +133,69 @@ final class GraphicsAppDelegate: NSObject, NSApplicationDelegate {
         window.contentView = NSHostingView(rootView: GameRootView(session: session))
         window.makeKeyAndOrderFront(nil)
         self.window = window
+        startAutomationIfNeeded()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         true
+    }
+
+    private func startAutomationIfNeeded() {
+        guard automationRunner != nil else {
+            return
+        }
+
+        automationTimer?.invalidate()
+        automationTimer = Timer.scheduledTimer(
+            timeInterval: 0.18,
+            target: self,
+            selector: #selector(driveAutomationTimer(_:)),
+            userInfo: nil,
+            repeats: true
+        )
+    }
+
+    @objc private func driveAutomationTimer(_ timer: Timer) {
+        driveAutomation()
+    }
+
+    private func driveAutomation() {
+        guard let automationRunner else {
+            automationTimer?.invalidate()
+            automationTimer = nil
+            return
+        }
+
+        if automationRunner.isFinished {
+            finishAutomation()
+            return
+        }
+
+        automationRunner.step(
+            sendCommand: { [session] in session.send($0) },
+            cycleTheme: { [session] in session.cycleVisualTheme() },
+            selectTheme: { [session] in session.selectVisualTheme($0) },
+            captureScreenshot: { [weak self] label in
+                self?.captureAutomationScreenshot(label: label)
+            }
+        )
+
+        if automationRunner.isFinished {
+            finishAutomation()
+        }
+    }
+
+    private func captureAutomationScreenshot(label: String?) {
+        let resolvedLabel = label ?? ScreenshotSupport.defaultGameLabel(for: session.state)
+        _ = try? NativeScreenshotCapture.captureKeyWindow(label: resolvedLabel)
+    }
+
+    private func finishAutomation() {
+        automationTimer?.invalidate()
+        automationTimer = nil
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            NSApplication.shared.terminate(nil)
+        }
     }
 }
 #endif

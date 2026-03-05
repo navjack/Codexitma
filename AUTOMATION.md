@@ -2,6 +2,8 @@
 
 `Codexitma` now supports a built-in headless control surface for testing and external tooling.
 
+It also supports a graphics automation path for deterministic screenshot capture in the real native and SDL frontends.
+
 ## Script Mode
 
 Run a fixed command sequence and print JSON state:
@@ -60,6 +62,33 @@ Lighting checkpoint baseline script:
 
 ```sh
 ./Codexitma --script-file ./scripts/lighting_checkpoints_ashes.txt --step-json
+```
+
+## Graphics Script Mode
+
+Run the actual graphics frontend with one scripted input per frame:
+
+```sh
+./Codexitma --graphics-script-file ./scripts/readme_screenshots.txt
+./Codexitma --sdl --graphics-script-file ./scripts/readme_screenshots.txt
+```
+
+Graphics script mode accepts normal gameplay tokens plus:
+
+- `shot`
+- `shot:<label>`
+- `theme`
+- `style`
+- `theme:gemstone`
+- `theme:ultima`
+- `theme:depth3d`
+
+If `CODEXITMA_SCREENSHOT_DIR` is set, screenshot output is redirected there instead of the normal per-user screenshots folder. That is the intended path for reproducible README gallery refreshes.
+
+To rebuild the stable README image set after visual changes:
+
+```sh
+./scripts/update_readme_screenshots.sh
 ```
 
 ## Bridge Mode

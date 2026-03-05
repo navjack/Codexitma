@@ -102,6 +102,15 @@ import Testing
     )
 }
 
+@Test func graphicsAutomationParsersRecognizeScreenshotAndThemeCommands() async throws {
+    #expect(try GraphicsAutomationCommandParser.parse("shot") == .screenshot(nil))
+    #expect(try GraphicsAutomationCommandParser.parse("shot:title-ashesofmerrow") == .screenshot("title-ashesofmerrow"))
+    #expect(try GraphicsAutomationCommandParser.parse("style") == .cycleTheme)
+    #expect(try GraphicsAutomationCommandParser.parse("theme:depth3d") == .selectTheme(.depth3D))
+    #expect(try GraphicsAutomationCommandParser.parse("theme:gemstone") == .selectTheme(.gemstone))
+    #expect(try GraphicsAutomationCommandParser.parse("e") == .game(.interact))
+}
+
 @Test func launchOptionsRemainGraphicsOnlyEvenWithLegacyTerminalFlag() async throws {
     let defaultOptions = try LaunchOptions.parse(arguments: ["Game"])
     #expect(defaultOptions.target == .interactive)
@@ -122,6 +131,11 @@ import Testing
     #expect(scriptOptions.target == .script)
     #expect(scriptOptions.graphicsBackend == .sdl)
     #expect(scriptOptions.commands == ["state"])
+
+    let graphicsScriptOptions = try LaunchOptions.parse(arguments: ["Game", "--graphics-script", "theme:gemstone,shot", "--sdl"])
+    #expect(graphicsScriptOptions.target == .graphicsScript)
+    #expect(graphicsScriptOptions.graphicsBackend == .sdl)
+    #expect(graphicsScriptOptions.commands == ["theme:gemstone", "shot"])
 
     let bridgeOptions = try LaunchOptions.parse(arguments: ["Game", "--bridge", "--sdl"])
     #expect(bridgeOptions.target == .bridge)

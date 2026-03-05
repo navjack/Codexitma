@@ -817,16 +817,7 @@ struct GameRootView: View {
     }
 
     private var screenshotLabel: String {
-        switch session.state.mode {
-        case .title:
-            return "title-\(session.state.selectedAdventureID().rawValue)"
-        case .characterCreation:
-            return "creator-\(session.state.selectedHeroClass().rawValue)"
-        case .ending:
-            return "ending-\(session.state.currentAdventureID.rawValue)"
-        default:
-            return "\(session.state.currentAdventureID.rawValue)-\(session.state.player.currentMapID)-\(String(describing: session.state.mode))"
-        }
+        ScreenshotSupport.defaultGameLabel(for: session.state)
     }
 
     private func postScreenshotNotice(_ text: String) {

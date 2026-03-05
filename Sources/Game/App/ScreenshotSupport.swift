@@ -5,6 +5,8 @@ import AppKit
 #endif
 
 enum ScreenshotSupport {
+    private static let screenshotDirectoryOverrideEnvironmentKey = "CODEXITMA_SCREENSHOT_DIR"
+
     private static let timestampFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -23,6 +25,13 @@ enum ScreenshotSupport {
 
     private static func screenshotsDirectory() throws -> URL {
         let manager = FileManager.default
+        if let overridePath = ProcessInfo.processInfo.environment[screenshotDirectoryOverrideEnvironmentKey],
+           !overridePath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let overrideURL = URL(fileURLWithPath: overridePath, isDirectory: true)
+            try manager.createDirectory(at: overrideURL, withIntermediateDirectories: true)
+            return overrideURL
+        }
+
         let baseRoot = CodexitmaPaths.dataRoot(fileManager: manager)
         let screenshots = baseRoot
             .appendingPathComponent("Screenshots", isDirectory: true)
@@ -38,6 +47,19 @@ enum ScreenshotSupport {
             .replacingOccurrences(of: "--", with: "-")
             .trimmingCharacters(in: CharacterSet(charactersIn: "-_."))
         return collapsed.isEmpty ? "capture" : collapsed
+    }
+
+    static func defaultGameLabel(for state: GameState) -> String {
+        switch state.mode {
+        case .title:
+            return "title-\(state.selectedAdventureID().rawValue)"
+        case .characterCreation:
+            return "creator-\(state.selectedHeroClass().rawValue)"
+        case .ending:
+            return "ending-\(state.currentAdventureID.rawValue)"
+        default:
+            return "\(state.currentAdventureID.rawValue)-\(state.player.currentMapID)-\(String(describing: state.mode))"
+        }
     }
 }
 

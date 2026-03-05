@@ -4,6 +4,7 @@ enum LaunchTarget: Equatable {
     case interactive
     case editor
     case script
+    case graphicsScript
     case bridge
 }
 
@@ -69,6 +70,22 @@ struct LaunchOptions: Equatable {
                     throw AutomationError.missingFlagValue("--script-file")
                 }
                 target = .script
+                let path = arguments[index + 1]
+                let raw = try String(contentsOfFile: path)
+                commands.append(contentsOf: AutomationTokenizer.tokens(from: raw))
+                index += 1
+            case "--graphics-script":
+                guard index + 1 < arguments.count else {
+                    throw AutomationError.missingFlagValue("--graphics-script")
+                }
+                target = .graphicsScript
+                commands.append(contentsOf: AutomationTokenizer.tokens(from: arguments[index + 1]))
+                index += 1
+            case "--graphics-script-file":
+                guard index + 1 < arguments.count else {
+                    throw AutomationError.missingFlagValue("--graphics-script-file")
+                }
+                target = .graphicsScript
                 let path = arguments[index + 1]
                 let raw = try String(contentsOfFile: path)
                 commands.append(contentsOf: AutomationTokenizer.tokens(from: raw))
