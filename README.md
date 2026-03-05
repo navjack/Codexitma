@@ -107,6 +107,9 @@ After successful builds, a convenience copy of the latest working binary is also
   - flatter overworld-style board with stricter classic field readability
 - `Depth 3D`
   - first-person raycast dungeon view with turn-in-place controls and map-accurate depth
+  - authored map backdrops (`sky` vs `ceiling`) for outdoor/indoor depth scenes
+  - shared world-space lighting/shadow field across floor, walls, and ceiling
+  - sky backdrop contributes emissive ambient light; torches and features cast occlusion-aware shadows
 
 In graphics mode, press `T` to cycle styles.
 
@@ -141,6 +144,8 @@ Each row below shows the same gameplay moment in both editions:
 - `T`: cycle graphics theme
 - `M`: open the editor (graphics mode)
 - `F12`: save a framebuffer screenshot (`.png` in native and SDL modes)
+- `Cmd/Ctrl+Shift+D`: toggle native lighting debug overlay
+- `F10`: toggle SDL lighting debug overlay
 
 ### Depth 3D
 
@@ -214,6 +219,7 @@ This includes:
 - enemies
 - shops
 - map layouts
+- map backdrop metadata (`depthBackdrop`: `sky` or `ceiling`) for `Depth 3D`
 
 External adventure packs are loaded from:
 
@@ -224,6 +230,11 @@ External adventure packs are loaded from:
   - if that folder is not writable, fallback is `%APPDATA%\\Codexitma\\Adventures`
 
 Each pack lives in its own folder and provides the same JSON-driven content structure.
+
+For map JSON, `depthBackdrop` controls depth-mode backdrop and ambient behavior:
+
+- `sky`: outdoor backdrop with sky emissive ambient
+- `ceiling`: indoor backdrop with shaded ceiling projection
 
 If an external pack uses the same adventure `id` as a bundled adventure, it overrides the bundled one. That is the supported mod path for changing shipped adventures without touching the app bundle.
 
