@@ -268,6 +268,7 @@ enum GraphicsSceneSnapshotBuilder {
         let maxDistance: Double
         let columns: Int
         let ambientLight: Double
+        let skyEmissive: Double
         let lightSubdivisions: Int
         let floorLightBands: Int
     }
@@ -374,6 +375,7 @@ enum GraphicsSceneSnapshotBuilder {
         let height: Int
         let subdivisions: Int
         let ambientBucket: Int
+        let skyEmissiveBucket: Int
         let openedInteractablesHash: Int
         let bossStateHash: Int
     }
@@ -513,13 +515,15 @@ enum GraphicsSceneSnapshotBuilder {
 
     private static func makeDepthScene(from state: GameState, board: MapBoardSnapshot) -> DepthSceneSnapshot {
         let mapID = state.player.currentMapID
-        let skyBackdrop = usesSkyBackdrop(for: mapID)
-        let profile = depthRenderProfile(for: mapID, usesSkyBackdrop: skyBackdrop)
+        let backdrop = depthBackdropStyle(for: state, mapID: mapID)
+        let skyBackdrop = backdrop == .sky
+        let profile = depthRenderProfile(for: mapID, backdrop: backdrop)
         let lightField = makeDepthLightField(
             from: state,
             board: board,
             ambient: profile.ambientLight,
-            subdivisions: profile.lightSubdivisions
+            subdivisions: profile.lightSubdivisions,
+            skyEmissive: profile.skyEmissive
         )
 
         let origin = DepthPoint(
@@ -581,12 +585,14 @@ enum GraphicsSceneSnapshotBuilder {
             return nil
         }
         let mapID = state.player.currentMapID
-        let profile = depthRenderProfile(for: mapID, usesSkyBackdrop: usesSkyBackdrop(for: mapID))
+        let backdrop = depthBackdropStyle(for: state, mapID: mapID)
+        let profile = depthRenderProfile(for: mapID, backdrop: backdrop)
         let lightField = makeDepthLightField(
             from: state,
             board: board,
             ambient: profile.ambientLight,
-            subdivisions: profile.lightSubdivisions
+            subdivisions: profile.lightSubdivisions,
+            skyEmissive: profile.skyEmissive
         )
         return makeDepthTileLighting(board: board, lightField: lightField)
     }
@@ -837,7 +843,7 @@ enum GraphicsSceneSnapshotBuilder {
         }
     }
 
-    private static func depthRenderProfile(for mapID: String, usesSkyBackdrop: Bool) -> DepthRenderProfile {
+    private static func depthRenderProfile(for mapID: String, backdrop: DepthBackdropStyle) -> DepthRenderProfile {
         let tightIndoorFragments = [
             "barrow",
             "catacomb",
@@ -854,16 +860,18 @@ enum GraphicsSceneSnapshotBuilder {
                 maxDistance: 8.5,
                 columns: 96,
                 ambientLight: 0.11,
+                skyEmissive: 0.0,
                 lightSubdivisions: 12,
                 floorLightBands: 20
             )
         }
-        if usesSkyBackdrop {
+        if backdrop == .sky {
             return DepthRenderProfile(
                 fieldOfView: .pi / 2.95,
                 maxDistance: 12.0,
                 columns: 128,
                 ambientLight: 0.18,
+                skyEmissive: 0.12,
                 lightSubdivisions: 12,
                 floorLightBands: 22
             )
@@ -873,6 +881,7 @@ enum GraphicsSceneSnapshotBuilder {
             maxDistance: 10.0,
             columns: 112,
             ambientLight: 0.15,
+            skyEmissive: 0.0,
             lightSubdivisions: 12,
             floorLightBands: 20
         )
@@ -882,13 +891,15 @@ enum GraphicsSceneSnapshotBuilder {
         from state: GameState,
         board: MapBoardSnapshot,
         ambient: Double,
-        subdivisions: Int
+        subdivisions: Int,
+        skyEmissive: Double
     ) -> DepthLightField {
         guard board.width > 0, board.height > 0 else {
+            let baseAmbient = min(1.0, ambient + max(0.0, skyEmissive))
             return DepthLightField(
                 width: board.width,
                 height: board.height,
-                ambient: ambient,
+                ambient: baseAmbient,
                 subdivisions: max(1, subdivisions),
                 sampleWidth: 0,
                 sampleHeight: 0,
@@ -901,7 +912,8 @@ enum GraphicsSceneSnapshotBuilder {
             from: state,
             board: board,
             ambient: ambient,
-            subdivisions: subdivisions
+            subdivisions: subdivisions,
+            skyEmissive: skyEmissive
         )
         let staticField: DepthLightField
         if let cached = cachedStaticLightField, cached.key == staticKey {
@@ -913,6 +925,7 @@ enum GraphicsSceneSnapshotBuilder {
                 height: board.height,
                 ambient: ambient,
                 subdivisions: max(1, subdivisions),
+                skyEmissive: skyEmissive,
                 sources: staticSources,
                 board: board
             )
@@ -940,7 +953,7 @@ enum GraphicsSceneSnapshotBuilder {
         let finalField = DepthLightField(
             width: board.width,
             height: board.height,
-            ambient: ambient,
+            ambient: staticField.ambient,
             subdivisions: staticField.subdivisions,
             sampleWidth: staticField.sampleWidth,
             sampleHeight: staticField.sampleHeight,
@@ -960,7 +973,8 @@ enum GraphicsSceneSnapshotBuilder {
         from state: GameState,
         board: MapBoardSnapshot,
         ambient: Double,
-        subdivisions: Int
+        subdivisions: Int,
+        skyEmissive: Double
     ) -> DepthStaticLightCacheKey {
         let openedInteractablesHash = hashStrings(state.world.openedInteractables)
         let bossMarkers = state.world.enemies
@@ -973,6 +987,7 @@ enum GraphicsSceneSnapshotBuilder {
             height: board.height,
             subdivisions: max(1, subdivisions),
             ambientBucket: Int(ambient * 1000.0),
+            skyEmissiveBucket: Int(skyEmissive * 1000.0),
             openedInteractablesHash: openedInteractablesHash,
             bossStateHash: bossStateHash
         )
@@ -1003,14 +1018,16 @@ enum GraphicsSceneSnapshotBuilder {
         height: Int,
         ambient: Double,
         subdivisions: Int,
+        skyEmissive: Double,
         sources: [DepthLightSource],
         board: MapBoardSnapshot
     ) -> DepthLightField {
         let sampleScale = max(1, subdivisions)
         let sampleWidth = max(0, width * sampleScale)
         let sampleHeight = max(0, height * sampleScale)
+        let baseAmbient = min(1.0, ambient + max(0.0, skyEmissive))
         var values = Array(
-            repeating: Array(repeating: ambient, count: sampleWidth),
+            repeating: Array(repeating: baseAmbient, count: sampleWidth),
             count: sampleHeight
         )
         var shadowValues = Array(
@@ -1020,7 +1037,7 @@ enum GraphicsSceneSnapshotBuilder {
         let field = DepthLightField(
             width: width,
             height: height,
-            ambient: ambient,
+            ambient: baseAmbient,
             subdivisions: sampleScale,
             sampleWidth: sampleWidth,
             sampleHeight: sampleHeight,
@@ -1040,7 +1057,7 @@ enum GraphicsSceneSnapshotBuilder {
         return DepthLightField(
             width: width,
             height: height,
-            ambient: ambient,
+            ambient: baseAmbient,
             subdivisions: sampleScale,
             sampleWidth: sampleWidth,
             sampleHeight: sampleHeight,
@@ -1470,7 +1487,14 @@ enum GraphicsSceneSnapshotBuilder {
         }
     }
 
-    private static func usesSkyBackdrop(for mapID: String) -> Bool {
+    private static func depthBackdropStyle(for state: GameState, mapID: String) -> DepthBackdropStyle {
+        if let configured = state.world.maps[mapID]?.depthBackdrop {
+            return configured
+        }
+        return inferredDepthBackdrop(for: mapID)
+    }
+
+    private static func inferredDepthBackdrop(for mapID: String) -> DepthBackdropStyle {
         let indoorFragments = [
             "barrow",
             "spire",
@@ -1483,7 +1507,7 @@ enum GraphicsSceneSnapshotBuilder {
             "crypt",
             "sanctum"
         ]
-        return indoorFragments.allSatisfy { !mapID.contains($0) }
+        return indoorFragments.allSatisfy { !mapID.contains($0) } ? .sky : .ceiling
     }
 
     private static func facingAngle(for direction: Direction) -> Double {

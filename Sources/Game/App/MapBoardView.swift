@@ -430,6 +430,10 @@ struct MapBoardView: View {
         let depthTextureAtlas = Self.depthTextureAtlas
         let facing = scene.depth?.facing ?? scene.player.facing
         let fieldOfView = scene.depth?.fieldOfView ?? depthFieldOfView
+        let hasSkyBackdrop = scene.depth?.usesSkyBackdrop ?? true
+        let playerX = Double(scene.player.position.x) + 0.5
+        let playerY = Double(scene.player.position.y) + 0.5
+        let skyGlow = min(0.22, max(0.04, (worldLighting?.ambient ?? 0.18) * 0.45))
         switch theme.pattern {
         case .brick:
             stripeStrength = 0.08
@@ -459,12 +463,12 @@ struct MapBoardView: View {
             facing: facing
         )
 
-        if scene.depth?.usesSkyBackdrop ?? true {
+        if hasSkyBackdrop {
             context.fill(
                 Path(ceilingRect),
                 with: .linearGradient(
                     Gradient(colors: [
-                        theme.roomHighlight.opacity(0.34),
+                        theme.roomHighlight.opacity(0.30 + skyGlow),
                         theme.roomShadow.opacity(0.86)
                     ]),
                     startPoint: CGPoint(x: size.width * 0.5, y: 0),
@@ -497,6 +501,18 @@ struct MapBoardView: View {
                 let y = horizon * pow(t, 1.65)
                 let line = Path(CGRect(x: 0, y: y, width: size.width, height: 1))
                 context.fill(line, with: .color(theme.roomHighlight.opacity(0.05)))
+            }
+
+            if let worldLighting {
+                drawCeilingShadowBands(
+                    into: &context,
+                    projections: projections,
+                    horizon: horizon,
+                    worldLighting: worldLighting,
+                    playerX: playerX,
+                    playerY: playerY,
+                    theme: theme
+                )
             }
         }
 
@@ -656,6 +672,93 @@ struct MapBoardView: View {
                 if shadow > 0.01 {
                     let occlusion = Color.black.opacity(min(0.24, shadow * 0.28))
                     context.fill(Path(stripe), with: .color(occlusion))
+                }
+            }
+        }
+    }
+
+    private func drawCeilingShadowBands(
+        into context: inout GraphicsContext,
+        projections: [DepthFloorBandProjection],
+        horizon: CGFloat,
+        worldLighting: DepthWorldLightingSnapshot,
+        playerX: Double,
+        playerY: Double,
+        theme: RegionTheme
+    ) {
+        for projection in projections {
+            let mirroredY0 = horizon - (projection.y1 - horizon)
+            let mirroredY1 = horizon - (projection.y0 - horizon)
+            let rect = CGRect(
+                x: 0,
+                y: max(0, mirroredY0),
+                width: projection.strips.last?.x1 ?? 0,
+                height: max(1, mirroredY1 - mirroredY0)
+            )
+            if rect.height <= 0 {
+                continue
+            }
+
+            var stripLevels = projection.strips.map { strip in
+                let worldX = playerX + (projection.rowDistance * strip.rayX)
+                let worldY = playerY + (projection.rowDistance * strip.rayY)
+                return worldLighting.effectiveLevel(
+                    atWorldX: worldX,
+                    y: worldY,
+                    shadowWeight: 0.72,
+                    minimumAmbientFactor: 0.14
+                )
+            }
+            var stripShadowLevels = projection.strips.map { strip in
+                let worldX = playerX + (projection.rowDistance * strip.rayX)
+                let worldY = playerY + (projection.rowDistance * strip.rayY)
+                return worldLighting.shadowLevel(atWorldX: worldX, y: worldY)
+            }
+
+            if stripLevels.count >= 3 {
+                var smoothed = stripLevels
+                for index in stripLevels.indices {
+                    let left = stripLevels[max(0, index - 1)]
+                    let center = stripLevels[index]
+                    let right = stripLevels[min(stripLevels.count - 1, index + 1)]
+                    smoothed[index] = (left * 0.24) + (center * 0.52) + (right * 0.24)
+                }
+                stripLevels = smoothed
+            }
+            if stripShadowLevels.count >= 3 {
+                var smoothed = stripShadowLevels
+                for index in stripShadowLevels.indices {
+                    let left = stripShadowLevels[max(0, index - 1)]
+                    let center = stripShadowLevels[index]
+                    let right = stripShadowLevels[min(stripShadowLevels.count - 1, index + 1)]
+                    smoothed[index] = (left * 0.24) + (center * 0.52) + (right * 0.24)
+                }
+                stripShadowLevels = smoothed
+            }
+
+            for (index, strip) in projection.strips.enumerated() {
+                let stripe = CGRect(
+                    x: strip.x0,
+                    y: rect.minY,
+                    width: max(1, strip.x1 - strip.x0),
+                    height: rect.height
+                )
+                let level = stripLevels[index]
+                let shadow = stripShadowLevels[index]
+                let dim = max(max(0.0, worldLighting.ambient - level), shadow * 0.46)
+                let lift = max(0.0, level - worldLighting.ambient)
+
+                if dim > 0.01 {
+                    let darkness = Color.black.opacity(min(0.38, 0.04 + (dim * 0.46)))
+                    context.fill(Path(stripe), with: .color(darkness))
+                }
+                if shadow > 0.01 {
+                    let occlusion = Color.black.opacity(min(0.30, shadow * 0.30))
+                    context.fill(Path(stripe), with: .color(occlusion))
+                }
+                if lift > 0.01 {
+                    let highlight = theme.roomHighlight.opacity(min(0.18, 0.02 + (lift * 0.22)))
+                    context.fill(Path(stripe), with: .color(highlight))
                 }
             }
         }

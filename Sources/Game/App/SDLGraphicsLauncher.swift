@@ -1001,9 +1001,10 @@ enum SDLGraphicsLauncher {
         with renderer: OpaquePointer
     ) {
         let depthTheme = boardTheme(for: scene)
+        let skyGlow = min(0.22, max(0.04, depth.worldLighting.ambient * 0.45))
         let horizon = frame.y + (frame.height / 2)
         let skyTop = depth.usesSkyBackdrop
-            ? blended(.sky, toward: depthTheme.innerBorder, amount: 0.20)
+            ? blended(.sky, toward: depthTheme.innerBorder, amount: 0.20 + skyGlow)
             : blended(.ceiling, toward: .void, amount: 0.14)
         let skyBottom = depth.usesSkyBackdrop
             ? blended(.ceiling, toward: depthTheme.frameBackground, amount: 0.42)
@@ -1043,6 +1044,19 @@ enum SDLGraphicsLauncher {
         let playerY = Double(scene.player.position.y) + 0.5
         let depthSamples = depth.samples
         let zBuffer = depthSamples.map(\.correctedDistance)
+
+        if !depth.usesSkyBackdrop {
+            renderCeilingShadows(
+                frame: frame,
+                horizon: horizon,
+                projection: floorProjection,
+                worldLighting: worldLighting,
+                playerX: playerX,
+                playerY: playerY,
+                theme: depthTheme,
+                renderer: renderer
+            )
+        }
 
         for (band, projection) in floorProjection.enumerated() {
             let y0 = projection.y0
@@ -1257,6 +1271,92 @@ enum SDLGraphicsLauncher {
         drawText("RANGE \(Int(depth.maxDistance.rounded()))", x: frame.x + 10, y: frame.y + 24, color: .bright, renderer: renderer)
         if showDebugLightingOverlay {
             renderDepthDebugOverlay(depth: depth, scene: scene, frame: frame, with: renderer)
+        }
+    }
+
+    private static func renderCeilingShadows(
+        frame: SDLRect,
+        horizon: Int,
+        projection: [DepthFloorBandProjection],
+        worldLighting: DepthWorldLightingSnapshot,
+        playerX: Double,
+        playerY: Double,
+        theme: SDLBoardTheme,
+        renderer: OpaquePointer
+    ) {
+        for band in projection {
+            let mirroredY0 = horizon - (band.y1 - horizon)
+            let mirroredY1 = horizon - (band.y0 - horizon)
+            let y0 = max(frame.y, mirroredY0)
+            let y1 = min(horizon, mirroredY1)
+            if y1 <= y0 {
+                continue
+            }
+
+            var stripLevels = band.strips.map { strip in
+                let worldX = playerX + (band.rowDistance * strip.rayX)
+                let worldY = playerY + (band.rowDistance * strip.rayY)
+                return worldLighting.effectiveLevel(
+                    atWorldX: worldX,
+                    y: worldY,
+                    shadowWeight: 0.72,
+                    minimumAmbientFactor: 0.14
+                )
+            }
+            var stripShadowLevels = band.strips.map { strip in
+                let worldX = playerX + (band.rowDistance * strip.rayX)
+                let worldY = playerY + (band.rowDistance * strip.rayY)
+                return worldLighting.shadowLevel(atWorldX: worldX, y: worldY)
+            }
+
+            if stripLevels.count >= 3 {
+                var smoothed = stripLevels
+                for index in stripLevels.indices {
+                    let left = stripLevels[max(0, index - 1)]
+                    let center = stripLevels[index]
+                    let right = stripLevels[min(stripLevels.count - 1, index + 1)]
+                    smoothed[index] = (left * 0.24) + (center * 0.52) + (right * 0.24)
+                }
+                stripLevels = smoothed
+            }
+            if stripShadowLevels.count >= 3 {
+                var smoothed = stripShadowLevels
+                for index in stripShadowLevels.indices {
+                    let left = stripShadowLevels[max(0, index - 1)]
+                    let center = stripShadowLevels[index]
+                    let right = stripShadowLevels[min(stripShadowLevels.count - 1, index + 1)]
+                    smoothed[index] = (left * 0.24) + (center * 0.52) + (right * 0.24)
+                }
+                stripShadowLevels = smoothed
+            }
+
+            for (index, strip) in band.strips.enumerated() {
+                let width = max(1, strip.x1 - strip.x0)
+                let level = stripLevels[index]
+                let shadow = stripShadowLevels[index]
+                let dim = max(max(0.0, worldLighting.ambient - level), shadow * 0.46)
+                let lift = max(0.0, level - worldLighting.ambient)
+
+                if dim > 0.01 {
+                    let alpha = UInt8(max(0, min(170, Int((0.04 + (dim * 0.46)) * 255.0))))
+                    fill(renderer, x: strip.x0, y: y0, width: width, height: max(1, y1 - y0), color: .void.withAlpha(alpha))
+                }
+                if shadow > 0.01 {
+                    let alpha = UInt8(max(0, min(145, Int((shadow * 0.30) * 255.0))))
+                    fill(renderer, x: strip.x0, y: y0, width: width, height: max(1, y1 - y0), color: .void.withAlpha(alpha))
+                }
+                if lift > 0.01 {
+                    let alpha = UInt8(max(0, min(90, Int((0.02 + (lift * 0.22)) * 255.0))))
+                    fill(
+                        renderer,
+                        x: strip.x0,
+                        y: y0,
+                        width: width,
+                        height: max(1, y1 - y0),
+                        color: theme.innerBorder.withAlpha(alpha)
+                    )
+                }
+            }
         }
     }
 

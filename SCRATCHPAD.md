@@ -190,3 +190,7 @@
 - Added a lightweight 3x3 softening filter on the shadow mask cache to reduce stair-stepped shadow edges while preserving occlusion structure.
 - Extended `DepthRaySample` with per-hit `shadowLevel` so wall shading can use the same world-space shadow source as the floor.
 - Replaced light LOS sampling with a supercover-style grid traversal (Amanatides/Woo corner-aware stepping) to reduce corner leakage and improve shadow stability around wall edges.
+- Added an explicit per-map `depthBackdrop` content attribute (`sky` or `ceiling`) through the model/content/editor pipeline so Depth3D backdrop behavior is authored instead of inferred only from map IDs.
+- Authored `depthBackdrop` values across bundled adventure maps (`world.json`, `world_starfall.json`) to mark indoor maps as ceiling-backed and outdoor maps as sky-backed.
+- Added sky emissive ambient support to Depth3D lighting snapshots (`sky` maps raise base ambient; `ceiling` maps do not) so open maps behave as globally lit by the sky.
+- Added ceiling shadow rendering in both native and SDL Depth3D paths: non-sky maps now project and shade ceiling bands from the shared world light/shadow field, mirroring floor-space occlusion behavior.

@@ -2,6 +2,7 @@
   {
     "id": "merrow_village",
     "name": "Village of Merrow",
+    "depthBackdrop": "sky",
     "layoutFile": "merrow_village.txt",
     "lines": [],
     "spawn": { "x": 3, "y": 5 },
@@ -50,6 +51,7 @@
   {
     "id": "south_fields",
     "name": "South Fields",
+    "depthBackdrop": "sky",
     "layoutFile": "south_fields.txt",
     "lines": [],
     "spawn": { "x": 1, "y": 5 },
@@ -105,6 +107,7 @@
   {
     "id": "sunken_orchard",
     "name": "Sunken Orchard",
+    "depthBackdrop": "sky",
     "layoutFile": "sunken_orchard.txt",
     "lines": [],
     "spawn": { "x": 1, "y": 5 },
@@ -170,6 +173,7 @@
   {
     "id": "hollow_barrows",
     "name": "Hollow Barrows",
+    "depthBackdrop": "ceiling",
     "layoutFile": "hollow_barrows.txt",
     "lines": [],
     "spawn": { "x": 1, "y": 5 },
@@ -225,6 +229,7 @@
   {
     "id": "black_fen",
     "name": "Black Fen",
+    "depthBackdrop": "sky",
     "layoutFile": "black_fen.txt",
     "lines": [],
     "spawn": { "x": 1, "y": 5 },
@@ -290,6 +295,7 @@
   {
     "id": "beacon_spire",
     "name": "Beacon Spire",
+    "depthBackdrop": "ceiling",
     "layoutFile": "beacon_spire.txt",
     "lines": [],
     "spawn": { "x": 1, "y": 5 },

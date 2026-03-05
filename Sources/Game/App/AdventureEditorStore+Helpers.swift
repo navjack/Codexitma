@@ -381,6 +381,7 @@ extension AdventureEditorStore {
                 EditableMap(
                     id: $0.id,
                     name: $0.name,
+                    depthBackdrop: $0.depthBackdrop,
                     lines: $0.lines,
                     spawn: $0.spawn,
                     portals: $0.portals,
@@ -464,6 +465,7 @@ extension AdventureEditorStore {
                 EditableMap(
                     id: "merrow_village",
                     name: "Starter Grounds",
+                    depthBackdrop: .sky,
                     lines: makeStarterMapLines(),
                     spawn: Position(x: 2, y: 2),
                     portals: [],
