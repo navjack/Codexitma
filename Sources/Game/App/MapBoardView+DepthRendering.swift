@@ -4,12 +4,10 @@ import Foundation
 import SwiftUI
 
 struct DepthTextureAtlas {
-    let image: Image
-    let cgImage: CGImage
-    let textureWidth: CGFloat
-    let textureHeight: CGFloat
     let tileSize: CGFloat
     let columns: Int
+    let floorColors: [CGColor]
+    let wallSlices: [TileType: [CGImage]]
 
     func tileRect(id: Int) -> CGRect {
         let column = id % columns
@@ -50,22 +48,24 @@ struct DepthTextureAtlas {
     }
 
     func wallSlice(for tileType: TileType, u: Double) -> CGImage? {
-        let rect = wallRect(for: tileType)
         let clampedU = max(0.0, min(0.999, u))
-        let x = Int(rect.minX + floor(CGFloat(clampedU) * rect.width))
-        let y = Int(rect.minY)
-        let crop = CGRect(x: x, y: y, width: 1, height: Int(rect.height))
-        return cgImage.cropping(to: crop)
+        guard let slices = wallSlices[tileType], !slices.isEmpty else {
+            return nil
+        }
+        let index = min(slices.count - 1, Int(floor(clampedU * Double(slices.count))))
+        return slices[index]
     }
 
-    func floorPixel(u: CGFloat, v: CGFloat) -> CGImage? {
-        let rect = floorRect
+    func floorColor(u: CGFloat, v: CGFloat) -> CGColor? {
+        guard !floorColors.isEmpty else {
+            return nil
+        }
         let clampedU = max(0.0, min(0.999, u))
         let clampedV = max(0.0, min(0.999, v))
-        let x = Int(rect.minX + floor(clampedU * rect.width))
-        let y = Int(rect.minY + floor(clampedV * rect.height))
-        let crop = CGRect(x: x, y: y, width: 1, height: 1)
-        return cgImage.cropping(to: crop)
+        let pixelX = min(Int(tileSize) - 1, Int(floor(clampedU * tileSize)))
+        let pixelY = min(Int(tileSize) - 1, Int(floor(clampedV * tileSize)))
+        let index = (pixelY * Int(tileSize)) + pixelX
+        return floorColors[index]
     }
 
     static func load(bundle: Bundle = GameResourceBundle.current) -> DepthTextureAtlas? {
@@ -90,19 +90,89 @@ struct DepthTextureAtlas {
             return nil
         }
 
-        let textureWidth = CGFloat(cgImage.width)
-        let textureHeight = CGFloat(cgImage.height)
         let tileSize: CGFloat = 16
+        let textureWidth = CGFloat(cgImage.width)
         let columns = Int(textureWidth / tileSize)
+        let bitmap = NSBitmapImageRep(cgImage: cgImage)
+        let floorRect = CGRect(
+            x: tileSize * 4,
+            y: 0,
+            width: tileSize,
+            height: tileSize
+        )
+        let floorColors = makeFloorColors(bitmap: bitmap, rect: floorRect)
+        let wallSlices = makeWallSlices(cgImage: cgImage, tileSize: tileSize, columns: columns)
 
         return DepthTextureAtlas(
-            image: Image(decorative: cgImage, scale: 1.0),
-            cgImage: cgImage,
-            textureWidth: textureWidth,
-            textureHeight: textureHeight,
             tileSize: tileSize,
-            columns: columns
+            columns: columns,
+            floorColors: floorColors,
+            wallSlices: wallSlices
         )
+    }
+
+    private static func makeFloorColors(bitmap: NSBitmapImageRep, rect: CGRect) -> [CGColor] {
+        let minX = Int(rect.minX)
+        let minY = Int(rect.minY)
+        let width = Int(rect.width)
+        let height = Int(rect.height)
+        var colors: [CGColor] = []
+        colors.reserveCapacity(width * height)
+
+        for y in 0..<height {
+            for x in 0..<width {
+                let color = bitmap.colorAt(x: minX + x, y: minY + y)?.cgColor ?? NSColor.black.cgColor
+                colors.append(color)
+            }
+        }
+
+        return colors
+    }
+
+    private static func makeWallSlices(
+        cgImage: CGImage,
+        tileSize: CGFloat,
+        columns: Int
+    ) -> [TileType: [CGImage]] {
+        let atlas = DepthTextureAtlas(
+            tileSize: tileSize,
+            columns: columns,
+            floorColors: [],
+            wallSlices: [:]
+        )
+        let tileTypes: [TileType] = [
+            .floor,
+            .wall,
+            .water,
+            .brush,
+            .doorLocked,
+            .doorOpen,
+            .shrine,
+            .stairs,
+            .beacon
+        ]
+        var slicesByTile: [TileType: [CGImage]] = [:]
+
+        for tileType in tileTypes {
+            let rect = atlas.wallRect(for: tileType)
+            let y = Int(rect.minY)
+            let height = Int(rect.height)
+            let sliceCount = max(1, Int(rect.width))
+            var slices: [CGImage] = []
+            slices.reserveCapacity(sliceCount)
+
+            for column in 0..<sliceCount {
+                let x = Int(rect.minX) + column
+                let crop = CGRect(x: x, y: y, width: 1, height: height)
+                if let slice = cgImage.cropping(to: crop) {
+                    slices.append(slice)
+                }
+            }
+
+            slicesByTile[tileType] = slices
+        }
+
+        return slicesByTile
     }
 }
 
@@ -180,6 +250,9 @@ extension MapBoardView {
             Text("AVG \(lightValueString(avgLevel))")
                 .font(.system(size: 8, weight: .regular, design: .monospaced))
                 .foregroundStyle(palette.text.opacity(0.90))
+            Text("BACKDROP \(scene.depth?.backdropLabel ?? "SKY")")
+                .font(.system(size: 8, weight: .regular, design: .monospaced))
+                .foregroundStyle(palette.text.opacity(0.90))
             Text("P \(scene.player.position.x),\(scene.player.position.y) \(scene.player.facing.shortLabel)")
                 .font(.system(size: 8, weight: .regular, design: .monospaced))
                 .foregroundStyle(palette.text.opacity(0.90))
@@ -206,16 +279,22 @@ extension MapBoardView {
                             green: 0.08 + (normalized * 0.78),
                             blue: 0.09 + (normalized * 0.64)
                         )
-                        if !cell.tile.walkable {
+                        if cell.tile.type.blocksDepthLighting {
                             color = Color(
                                 red: 0.10 + (normalized * 0.32),
                                 green: 0.10 + (normalized * 0.28),
                                 blue: 0.12 + (normalized * 0.24)
                             )
+                        } else if cell.tile.type.usesDepthPoolSurface {
+                            color = Color(
+                                red: 0.10 + (normalized * 0.20),
+                                green: 0.16 + (normalized * 0.32),
+                                blue: 0.24 + (normalized * 0.52)
+                            )
                         }
                         context.fill(Path(rect), with: .color(color))
 
-                        if !cell.tile.walkable {
+                        if cell.tile.type.blocksDepthLighting {
                             context.stroke(
                                 Path(rect),
                                 with: .color(Color.black.opacity(0.42)),
@@ -360,6 +439,7 @@ extension MapBoardView {
                     into: &context,
                     projections: projections,
                     horizon: horizon,
+                    floorLighting: floorLighting,
                     worldLighting: worldLighting,
                     playerX: playerX,
                     playerY: playerY,
@@ -446,6 +526,7 @@ extension MapBoardView {
         guard stripCount > 0 else { return }
         var stripLightLevels = Array(repeating: floorLighting?.ambient ?? worldLighting?.ambient ?? 0.20, count: stripCount)
         var stripShadowLevels = Array(repeating: 0.0, count: stripCount)
+        var waterSurfaces: [(pit: CGRect, surface: CGRect, shimmer: Double)] = []
 
         context.withCGContext { cgContext in
             cgContext.interpolationQuality = .none
@@ -464,19 +545,61 @@ extension MapBoardView {
                     width: max(1, strip.x1 - strip.x0),
                     height: rect.height
                 )
-                if let pixel = atlas.floorPixel(u: u, v: v) {
-                    cgContext.draw(pixel, in: stripe)
+                if let color = atlas.floorColor(u: u, v: v) {
+                    cgContext.setFillColor(color)
+                    cgContext.fill(stripe)
                 }
 
-                let light = worldLighting?.level(atWorldX: worldX, y: worldY)
-                    ?? floorLighting?.interpolatedLevel(
-                        xNormalized: xNorm,
-                    yNormalized: bandNorm
+                let sampledTile = tile(at: Position(x: Int(floor(worldX)), y: Int(floor(worldY))))
+                if sampledTile.type.usesDepthPoolSurface {
+                    let poolInset = max(1.0, rect.height * (0.12 + (bandNorm * 0.10)))
+                    let waterRect = CGRect(
+                        x: stripe.minX,
+                        y: min(rect.maxY - 1, stripe.minY + poolInset),
+                        width: stripe.width,
+                        height: max(1, stripe.height - poolInset)
                     )
+                    let shimmer = Double((u * 0.55) + (v * 0.45))
+                    waterSurfaces.append((pit: stripe, surface: waterRect, shimmer: shimmer))
+                }
+
+                let light = floorLighting?.interpolatedLevel(
+                        xNormalized: xNorm,
+                        yNormalized: bandNorm
+                    )
+                    ?? worldLighting?.level(atWorldX: worldX, y: worldY)
                     ?? (floorLighting?.ambient ?? worldLighting?.ambient ?? 0.20)
                 stripLightLevels[index] = light
-                stripShadowLevels[index] = worldLighting?.shadowLevel(atWorldX: worldX, y: worldY) ?? 0.0
+                stripShadowLevels[index] = floorLighting?.interpolatedShadow(
+                    xNormalized: xNorm,
+                    yNormalized: bandNorm
+                )
+                ?? worldLighting?.shadowLevel(atWorldX: worldX, y: worldY)
+                ?? 0.0
             }
+        }
+
+        for water in waterSurfaces {
+            context.fill(Path(water.pit), with: .color(theme.floor.opacity(0.46)))
+            context.fill(Path(water.surface), with: .color(theme.water.opacity(0.78)))
+
+            let lip = CGRect(
+                x: water.surface.minX,
+                y: water.surface.minY,
+                width: water.surface.width,
+                height: max(1, water.surface.height * 0.10)
+            )
+            context.fill(Path(lip), with: .color(Color.black.opacity(0.18)))
+
+            let shimmerY = water.surface.minY + max(1, water.surface.height * 0.26)
+            let shimmerBand = CGRect(
+                x: water.surface.minX + max(0, water.surface.width * 0.08),
+                y: shimmerY,
+                width: max(1, water.surface.width * 0.84),
+                height: max(1, water.surface.height * 0.10)
+            )
+            let shimmerOpacity = 0.08 + (0.10 * (water.shimmer - floor(water.shimmer)))
+            context.fill(Path(shimmerBand), with: .color(theme.roomHighlight.opacity(shimmerOpacity)))
         }
 
         if stripLightLevels.count >= 3 {
@@ -533,6 +656,7 @@ extension MapBoardView {
         into context: inout GraphicsContext,
         projections: [DepthFloorBandProjection],
         horizon: CGFloat,
+        floorLighting: DepthFloorLightingSnapshot?,
         worldLighting: DepthWorldLightingSnapshot,
         playerX: Double,
         playerY: Double,
@@ -551,20 +675,29 @@ extension MapBoardView {
                 continue
             }
 
-            var stripLevels = projection.strips.map { strip in
-                let worldX = playerX + (projection.rowDistance * strip.rayX)
-                let worldY = playerY + (projection.rowDistance * strip.rayY)
-                return worldLighting.effectiveLevel(
-                    atWorldX: worldX,
-                    y: worldY,
-                    shadowWeight: 0.72,
-                    minimumAmbientFactor: 0.14
-                )
-            }
-            var stripShadowLevels = projection.strips.map { strip in
-                let worldX = playerX + (projection.rowDistance * strip.rayX)
-                let worldY = playerY + (projection.rowDistance * strip.rayY)
-                return worldLighting.shadowLevel(atWorldX: worldX, y: worldY)
+            var stripLevels = Array(repeating: worldLighting.ambient, count: projection.strips.count)
+            var stripShadowLevels = Array(repeating: 0.0, count: projection.strips.count)
+            for (index, strip) in projection.strips.enumerated() {
+                let light = floorLighting?.interpolatedLevel(
+                    xNormalized: strip.xNormalized,
+                    yNormalized: projection.bandNorm
+                ) ?? {
+                    let worldX = playerX + (projection.rowDistance * strip.rayX)
+                    let worldY = playerY + (projection.rowDistance * strip.rayY)
+                    return worldLighting.level(atWorldX: worldX, y: worldY)
+                }()
+                let shadow = floorLighting?.interpolatedShadow(
+                    xNormalized: strip.xNormalized,
+                    yNormalized: projection.bandNorm
+                ) ?? {
+                    let worldX = playerX + (projection.rowDistance * strip.rayX)
+                    let worldY = playerY + (projection.rowDistance * strip.rayY)
+                    return worldLighting.shadowLevel(atWorldX: worldX, y: worldY)
+                }()
+                let shaded = light - (shadow * 0.72)
+                let minimum = max(0.01, worldLighting.ambient * 0.14)
+                stripLevels[index] = max(minimum, min(1.0, shaded))
+                stripShadowLevels[index] = shadow
             }
 
             if stripLevels.count >= 3 {

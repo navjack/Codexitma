@@ -77,6 +77,7 @@ extension GameEngine {
         let selectedIndex = library.catalog.firstIndex { $0.id == state.currentAdventureID } ?? state.selectedAdventureIndex
         state.mode = .title
         state.selectedAdventureIndex = selectedIndex
+        state.titleSelectionIndex = 0
         state.pauseSelectionIndex = 0
         state.inventorySelectionIndex = 0
         state.currentDialogue = nil

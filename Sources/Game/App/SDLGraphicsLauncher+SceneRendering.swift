@@ -131,22 +131,30 @@ extension SDLGraphicsLauncher {
 
         drawText("CODEXITMA", x: frame.x + 18, y: frame.y + 18, color: .gold, renderer: renderer)
         drawText(scene.visualTheme.displayName.uppercased(), x: frame.x + 210, y: frame.y + 18, color: .bright, renderer: renderer)
-        drawWrappedText(scene.adventureSummary.uppercased(), x: frame.x + 18, y: frame.y + 42, width: 82, color: .bright, renderer: renderer)
+        drawText("SELECTED ADVENTURE", x: frame.x + 18, y: frame.y + 56, color: .gold, renderer: renderer)
+        drawText(scene.adventureTitle.uppercased(), x: frame.x + 18, y: frame.y + 74, color: .bright, renderer: renderer)
+        _ = drawWrappedText(scene.adventureSummary.uppercased(), x: frame.x + 18, y: frame.y + 92, width: 76, color: .dim, renderer: renderer)
+        drawText("A/D CHANGE ADVENTURE", x: frame.x + 18, y: frame.y + 144, color: .editorAccent, renderer: renderer)
+        drawText("NEW HEROES START IN THE ADVENTURE SHOWN ABOVE.", x: frame.x + 18, y: frame.y + 158, color: .bright, renderer: renderer)
 
-        drawText("ADVENTURES", x: frame.x + 18, y: frame.y + 104, color: .gold, renderer: renderer)
-        var y = frame.y + 124
-        for (index, entry) in scene.availableAdventures.enumerated() {
-            let selected = index == normalizedIndex(scene.selectedAdventureIndex, count: scene.availableAdventures.count)
-            let prefix = selected ? ">" : " "
-            drawText("\(prefix) \(entry.title.uppercased())", x: frame.x + 18, y: y, color: selected ? .gold : .bright, renderer: renderer)
+        drawText("MAIN MENU", x: frame.x + 18, y: frame.y + 198, color: .gold, renderer: renderer)
+        var y = frame.y + 218
+        for option in scene.titleOptions {
+            let prefix = option.isSelected ? ">" : " "
+            drawText("\(prefix) \(option.label.uppercased())", x: frame.x + 18, y: y, color: option.isSelected ? .gold : .bright, renderer: renderer)
             y += 14
-            drawWrappedText(entry.summary.uppercased(), x: frame.x + 36, y: y, width: 72, color: .dim, renderer: renderer)
-            y += 24
+            y = drawWrappedText(option.detail.uppercased(), x: frame.x + 36, y: y, width: 72, color: option.isSelected ? .bright : .dim, renderer: renderer)
+            y += 10
         }
 
-        drawText("A/D SELECT  N CREATE  L LOAD", x: frame.x + 18, y: frame.y + frame.height - 42, color: .bright, renderer: renderer)
-        drawText("M EDIT  T STYLE  F10 DBG  F12 SHOT", x: frame.x + 18, y: frame.y + frame.height - 26, color: .bright, renderer: renderer)
-        drawText("X QUIT", x: frame.x + 18, y: frame.y + frame.height - 12, color: .bright, renderer: renderer)
+        if let detail = scene.titleDetail {
+            drawText("READY", x: frame.x + 18, y: frame.y + frame.height - 58, color: .gold, renderer: renderer)
+            _ = drawWrappedText(detail.uppercased(), x: frame.x + 74, y: frame.y + frame.height - 58, width: 54, color: .bright, renderer: renderer)
+        }
+
+        drawText("W/S MENU  A/D ADVENTURE  E SELECT", x: frame.x + 18, y: frame.y + frame.height - 42, color: .bright, renderer: renderer)
+        drawText("L LOAD  M EDIT  T STYLE  F10 DBG  F12 SHOT", x: frame.x + 18, y: frame.y + frame.height - 26, color: .bright, renderer: renderer)
+        drawText("X OR Q QUIT", x: frame.x + 18, y: frame.y + frame.height - 12, color: .bright, renderer: renderer)
     }
 
     private static func renderCharacterCreationScreen(_ scene: GraphicsSceneSnapshot, viewport: SDLViewport, with renderer: OpaquePointer) {
@@ -156,8 +164,9 @@ extension SDLGraphicsLauncher {
 
         drawText("CREATE HERO", x: frame.x + 18, y: frame.y + 18, color: .gold, renderer: renderer)
         drawText(scene.adventureTitle.uppercased(), x: frame.x + 190, y: frame.y + 18, color: .bright, renderer: renderer)
+        drawText("CHOOSE A CLASS, THEN START THE ADVENTURE.", x: frame.x + 18, y: frame.y + 38, color: .editorAccent, renderer: renderer)
 
-        var y = frame.y + 66
+        var y = frame.y + 72
         for (index, hero) in scene.heroOptions.enumerated() {
             let selected = index == normalizedIndex(scene.selectedHeroIndex, count: scene.heroOptions.count)
             let prefix = selected ? ">" : " "
@@ -175,7 +184,8 @@ extension SDLGraphicsLauncher {
         drawText("SKILLS", x: frame.x + 18, y: frame.y + 306, color: .gold, renderer: renderer)
         drawWrappedText(skills.uppercased(), x: frame.x + 18, y: frame.y + 324, width: 78, color: .bright, renderer: renderer)
 
-        drawText("A/D CLASS  E BEGIN  Q BACK", x: frame.x + 18, y: frame.y + frame.height - 42, color: .bright, renderer: renderer)
+        drawText("START \(scene.adventureTitle.uppercased()) WITH THIS CLASS", x: frame.x + 18, y: frame.y + frame.height - 56, color: .gold, renderer: renderer)
+        drawText("A/D CLASS  E START  Q BACK", x: frame.x + 18, y: frame.y + frame.height - 42, color: .bright, renderer: renderer)
         drawText("M EDIT  T STYLE", x: frame.x + 18, y: frame.y + frame.height - 26, color: .bright, renderer: renderer)
     }
 
@@ -609,6 +619,7 @@ extension SDLGraphicsLauncher {
     private static func renderBoard(_ scene: GraphicsSceneSnapshot, frame: SDLRect, with renderer: OpaquePointer) {
         let board = scene.board
         let theme = boardTheme(for: scene)
+        let lighting = scene.mapLighting
 
         if scene.visualTheme == .gemstone {
             fill(renderer, x: frame.x + 4, y: frame.y + 4, width: frame.width, height: frame.height, color: .shadow)
@@ -642,6 +653,16 @@ extension SDLGraphicsLauncher {
                     cellSize: cellWidth,
                     renderer: renderer
                 )
+                if let lighting {
+                    let overlayColor = boardLightingOverlayColor(
+                        for: cell.position,
+                        lighting: lighting,
+                        theme: theme
+                    )
+                    if overlayColor.a > 0 {
+                        fill(renderer, x: x, y: y, width: cellWidth, height: cellWidth, color: overlayColor)
+                    }
+                }
                 if cell.feature != .none {
                     let inset = max(1, cellWidth / 6)
                     drawPattern(
@@ -675,5 +696,42 @@ extension SDLGraphicsLauncher {
                 }
             }
         }
+    }
+
+    private static func boardLightingOverlayColor(
+        for position: Position,
+        lighting: DepthTileLightingSnapshot,
+        theme: SDLBoardTheme
+    ) -> SDLColor {
+        let light = lighting.level(at: position)
+        let lift = max(0.0, light - lighting.ambient)
+        if lift > 0.01 {
+            let highlight = blended(theme.outerBorder, toward: .bright, amount: 0.45)
+            return withAlpha(
+                highlight,
+                min(138, max(0, Int((0.10 + (lift * 0.85)) * 255.0)))
+            )
+        }
+
+        let dim = max(0.0, lighting.ambient - light)
+        if dim > 0.01 {
+            return SDLColor(
+                r: 0,
+                g: 0,
+                b: 0,
+                a: UInt8(min(138, max(0, Int((0.08 + (dim * 0.92)) * 255.0))))
+            )
+        }
+
+        return SDLColor(r: 0, g: 0, b: 0, a: 0)
+    }
+
+    private static func withAlpha(_ color: SDLColor, _ alpha: Int) -> SDLColor {
+        SDLColor(
+            r: color.r,
+            g: color.g,
+            b: color.b,
+            a: UInt8(max(0, min(255, alpha)))
+        )
     }
 }

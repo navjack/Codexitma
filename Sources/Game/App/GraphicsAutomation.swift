@@ -13,6 +13,7 @@ enum GraphicsAutomationError: Error, CustomStringConvertible {
 
 enum GraphicsAutomationDirective: Equatable {
     case game(ActionCommand)
+    case warp(mapID: String?, position: Position, facing: Direction?)
     case cycleTheme
     case selectTheme(GraphicsVisualTheme)
     case screenshot(String?)
@@ -40,6 +41,8 @@ enum GraphicsAutomationCommandParser {
         switch try AutomationCommandParser.parse(trimmed) {
         case .game(let command):
             return .game(command)
+        case .warp(let mapID, let position, let facing):
+            return .warp(mapID: mapID, position: position, facing: facing)
         default:
             throw GraphicsAutomationError.invalidCommand(token)
         }
@@ -109,10 +112,11 @@ final class GraphicsAutomationRunner {
 
     func step(
         sendCommand: (ActionCommand) -> Void,
+        warpPlayer: (String?, Position, Direction?) throws -> Void,
         cycleTheme: () -> Void,
         selectTheme: (GraphicsVisualTheme) -> Void,
         captureScreenshot: (String?) -> Void
-    ) {
+    ) throws {
         guard !isFinished else {
             return
         }
@@ -123,6 +127,8 @@ final class GraphicsAutomationRunner {
         switch directive {
         case .game(let command):
             sendCommand(command)
+        case .warp(let mapID, let position, let facing):
+            try warpPlayer(mapID, position, facing)
         case .cycleTheme:
             cycleTheme()
         case .selectTheme(let theme):

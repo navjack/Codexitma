@@ -129,14 +129,21 @@ enum SDLGraphicsLauncher {
             }
 
             if let automationRunner, editorSession == nil, !showingEditorPrompt, pendingScreenshotLabel == nil, running {
-                automationRunner.step(
-                    sendCommand: { session.send($0) },
-                    cycleTheme: { session.cycleVisualTheme() },
-                    selectTheme: { session.selectVisualTheme($0) },
-                    captureScreenshot: { label in
-                        pendingScreenshotLabel = label ?? screenshotLabel(session: session, editorSession: nil)
-                    }
-                )
+                do {
+                    try automationRunner.step(
+                        sendCommand: { session.send($0) },
+                        warpPlayer: { mapID, position, facing in
+                            try session.warp(mapID: mapID, position: position, facing: facing)
+                        },
+                        cycleTheme: { session.cycleVisualTheme() },
+                        selectTheme: { session.selectVisualTheme($0) },
+                        captureScreenshot: { label in
+                            pendingScreenshotLabel = label ?? screenshotLabel(session: session, editorSession: nil)
+                        }
+                    )
+                } catch {
+                    running = false
+                }
             }
 
             if let editorSession {

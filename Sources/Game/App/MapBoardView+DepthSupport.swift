@@ -93,17 +93,33 @@ extension MapBoardView {
         }
 
         let feature = feature(at: position)
-        guard feature != .none else { return nil }
-        guard let appearance = depthFeatureAppearance(for: feature) else { return nil }
+        if feature != .none, let appearance = depthFeatureAppearance(for: feature) {
+            return DepthBillboard(
+                id: "feature:\(position.x):\(position.y):\(feature.debugName)",
+                pattern: appearance.pattern,
+                color: appearance.color,
+                distance: distance,
+                angleOffset: angleOffset,
+                maxDistance: maxDistance,
+                scale: appearance.scale,
+                widthScale: appearance.widthScale
+            )
+        }
+
+        let tile = tile(at: position)
+        guard let appearance = depthTileBillboardAppearance(for: tile.type) else {
+            return nil
+        }
+        let tileAppearance = depthTileAppearance(for: tile.type)
         return DepthBillboard(
-            id: "feature:\(position.x):\(position.y):\(feature.debugName)",
-            pattern: appearance.pattern,
-            color: appearance.color,
+            id: "tile:\(position.x):\(position.y):\(tile.type.rawValue)",
+            pattern: tileAppearance.pattern,
+            color: tileAppearance.color,
             distance: distance,
             angleOffset: angleOffset,
             maxDistance: maxDistance,
             scale: appearance.scale,
-            widthScale: appearance.widthScale
+            widthScale: CGFloat(appearance.widthScale)
         )
     }
 
@@ -357,9 +373,9 @@ extension MapBoardView {
                 frontTile: frontTile,
                 leftTile: leftTile,
                 rightTile: rightTile,
-                leftBlocked: !leftTile.walkable,
-                rightBlocked: !rightTile.walkable,
-                frontBlocked: !frontTile.walkable,
+                leftBlocked: leftTile.type.blocksDepthRay,
+                rightBlocked: rightTile.type.blocksDepthRay,
+                frontBlocked: frontTile.type.blocksDepthRay,
                 occupant: occupant(at: frontPosition),
                 feature: feature(at: frontPosition)
             )
@@ -533,6 +549,23 @@ extension MapBoardView {
             return "/"
         }
         return raw
+    }
+
+    func depthTileBillboardAppearance(for tileType: TileType) -> (scale: Double, widthScale: Double)? {
+        switch tileType {
+        case .stairs:
+            return (0.32, 1.18)
+        case .doorOpen:
+            return (0.58, 0.90)
+        case .brush:
+            return (0.30, 1.12)
+        case .shrine:
+            return (0.46, 0.90)
+        case .beacon:
+            return (0.54, 0.92)
+        case .floor, .wall, .water, .doorLocked:
+            return nil
+        }
     }
 
     func occupant(at position: Position) -> MapOccupant {

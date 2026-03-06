@@ -150,6 +150,28 @@ extension GameRootView {
         "CMD/CTRL+SHIFT+D DEBUG"
     }
 
+    func performTitleAction(_ option: TitleMenuOption) {
+        switch option {
+        case .startNewGame:
+            session.send(.confirm)
+        case .loadSave:
+            session.send(.load)
+        case .quitGame:
+            session.send(.quit)
+        }
+    }
+
+    func titleOptionHint(_ option: TitleMenuOption) -> String {
+        switch option {
+        case .startNewGame:
+            return "E / RETURN"
+        case .loadSave:
+            return "L"
+        case .quitGame:
+            return "X / Q"
+        }
+    }
+
     var editorConfirmOverlay: some View {
         ZStack {
             Color.black.opacity(0.74)

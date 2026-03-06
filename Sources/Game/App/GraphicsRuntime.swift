@@ -51,6 +51,11 @@ final class GameSessionController: ObservableObject {
         refresh()
     }
 
+    func warp(mapID: String?, position: Position, facing: Direction?) throws {
+        try core.warp(mapID: mapID, position: position, facing: facing)
+        refresh()
+    }
+
     var sceneSnapshot: GraphicsSceneSnapshot {
         core.sceneSnapshot
     }
@@ -171,14 +176,22 @@ final class GraphicsAppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        automationRunner.step(
-            sendCommand: { [session] in session.send($0) },
-            cycleTheme: { [session] in session.cycleVisualTheme() },
-            selectTheme: { [session] in session.selectVisualTheme($0) },
-            captureScreenshot: { [weak self] label in
-                self?.captureAutomationScreenshot(label: label)
-            }
-        )
+        do {
+            try automationRunner.step(
+                sendCommand: { [session] in session.send($0) },
+                warpPlayer: { [session] mapID, position, facing in
+                    try session.warp(mapID: mapID, position: position, facing: facing)
+                },
+                cycleTheme: { [session] in session.cycleVisualTheme() },
+                selectTheme: { [session] in session.selectVisualTheme($0) },
+                captureScreenshot: { [weak self] label in
+                    self?.captureAutomationScreenshot(label: label)
+                }
+            )
+        } catch {
+            finishAutomation()
+            return
+        }
 
         if automationRunner.isFinished {
             finishAutomation()

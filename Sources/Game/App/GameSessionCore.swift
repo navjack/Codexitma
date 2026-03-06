@@ -9,6 +9,7 @@ final class SharedGameSession {
 
     private(set) var state: GameState
     private(set) var visualTheme: GraphicsVisualTheme
+    private var cachedSceneSnapshot: GraphicsSceneSnapshot?
 
     init(
         library: GameContentLibrary,
@@ -31,7 +32,12 @@ final class SharedGameSession {
     }
 
     var sceneSnapshot: GraphicsSceneSnapshot {
-        GraphicsSceneSnapshotBuilder.build(state: state, visualTheme: visualTheme)
+        if let cachedSceneSnapshot {
+            return cachedSceneSnapshot
+        }
+        let snapshot = GraphicsSceneSnapshotBuilder.build(state: state, visualTheme: visualTheme)
+        cachedSceneSnapshot = snapshot
+        return snapshot
     }
 
     func send(_ command: ActionCommand) {
@@ -39,17 +45,49 @@ final class SharedGameSession {
         let resolved = resolvedCommand(for: command)
         engine.handle(resolved)
         state = engine.state
+        invalidateSceneSnapshot()
         playSound(for: resolved, previous: previous, current: state)
     }
 
     func cycleVisualTheme() {
         visualTheme = visualTheme.next()
         preferenceStore.saveTheme(visualTheme)
+        invalidateSceneSnapshot()
     }
 
     func selectVisualTheme(_ theme: GraphicsVisualTheme) {
         visualTheme = theme
         preferenceStore.saveTheme(theme)
+        invalidateSceneSnapshot()
+    }
+
+    func warp(mapID: String?, position: Position, facing: Direction?) throws {
+        let targetMapID = mapID ?? state.player.currentMapID
+        guard let map = engine.state.world.maps[targetMapID] else {
+            throw AutomationError.invalidCommand("warp (unknown map \(targetMapID))")
+        }
+        guard position.y >= 0, position.y < map.lines.count else {
+            throw AutomationError.invalidCommand("warp (y out of bounds)")
+        }
+
+        let row = Array(map.lines[position.y])
+        guard position.x >= 0, position.x < row.count else {
+            throw AutomationError.invalidCommand("warp (x out of bounds)")
+        }
+
+        engine.state.player.currentMapID = targetMapID
+        engine.state.player.position = position
+        engine.state.player.lastSaveMapID = targetMapID
+        engine.state.player.lastSavePosition = position
+        if let facing {
+            engine.state.player.facing = facing
+        }
+        engine.state.mode = .exploration
+        engine.state.currentDialogue = nil
+        engine.state.clearShopPanel()
+        engine.state.log("Automation warped to \(targetMapID) @ \(position.x),\(position.y).")
+        state = engine.state
+        invalidateSceneSnapshot()
     }
 
     func canOpenEditorFromCurrentMode() -> Bool {
@@ -183,5 +221,9 @@ final class SharedGameSession {
         default:
             return false
         }
+    }
+
+    private func invalidateSceneSnapshot() {
+        cachedSceneSnapshot = nil
     }
 }

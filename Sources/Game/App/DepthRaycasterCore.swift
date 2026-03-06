@@ -122,7 +122,7 @@ struct DepthRaycaster {
             travelDistance = rawDistance
 
             let tile = tileAt(Position(x: mapX, y: mapY))
-            if !tile.walkable {
+            if tile.type.blocksDepthRay {
                 hitTile = tile
                 didHit = true
                 break

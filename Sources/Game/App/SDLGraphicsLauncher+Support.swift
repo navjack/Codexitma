@@ -1,6 +1,9 @@
 import CSDL3
 import Foundation
 
+@MainActor
+private var cachedSDLDrawState: (rendererID: UInt, color: SDLColor)?
+
 extension SDLGraphicsLauncher {
     static func shaded(_ color: SDLColor, intensity: Double) -> SDLColor {
         SDLColor(
@@ -168,7 +171,11 @@ extension SDLGraphicsLauncher {
     static func fill(_ renderer: OpaquePointer, x: Int, y: Int, width: Int, height: Int, color: SDLColor) {
         guard width > 0, height > 0 else { return }
         var rect = SDL_FRect(x: Float(x), y: Float(y), w: Float(width), h: Float(height))
-        _ = SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a)
+        let rendererID = UInt(bitPattern: renderer)
+        if cachedSDLDrawState?.rendererID != rendererID || cachedSDLDrawState?.color != color {
+            _ = SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a)
+            cachedSDLDrawState = (rendererID: rendererID, color: color)
+        }
         _ = SDL_RenderFillRect(renderer, &rect)
     }
 
@@ -514,7 +521,7 @@ struct SDLBoardTheme {
     let beacon: SDLColor
 }
 
-struct SDLColor {
+struct SDLColor: Equatable {
     let r: UInt8
     let g: UInt8
     let b: UInt8

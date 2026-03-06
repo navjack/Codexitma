@@ -1,5 +1,18 @@
 import Foundation
 
+private struct DepthLightBlockingGrid {
+    let width: Int
+    let height: Int
+    let values: [Bool]
+
+    func isBlocking(x: Int, y: Int) -> Bool {
+        guard x >= 0, y >= 0, x < width, y < height else {
+            return true
+        }
+        return values[(y * width) + x]
+    }
+}
+
 extension GraphicsSceneSnapshotBuilder {
     static func makeDepthLightField(
         from state: GameState,
@@ -21,6 +34,7 @@ extension GraphicsSceneSnapshotBuilder {
                 shadowValues: []
             )
         }
+        let blockingGrid = makeLightBlockingGrid(board: board)
 
         let staticKey = staticLightCacheKey(
             from: state,
@@ -41,7 +55,7 @@ extension GraphicsSceneSnapshotBuilder {
                 subdivisions: max(1, subdivisions),
                 skyEmissive: skyEmissive,
                 sources: staticSources,
-                board: board
+                blockingGrid: blockingGrid
             )
             cachedStaticLightField = (staticKey, staticField)
         }
@@ -62,7 +76,13 @@ extension GraphicsSceneSnapshotBuilder {
 
         var values = staticField.values
         var shadowValues = staticField.shadowValues
-        applyLightSource(lantern, lightValues: &values, shadowValues: &shadowValues, field: staticField, board: board)
+        applyLightSource(
+            lantern,
+            lightValues: &values,
+            shadowValues: &shadowValues,
+            field: staticField,
+            blockingGrid: blockingGrid
+        )
         shadowValues = softenedShadowMask(shadowValues)
         let finalField = DepthLightField(
             width: board.width,
@@ -127,14 +147,14 @@ extension GraphicsSceneSnapshotBuilder {
         )
     }
 
-    static func buildLightField(
+    fileprivate static func buildLightField(
         width: Int,
         height: Int,
         ambient: Double,
         subdivisions: Int,
         skyEmissive: Double,
         sources: [DepthLightSource],
-        board: MapBoardSnapshot
+        blockingGrid: DepthLightBlockingGrid
     ) -> DepthLightField {
         let sampleScale = max(1, subdivisions)
         let sampleWidth = max(0, width * sampleScale)
@@ -164,7 +184,7 @@ extension GraphicsSceneSnapshotBuilder {
                 lightValues: &values,
                 shadowValues: &shadowValues,
                 field: field,
-                board: board
+                blockingGrid: blockingGrid
             )
         }
         shadowValues = softenedShadowMask(shadowValues)
@@ -180,15 +200,15 @@ extension GraphicsSceneSnapshotBuilder {
         )
     }
 
-    static func applyLightSource(
+    fileprivate static func applyLightSource(
         _ source: DepthLightSource,
         lightValues: inout [[Double]],
         shadowValues: inout [[Double]],
         field: DepthLightField,
-        board: MapBoardSnapshot
+        blockingGrid: DepthLightBlockingGrid
     ) {
-        guard board.width > 0,
-              board.height > 0,
+        guard blockingGrid.width > 0,
+              blockingGrid.height > 0,
               field.sampleWidth > 0,
               field.sampleHeight > 0 else {
             return
@@ -231,7 +251,7 @@ extension GraphicsSceneSnapshotBuilder {
                     y: sourceWorldY,
                     toWorldX: worldX,
                     y: worldY,
-                    board: board
+                    blockingGrid: blockingGrid
                 )
                 if blocked {
                     contribution *= source.blockedTransmission
@@ -402,12 +422,12 @@ extension GraphicsSceneSnapshotBuilder {
         }
     }
 
-    static func hasLightLineOfSight(
+    fileprivate static func hasLightLineOfSight(
         fromWorldX startX: Double,
         y startY: Double,
         toWorldX endX: Double,
         y endY: Double,
-        board: MapBoardSnapshot
+        blockingGrid: DepthLightBlockingGrid
     ) -> Bool {
         let dx = endX - startX
         let dy = endY - startY
@@ -464,7 +484,7 @@ extension GraphicsSceneSnapshotBuilder {
                     startY: startTileY,
                     endX: endTileX,
                     endY: endTileY,
-                    board: board
+                    blockingGrid: blockingGrid
                 ) {
                     return false
                 }
@@ -478,7 +498,7 @@ extension GraphicsSceneSnapshotBuilder {
                     startY: startTileY,
                     endX: endTileX,
                     endY: endTileY,
-                    board: board
+                    blockingGrid: blockingGrid
                 ) {
                     return false
                 }
@@ -494,7 +514,7 @@ extension GraphicsSceneSnapshotBuilder {
                     startY: startTileY,
                     endX: endTileX,
                     endY: endTileY,
-                    board: board
+                    blockingGrid: blockingGrid
                 ) {
                     return false
                 }
@@ -505,7 +525,7 @@ extension GraphicsSceneSnapshotBuilder {
                     startY: startTileY,
                     endX: endTileX,
                     endY: endTileY,
-                    board: board
+                    blockingGrid: blockingGrid
                 ) {
                     return false
                 }
@@ -522,7 +542,7 @@ extension GraphicsSceneSnapshotBuilder {
                     startY: startTileY,
                     endX: endTileX,
                     endY: endTileY,
-                    board: board
+                    blockingGrid: blockingGrid
                 ) {
                     return false
                 }
@@ -532,23 +552,26 @@ extension GraphicsSceneSnapshotBuilder {
         return true
     }
 
-    static func isBlockingLightTile(
+    fileprivate static func isBlockingLightTile(
         x: Int,
         y: Int,
         startX: Int,
         startY: Int,
         endX: Int,
         endY: Int,
-        board: MapBoardSnapshot
+        blockingGrid: DepthLightBlockingGrid
     ) -> Bool {
         if (x == startX && y == startY) || (x == endX && y == endY) {
             return false
         }
+        return blockingGrid.isBlocking(x: x, y: y)
+    }
 
-        guard let cell = board.cell(at: Position(x: x, y: y)) else {
-            return true
+    fileprivate static func makeLightBlockingGrid(board: MapBoardSnapshot) -> DepthLightBlockingGrid {
+        let values = board.rows.flatMap { row in
+            row.map { $0.tile.type.blocksDepthLighting }
         }
-        return !cell.tile.walkable
+        return DepthLightBlockingGrid(width: board.width, height: board.height, values: values)
     }
 
     static func resolved(_ raw: Character, state: GameState) -> Character {
@@ -556,49 +579,6 @@ extension GraphicsSceneSnapshotBuilder {
             return "/"
         }
         return raw
-    }
-
-    static func occupant(at position: Position, state: GameState) -> MapOccupant {
-        if state.player.position == position {
-            return .player
-        }
-        if let npc = state.world.npcs.first(where: { $0.mapID == state.player.currentMapID && $0.position == position }) {
-            return .npc(npc.id)
-        }
-        if let enemy = state.world.enemies.first(where: {
-            $0.active && $0.mapID == state.player.currentMapID && $0.position == position
-        }) {
-            return enemy.ai == .boss ? .boss(enemy.id) : .enemy(enemy.id)
-        }
-        return .none
-    }
-
-    static func feature(at position: Position, state: GameState) -> MapFeature {
-        guard let interactable = state.world.maps[state.player.currentMapID]?.interactables.first(where: { $0.position == position }) else {
-            return .none
-        }
-        switch interactable.kind {
-        case .chest:
-            return state.world.openedInteractables.contains(interactable.id) ? .none : .chest
-        case .bed:
-            return .bed
-        case .plate:
-            return state.world.openedInteractables.contains(interactable.id) ? .plateDown : .plateUp
-        case .switchRune:
-            return state.world.openedInteractables.contains("spire_mirrors_aligned") ? .switchLit : .switchIdle
-        case .torchFloor:
-            return .torchFloor
-        case .torchWall:
-            return .torchWall
-        case .shrine:
-            return .shrine
-        case .beacon:
-            return .beacon
-        case .gate:
-            return .gate
-        case .npc:
-            return .none
-        }
     }
 
     static func depthBackdropStyle(for state: GameState, mapID: String) -> DepthBackdropStyle {

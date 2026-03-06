@@ -5,7 +5,8 @@ import SwiftUI
 
 extension GameRootView {
     var titleView: some View {
-        ScrollView(.vertical, showsIndicators: false) {
+        let scene = session.sceneSnapshot
+        return ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 16) {
                 Spacer(minLength: 24)
                 PixelBanner(text: "CODEXITMA", color: palette.titleGold)
@@ -16,37 +17,63 @@ extension GameRootView {
                     .font(.system(size: 11, weight: .regular, design: .monospaced))
                     .foregroundStyle(palette.accentBlue)
 
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 10) {
-                        menuButton("A: PREV") { session.send(.move(.left)) }
-                        menuButton("D: NEXT") { session.send(.move(.right)) }
-                        menuButton("N: CREATE") { session.send(.newGame) }
-                        menuButton("L: LOAD") { session.send(.load) }
-                        menuButton("M: EDIT") { requestEditor() }
-                        menuButton("X: QUIT") { session.send(.quit) }
+                PixelPanel(title: "SELECTED ADVENTURE", palette: palette) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(session.state.selectedAdventureTitle().uppercased())
+                            .font(.system(size: 13, weight: .bold, design: .monospaced))
+                            .foregroundStyle(palette.lightGold)
+                        Text(session.state.selectedAdventureSummary().uppercased())
+                            .font(.system(size: 10, weight: .regular, design: .monospaced))
+                            .foregroundStyle(palette.text.opacity(0.9))
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text("A/D CHANGES THE ADVENTURE. A NEW HERO STARTS IN THE ONE SHOWN HERE.")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .foregroundStyle(palette.accentBlue)
                     }
-                    .frame(maxWidth: 900)
-
-                    VStack(spacing: 10) {
-                        HStack(spacing: 10) {
-                            menuButton("A: PREV") { session.send(.move(.left)) }
-                            menuButton("D: NEXT") { session.send(.move(.right)) }
-                            menuButton("N: CREATE") { session.send(.newGame) }
-                        }
-                        HStack(spacing: 10) {
-                            menuButton("L: LOAD") { session.send(.load) }
-                            menuButton("M: EDIT") { requestEditor() }
-                            menuButton("X: QUIT") { session.send(.quit) }
-                        }
-                    }
-                    .frame(maxWidth: 540)
+                    .frame(maxWidth: 760, alignment: .leading)
                 }
 
-                Text(session.state.selectedAdventureSummary().uppercased())
-                    .font(.system(size: 10, weight: .regular, design: .monospaced))
-                    .foregroundStyle(palette.text.opacity(0.9))
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 820)
+                PixelPanel(title: "MAIN MENU", palette: palette) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(scene.titleOptions, id: \.index) { option in
+                            let selected = option.isSelected
+                            let resolved = TitleMenuOption.allCases[option.index]
+
+                            Button {
+                                performTitleAction(resolved)
+                            } label: {
+                                HStack(alignment: .top, spacing: 10) {
+                                    Text(selected ? ">" : " ")
+                                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                        .foregroundStyle(selected ? palette.background : palette.text)
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        HStack {
+                                            Text(option.label.uppercased())
+                                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                            Spacer(minLength: 8)
+                                            Text(titleOptionHint(resolved))
+                                                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                        }
+                                        Text(option.detail.uppercased())
+                                            .font(.system(size: 9, weight: .regular, design: .monospaced))
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                }
+                                .foregroundStyle(selected ? palette.background : palette.text)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 8)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(selected ? palette.lightGold : palette.background.opacity(0.22))
+                                .overlay(
+                                    Rectangle()
+                                        .stroke(selected ? palette.titleGold : palette.lightGold.opacity(0.45), lineWidth: 2)
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .frame(maxWidth: 760, alignment: .leading)
+                }
 
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 10) {
@@ -77,13 +104,13 @@ extension GameRootView {
                 }
 
                 VStack(spacing: 4) {
-                    Text("\(session.visualTheme.displayName.uppercased()) DISPLAY ACTIVE. CREATE A HERO BEFORE YOU ENTER THE VALLEY")
-                    Text("A/D PICK ADVENTURE   ARROWS/WASD STEP ROOM TO ROOM")
-                    Text("E TALK OR USE   I OPEN PACK")
-                    Text("J SHOW GOAL   K SAVE   L LOAD   T SWITCH STYLE")
-                    Text("M OPENS EDITOR   F12 SAVES SCREENSHOT PNG")
+                    Text("\(session.visualTheme.displayName.uppercased()) DISPLAY ACTIVE. START NEW GAME IS SELECTED BY DEFAULT.")
+                    Text("W/S CHOOSE MENU OPTION   A/D CHANGE ADVENTURE")
+                    Text("E OR RETURN ACTIVATE THE HIGHLIGHTED CHOICE")
+                    Text("L LOADS A SAVE DIRECTLY   M OPENS EDITOR   T SWITCHES STYLE")
+                    Text("F12 SAVES SCREENSHOT PNG")
                     Text("CMD/CTRL+SHIFT+D TOGGLES LIGHT DEBUG")
-                    Text("Q BACKS OUT OF MENUS")
+                    Text("Q OR X QUITS FROM THE TITLE SCREEN")
                     Text("--BRIDGE / --SCRIPT FOR HEADLESS CONTROL")
                 }
                 .font(.system(size: 10, weight: .regular, design: .monospaced))
@@ -111,7 +138,7 @@ extension GameRootView {
                     .foregroundStyle(palette.text)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 40)
-                Text(session.state.selectedAdventureTitle().uppercased())
+                Text("NEW HERO FOR \(session.state.selectedAdventureTitle().uppercased())")
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
                     .foregroundStyle(palette.accentBlue)
 
@@ -157,6 +184,29 @@ extension GameRootView {
                     .frame(maxWidth: 520, alignment: .leading)
                 }
 
+                PixelPanel(title: "BEGIN ADVENTURE", palette: palette) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("THIS HERO WILL ENTER \(session.state.selectedAdventureTitle().uppercased()).")
+                            .font(.system(size: 10, weight: .regular, design: .monospaced))
+                            .foregroundStyle(palette.text)
+                            .fixedSize(horizontal: false, vertical: true)
+                        ViewThatFits(in: .horizontal) {
+                            HStack(spacing: 10) {
+                                menuButton("START \(session.state.selectedAdventureTitle().uppercased())") { session.send(.confirm) }
+                                menuButton("BACK") { session.send(.cancel) }
+                            }
+                            VStack(spacing: 10) {
+                                menuButton("START \(session.state.selectedAdventureTitle().uppercased())") { session.send(.confirm) }
+                                menuButton("BACK") { session.send(.cancel) }
+                            }
+                        }
+                        Text("A/D CHANGES CLASS   E OR RETURN STARTS THE ADVENTURE")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .foregroundStyle(palette.accentBlue)
+                    }
+                    .frame(maxWidth: 540, alignment: .leading)
+                }
+
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 10) {
                         menuButton("T: STYLE") { session.cycleVisualTheme() }
@@ -164,25 +214,17 @@ extension GameRootView {
                             .font(.system(size: 10, weight: .bold, design: .monospaced))
                             .foregroundStyle(palette.accentBlue)
                         menuButton("M: EDIT") { requestEditor() }
-                        menuButton("E: BEGIN") { session.send(.confirm) }
-                        menuButton("Q: BACK") { session.send(.cancel) }
                     }
-                    .frame(maxWidth: 520)
+                    .frame(maxWidth: 420)
 
                     VStack(spacing: 10) {
-                        HStack(spacing: 10) {
-                            menuButton("T: STYLE") { session.cycleVisualTheme() }
-                            menuButton("M: EDIT") { requestEditor() }
-                        }
-                        HStack(spacing: 10) {
-                            menuButton("E: BEGIN") { session.send(.confirm) }
-                            menuButton("Q: BACK") { session.send(.cancel) }
-                        }
+                        menuButton("T: STYLE") { session.cycleVisualTheme() }
+                        menuButton("M: EDIT") { requestEditor() }
                         Text(session.visualTheme.displayName.uppercased())
                             .font(.system(size: 10, weight: .bold, design: .monospaced))
                             .foregroundStyle(palette.accentBlue)
                     }
-                    .frame(maxWidth: 420)
+                    .frame(maxWidth: 320)
                 }
                 Spacer(minLength: 24)
             }

@@ -4,51 +4,35 @@ extension GameEngine {
     func handleTitle(_ command: ActionCommand) {
         let adventureCount = max(state.availableAdventures.count, 1)
         switch command {
-        case .move(.left), .move(.up):
+        case .move(.left):
             state.selectedAdventureIndex = (state.selectedAdventureIndex - 1 + adventureCount) % adventureCount
             logSelectedAdventure()
-        case .move(.right), .move(.down):
+        case .move(.right):
             state.selectedAdventureIndex = (state.selectedAdventureIndex + 1) % adventureCount
             logSelectedAdventure()
+        case .move(.up):
+            moveTitleSelection(step: -1)
+        case .move(.down):
+            moveTitleSelection(step: 1)
         case .turnLeft:
             state.selectedAdventureIndex = (state.selectedAdventureIndex - 1 + adventureCount) % adventureCount
             logSelectedAdventure()
         case .turnRight:
             state.selectedAdventureIndex = (state.selectedAdventureIndex + 1) % adventureCount
             logSelectedAdventure()
-        case .newGame, .confirm:
-            state.mode = .characterCreation
-            state.log("Choose a class for \(state.selectedAdventureTitle()), then confirm.")
+        case .newGame:
+            state.titleSelectionIndex = 0
+            activateSelectedTitleOption()
+        case .interact, .confirm:
+            activateSelectedTitleOption()
         case .load:
-            do {
-                let save = try saveRepository.load()
-                guard library.contains(save.adventureID) else {
-                    state.log("The saved road is missing. Reinstall that adventure pack first.")
-                    return
-                }
-                content = library.content(for: save.adventureID)
-                state.player = save.player
-                state.world = save.world
-                state.quests = save.quests
-                state.playTimeSeconds = save.playTimeSeconds
-                state.currentAdventureID = save.adventureID
-                state.availableAdventures = library.catalog
-                state.questFlow = content.questFlow
-                state.selectedAdventureIndex = library.catalog.firstIndex { $0.id == save.adventureID } ?? 0
-                state.clearShopPanel()
-                state.mode = .exploration
-                state.log("You return to the last warm light.")
-            } catch SaveError.notFound {
-                state.log("No save waits in the ash.")
-            } catch {
-                state.log("The save file is broken.")
-            }
+            loadSavedAdventure()
         case .help:
-            logSelectedAdventure()
+            state.log("\(state.selectedTitleOption().label): \(state.selectedTitleOption().detail)")
         case .quit, .cancel:
             state.shouldQuit = true
         case .moveBackward:
-            break
+            moveTitleSelection(step: 1)
         default:
             break
         }
@@ -75,6 +59,7 @@ extension GameEngine {
             state.log("\(template.title): \(template.summary)")
         case .cancel:
             state.mode = .title
+            state.titleSelectionIndex = 0
             state.log("The campfire waits while you reconsider.")
         case .quit:
             state.shouldQuit = true
@@ -187,6 +172,57 @@ extension GameEngine {
             state.shouldQuit = true
         default:
             break
+        }
+    }
+
+    private func moveTitleSelection(step: Int) {
+        let options = TitleMenuOption.allCases
+        guard !options.isEmpty else {
+            state.titleSelectionIndex = 0
+            return
+        }
+
+        state.titleSelectionIndex = (state.titleSelectionIndex + step + options.count) % options.count
+        state.log("\(state.selectedTitleOption().label) selected.")
+    }
+
+    private func activateSelectedTitleOption() {
+        switch state.selectedTitleOption() {
+        case .startNewGame:
+            state.mode = .characterCreation
+            state.selectedHeroIndex = 0
+            state.log("Choose a class for \(state.selectedAdventureTitle()), then begin the road.")
+        case .loadSave:
+            loadSavedAdventure()
+        case .quitGame:
+            state.shouldQuit = true
+        }
+    }
+
+    private func loadSavedAdventure() {
+        do {
+            let save = try saveRepository.load()
+            guard library.contains(save.adventureID) else {
+                state.log("The saved road is missing. Reinstall that adventure pack first.")
+                return
+            }
+            content = library.content(for: save.adventureID)
+            state.player = save.player
+            state.world = save.world
+            state.quests = save.quests
+            state.playTimeSeconds = save.playTimeSeconds
+            state.currentAdventureID = save.adventureID
+            state.availableAdventures = library.catalog
+            state.questFlow = content.questFlow
+            state.selectedAdventureIndex = library.catalog.firstIndex { $0.id == save.adventureID } ?? 0
+            state.titleSelectionIndex = TitleMenuOption.allCases.firstIndex(of: .startNewGame) ?? 0
+            state.clearShopPanel()
+            state.mode = .exploration
+            state.log("You return to the last warm light.")
+        } catch SaveError.notFound {
+            state.log("No save waits in the ash.")
+        } catch {
+            state.log("The save file is broken.")
         }
     }
 }

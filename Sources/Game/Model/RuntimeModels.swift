@@ -1,5 +1,33 @@
 import Foundation
 
+enum TitleMenuOption: CaseIterable {
+    case startNewGame
+    case loadSave
+    case quitGame
+
+    var label: String {
+        switch self {
+        case .startNewGame:
+            return "Start New Game"
+        case .loadSave:
+            return "Load Save"
+        case .quitGame:
+            return "Quit Game"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .startNewGame:
+            return "Create a fresh hero in the selected adventure."
+        case .loadSave:
+            return "Resume the last saved road, if one exists."
+        case .quitGame:
+            return "Close Codexitma."
+        }
+    }
+}
+
 enum PauseMenuOption: CaseIterable {
     case resume
     case saveAndReturnToTitle
@@ -92,6 +120,7 @@ struct GameState {
     var shopDetail: String?
     var selectedHeroIndex = 0
     var selectedAdventureIndex = 0
+    var titleSelectionIndex = 0
     var pauseSelectionIndex = 0
 
     mutating func log(_ message: String) {
@@ -133,6 +162,24 @@ struct GameState {
             return
         }
         pauseSelectionIndex = max(0, min(pauseSelectionIndex, options.count - 1))
+    }
+
+    mutating func clampTitleSelection() {
+        let options = TitleMenuOption.allCases
+        guard !options.isEmpty else {
+            titleSelectionIndex = 0
+            return
+        }
+        titleSelectionIndex = max(0, min(titleSelectionIndex, options.count - 1))
+    }
+
+    func selectedTitleOption() -> TitleMenuOption {
+        let options = TitleMenuOption.allCases
+        guard !options.isEmpty else {
+            return .startNewGame
+        }
+        let index = max(0, min(titleSelectionIndex, options.count - 1))
+        return options[index]
     }
 
     func selectedPauseOption() -> PauseMenuOption {

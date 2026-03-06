@@ -87,6 +87,7 @@ struct DepthFloorLightingSnapshot {
     let bands: Int
     let ambient: Double
     let values: [[Double]]
+    let shadowValues: [[Double]]
 
     func level(column: Int, band: Int) -> Double {
         guard band >= 0,
@@ -100,8 +101,32 @@ struct DepthFloorLightingSnapshot {
     }
 
     func interpolatedLevel(xNormalized: Double, yNormalized: Double) -> Double {
-        guard !values.isEmpty, columns > 0, bands > 0 else {
-            return ambient
+        interpolatedSample(from: values, xNormalized: xNormalized, yNormalized: yNormalized)
+    }
+
+    func shadow(column: Int, band: Int) -> Double {
+        guard band >= 0,
+              band < shadowValues.count,
+              column >= 0,
+              !shadowValues.isEmpty,
+              column < shadowValues[band].count else {
+            return 0.0
+        }
+        return shadowValues[band][column]
+    }
+
+    func interpolatedShadow(xNormalized: Double, yNormalized: Double) -> Double {
+        interpolatedSample(from: shadowValues, xNormalized: xNormalized, yNormalized: yNormalized, fallback: 0.0)
+    }
+
+    private func interpolatedSample(
+        from source: [[Double]],
+        xNormalized: Double,
+        yNormalized: Double,
+        fallback: Double? = nil
+    ) -> Double {
+        guard !source.isEmpty, columns > 0, bands > 0 else {
+            return fallback ?? ambient
         }
 
         let x = max(0.0, min(1.0, xNormalized)) * Double(max(0, columns - 1))
@@ -113,9 +138,15 @@ struct DepthFloorLightingSnapshot {
         let tx = x - Double(x0)
         let ty = y - Double(y0)
 
-        let top = (level(column: x0, band: y0) * (1.0 - tx)) + (level(column: x1, band: y0) * tx)
-        let bottom = (level(column: x0, band: y1) * (1.0 - tx)) + (level(column: x1, band: y1) * tx)
-        return max(0.0, min(1.0, (top * (1.0 - ty)) + (bottom * ty)))
+        let sample00 = source[y0][x0]
+        let sample10 = source[y0][x1]
+        let sample01 = source[y1][x0]
+        let sample11 = source[y1][x1]
+        let top = (sample00 * (1.0 - tx)) + (sample10 * tx)
+        let bottom = (sample01 * (1.0 - tx)) + (sample11 * tx)
+        let value = (top * (1.0 - ty)) + (bottom * ty)
+        let base = fallback ?? ambient
+        return max(0.0, min(1.0, value.isFinite ? value : base))
     }
 }
 
@@ -207,6 +238,10 @@ struct DepthSceneSnapshot {
     let floorLighting: DepthFloorLightingSnapshot
     let tileLighting: DepthTileLightingSnapshot
     let worldLighting: DepthWorldLightingSnapshot
+
+    var backdropLabel: String {
+        usesSkyBackdrop ? "SKY" : "CEILING"
+    }
 }
 
 struct InventoryEntrySnapshot {
@@ -232,6 +267,13 @@ struct PauseOptionSnapshot {
     let isSelected: Bool
 }
 
+struct TitleOptionSnapshot {
+    let index: Int
+    let label: String
+    let detail: String
+    let isSelected: Bool
+}
+
 struct GraphicsSceneSnapshot {
     let mode: GameMode
     let visualTheme: GraphicsVisualTheme
@@ -247,6 +289,8 @@ struct GraphicsSceneSnapshot {
     let questFlow: QuestFlowDefinition
     let availableAdventures: [AdventureCatalogEntry]
     let selectedAdventureIndex: Int
+    let titleOptions: [TitleOptionSnapshot]
+    let titleDetail: String?
     let heroOptions: [HeroClass]
     let selectedHeroIndex: Int
     let selectedHeroClass: HeroClass

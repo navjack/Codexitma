@@ -1,5 +1,20 @@
 import Foundation
 
+private let sharedDepthRenderDistance: Double = 18.0
+
+private struct SceneBoardLookups {
+    let occupants: [Position: MapOccupant]
+    let features: [Position: MapFeature]
+
+    func occupant(at position: Position) -> MapOccupant {
+        occupants[position] ?? .none
+    }
+
+    func feature(at position: Position) -> MapFeature {
+        features[position] ?? .none
+    }
+}
+
 extension GraphicsSceneSnapshotBuilder {
     static func build(state: GameState, visualTheme: GraphicsVisualTheme) -> GraphicsSceneSnapshot {
         let board = makeBoard(from: state)
@@ -23,6 +38,8 @@ extension GraphicsSceneSnapshotBuilder {
             questFlow: state.questFlow,
             availableAdventures: state.availableAdventures,
             selectedAdventureIndex: state.selectedAdventureIndex,
+            titleOptions: titleOptions(from: state),
+            titleDetail: titleDetail(from: state),
             heroOptions: HeroClass.allCases,
             selectedHeroIndex: state.selectedHeroIndex,
             selectedHeroClass: selectedHeroClass,
@@ -114,6 +131,24 @@ extension GraphicsSceneSnapshotBuilder {
         }
     }
 
+    static func titleOptions(from state: GameState) -> [TitleOptionSnapshot] {
+        TitleMenuOption.allCases.enumerated().map { index, option in
+            TitleOptionSnapshot(
+                index: index,
+                label: option.label,
+                detail: option.detail,
+                isSelected: index == state.titleSelectionIndex
+            )
+        }
+    }
+
+    static func titleDetail(from state: GameState) -> String? {
+        guard state.mode == .title else {
+            return nil
+        }
+        return state.selectedTitleOption().detail
+    }
+
     static func pauseDetail(from state: GameState) -> String? {
         guard state.mode == .pause else {
             return nil
@@ -125,15 +160,17 @@ extension GraphicsSceneSnapshotBuilder {
         guard let map = state.world.maps[state.player.currentMapID] else {
             return MapBoardSnapshot(width: 0, height: 0, rows: [])
         }
+        let lookups = makeSceneBoardLookups(from: state)
 
         let rows = map.lines.enumerated().map { y, line in
-            Array(line).enumerated().map { x, raw in
+            let glyphs = Array(line)
+            return glyphs.enumerated().map { x, raw in
                 let position = Position(x: x, y: y)
                 return BoardCellSnapshot(
                     position: position,
                     tile: TileFactory.tile(for: resolved(raw, state: state)),
-                    occupant: occupant(at: position, state: state),
-                    feature: feature(at: position, state: state)
+                    occupant: lookups.occupant(at: position),
+                    feature: lookups.feature(at: position)
                 )
             }
         }
@@ -143,6 +180,57 @@ extension GraphicsSceneSnapshotBuilder {
             height: rows.count,
             rows: rows
         )
+    }
+
+    fileprivate static func makeSceneBoardLookups(from state: GameState) -> SceneBoardLookups {
+        var occupants: [Position: MapOccupant] = [:]
+        var features: [Position: MapFeature] = [:]
+        let currentMapID = state.player.currentMapID
+
+        for npc in state.world.npcs where npc.mapID == currentMapID {
+            occupants[npc.position] = .npc(npc.id)
+        }
+
+        for enemy in state.world.enemies where enemy.active && enemy.mapID == currentMapID {
+            occupants[enemy.position] = enemy.ai == .boss ? .boss(enemy.id) : .enemy(enemy.id)
+        }
+
+        occupants[state.player.position] = .player
+
+        if let interactables = state.world.maps[currentMapID]?.interactables {
+            let opened = state.world.openedInteractables
+            let mirrorsAligned = opened.contains("spire_mirrors_aligned")
+            for interactable in interactables {
+                let feature: MapFeature
+                switch interactable.kind {
+                case .chest:
+                    feature = opened.contains(interactable.id) ? .none : .chest
+                case .bed:
+                    feature = .bed
+                case .plate:
+                    feature = opened.contains(interactable.id) ? .plateDown : .plateUp
+                case .switchRune:
+                    feature = mirrorsAligned ? .switchLit : .switchIdle
+                case .torchFloor:
+                    feature = .torchFloor
+                case .torchWall:
+                    feature = .torchWall
+                case .shrine:
+                    feature = .shrine
+                case .beacon:
+                    feature = .beacon
+                case .gate:
+                    feature = .gate
+                case .npc:
+                    feature = .none
+                }
+                if feature != .none {
+                    features[interactable.position] = feature
+                }
+            }
+        }
+
+        return SceneBoardLookups(occupants: occupants, features: features)
     }
 
     static func makeDepthScene(from state: GameState, board: MapBoardSnapshot) -> DepthSceneSnapshot {
@@ -298,20 +386,25 @@ extension GraphicsSceneSnapshotBuilder {
         let originX = Double(state.player.position.x) + 0.5
         let originY = Double(state.player.position.y) + 0.5
         let baseAngle = facingAngle(for: state.player.facing)
+        var values = Array(
+            repeating: Array(repeating: lightField.ambient, count: safeColumns),
+            count: safeBands
+        )
+        var shadowValues = Array(
+            repeating: Array(repeating: 0.0, count: safeColumns),
+            count: safeBands
+        )
 
-        let values: [[Double]] = (0..<safeBands).map { band in
+        for band in 0..<safeBands {
             let t = (Double(band) + 0.5) / Double(safeBands)
             let distance = 0.72 + (pow(1.0 - t, 1.45) * (maxDistance - 0.72))
-            return (0..<safeColumns).map { column in
+            for column in 0..<safeColumns {
                 let cameraOffset = ((Double(column) + 0.5) / Double(safeColumns)) - 0.5
                 let rayAngle = baseAngle + (cameraOffset * fieldOfView)
                 let sampleX = originX + (cos(rayAngle) * distance)
                 let sampleY = originY + (sin(rayAngle) * distance)
-                let level = lightField.level(atWorldX: sampleX, y: sampleY)
-                return max(
-                    lightField.ambient * 0.82,
-                    min(1.0, pow(level, 0.78) + 0.05)
-                )
+                values[band][column] = lightField.level(atWorldX: sampleX, y: sampleY)
+                shadowValues[band][column] = lightField.shadowLevel(atWorldX: sampleX, y: sampleY)
             }
         }
 
@@ -319,7 +412,8 @@ extension GraphicsSceneSnapshotBuilder {
             columns: safeColumns,
             bands: safeBands,
             ambient: lightField.ambient,
-            values: values
+            values: values,
+            shadowValues: shadowValues
         )
     }
 
@@ -489,7 +583,7 @@ extension GraphicsSceneSnapshotBuilder {
         if tightIndoor {
             return DepthRenderProfile(
                 fieldOfView: .pi / 3.4,
-                maxDistance: 8.5,
+                maxDistance: sharedDepthRenderDistance,
                 columns: 96,
                 ambientLight: 0.11,
                 skyEmissive: 0.0,
@@ -500,7 +594,7 @@ extension GraphicsSceneSnapshotBuilder {
         if backdrop == .sky {
             return DepthRenderProfile(
                 fieldOfView: .pi / 2.95,
-                maxDistance: 12.0,
+                maxDistance: sharedDepthRenderDistance,
                 columns: 128,
                 ambientLight: 0.18,
                 skyEmissive: 0.12,
@@ -510,7 +604,7 @@ extension GraphicsSceneSnapshotBuilder {
         }
         return DepthRenderProfile(
             fieldOfView: defaultDepthFieldOfView,
-            maxDistance: 10.0,
+            maxDistance: sharedDepthRenderDistance,
             columns: 112,
             ambientLight: 0.15,
             skyEmissive: 0.0,

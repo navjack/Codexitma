@@ -25,6 +25,25 @@ enum TileType: String, Codable {
     case beacon
 }
 
+extension TileType {
+    var blocksDepthRay: Bool {
+        switch self {
+        case .wall, .doorLocked:
+            return true
+        case .floor, .water, .brush, .doorOpen, .shrine, .stairs, .beacon:
+            return false
+        }
+    }
+
+    var blocksDepthLighting: Bool {
+        blocksDepthRay
+    }
+
+    var usesDepthPoolSurface: Bool {
+        self == .water
+    }
+}
+
 enum Direction: String, Codable, CaseIterable {
     case up
     case down

@@ -64,7 +64,7 @@ struct MapBoardView: View {
                         }
                     }
                 }
-                if showLightingDebug, let lighting {
+                if let lighting {
                     topDownLightingOverlay(board: board, lighting: lighting, theme: theme)
                 }
             }

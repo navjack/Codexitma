@@ -109,6 +109,10 @@ import Testing
     #expect(try GraphicsAutomationCommandParser.parse("theme:depth3d") == .selectTheme(.depth3D))
     #expect(try GraphicsAutomationCommandParser.parse("theme:gemstone") == .selectTheme(.gemstone))
     #expect(try GraphicsAutomationCommandParser.parse("e") == .game(.interact))
+    #expect(
+        try GraphicsAutomationCommandParser.parse("warp:south_fields:5:2:e")
+            == .warp(mapID: "south_fields", position: Position(x: 5, y: 2), facing: .right)
+    )
 }
 
 @Test func launchOptionsRemainGraphicsOnlyEvenWithLegacyTerminalFlag() async throws {
@@ -175,6 +179,8 @@ import Testing
     #expect(topDown.board.height > 0)
     #expect(topDown.depth == nil)
     #expect(topDown.availableAdventures.isEmpty == false)
+    #expect(topDown.titleOptions.count == TitleMenuOption.allCases.count)
+    #expect(topDown.titleOptions.first?.isSelected == true)
     #expect(topDown.selectedHeroClass == engine.state.selectedHeroClass())
 
     let depth = GraphicsSceneSnapshotBuilder.build(state: engine.state, visualTheme: .depth3D)
@@ -182,6 +188,39 @@ import Testing
     #expect((depth.depth?.samples.count ?? 0) >= 96)
     #expect((depth.depth?.maxDistance ?? 0) >= 8.5)
     #expect((depth.depth?.samples.first?.lightLevel ?? 0) > 0)
+}
+
+@Test func titleMenuUsesVerticalSelectionAndConfirmStartsCharacterCreation() async throws {
+    let library = try ContentLoader().load()
+    let saveURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString).appendingPathExtension("json")
+    let engine = GameEngine(library: library, saveRepository: SaveRepository(fileURL: saveURL))
+
+    #expect(engine.state.mode == .title)
+    #expect(engine.state.selectedTitleOption() == .startNewGame)
+
+    engine.handle(.move(.down))
+
+    #expect(engine.state.mode == .title)
+    #expect(engine.state.selectedTitleOption() == .loadSave)
+
+    engine.handle(.move(.up))
+    engine.handle(.confirm)
+
+    #expect(engine.state.mode == .characterCreation)
+    #expect(engine.state.selectedHeroClass() == .warden)
+}
+
+@Test func titleMenuKeepsAdventureSelectionOnHorizontalMovement() async throws {
+    let library = try ContentLoader().load()
+    let saveURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString).appendingPathExtension("json")
+    let engine = GameEngine(library: library, saveRepository: SaveRepository(fileURL: saveURL))
+    let initialTitleOption = engine.state.selectedTitleOption()
+    let initialAdventure = engine.state.selectedAdventureID()
+
+    engine.handle(.move(.right))
+
+    #expect(engine.state.selectedTitleOption() == initialTitleOption)
+    #expect(engine.state.selectedAdventureID() != initialAdventure || engine.state.availableAdventures.count <= 1)
 }
 
 @Test func sharedGameSessionUsesSameDepthControlRemapAsNativeGraphics() async throws {
@@ -308,6 +347,83 @@ import Testing
     let sample = try #require(caster.castSamples(columns: 1, maxDistance: 8).first)
     #expect(sample.didHit)
     #expect(abs(sample.correctedDistance - 1.5) < 0.001)
+}
+
+@Test func depthRaycasterSkipsWaterAndHitsRealOccluder() async throws {
+    let map = [
+        "######",
+        "#.~..#",
+        "######"
+    ]
+
+    let caster = DepthRaycaster(
+        origin: DepthPoint(x: 1.5, y: 1.5),
+        facing: .right
+    ) { position in
+        guard position.y >= 0,
+              position.y < map.count,
+              position.x >= 0,
+              position.x < map[position.y].count else {
+            return TileFactory.tile(for: "#")
+        }
+        let raw = Array(map[position.y])[position.x]
+        return TileFactory.tile(for: raw)
+    }
+
+    let sample = try #require(caster.castSamples(columns: 1, maxDistance: 8).first)
+    #expect(sample.didHit)
+    #expect(sample.hitTile.type == .wall)
+    #expect(sample.hitPosition == Position(x: 5, y: 1))
+    #expect(abs(sample.correctedDistance - 3.5) < 0.001)
+}
+
+@Test func depthTileSemanticsSeparateWaterFromWalls() async throws {
+    #expect(TileFactory.tile(for: "#").type.blocksDepthRay)
+    #expect(TileFactory.tile(for: "+").type.blocksDepthRay)
+    #expect(TileFactory.tile(for: "+").type.blocksDepthLighting)
+    #expect(TileFactory.tile(for: "~").type.blocksDepthRay == false)
+    #expect(TileFactory.tile(for: "~").type.blocksDepthLighting == false)
+    #expect(TileFactory.tile(for: "\"").type.blocksDepthRay == false)
+    #expect(TileFactory.tile(for: "/").type.blocksDepthRay == false)
+    #expect(TileFactory.tile(for: "*").type.blocksDepthRay == false)
+    #expect(TileFactory.tile(for: ">").type.blocksDepthRay == false)
+    #expect(TileFactory.tile(for: "B").type.blocksDepthRay == false)
+    #expect(TileFactory.tile(for: "~").type.usesDepthPoolSurface)
+    #expect(TileFactory.tile(for: "\"").type.usesDepthPoolSurface == false)
+    #expect(TileFactory.tile(for: "/").type.usesDepthPoolSurface == false)
+    #expect(TileFactory.tile(for: "*").type.usesDepthPoolSurface == false)
+    #expect(TileFactory.tile(for: ">").type.usesDepthPoolSurface == false)
+    #expect(TileFactory.tile(for: "B").type.usesDepthPoolSurface == false)
+}
+
+@Test func depthTileBillboardsOnlyAppearForPassThroughSceneryTiles() async throws {
+    let floorCell = BoardCellSnapshot(position: Position(x: 0, y: 0), tile: TileFactory.tile(for: "."), occupant: .none, feature: .none)
+    let wallCell = BoardCellSnapshot(position: Position(x: 1, y: 0), tile: TileFactory.tile(for: "#"), occupant: .none, feature: .none)
+    let waterCell = BoardCellSnapshot(position: Position(x: 2, y: 0), tile: TileFactory.tile(for: "~"), occupant: .none, feature: .none)
+    let brushCell = BoardCellSnapshot(position: Position(x: 3, y: 0), tile: TileFactory.tile(for: "\""), occupant: .none, feature: .none)
+    let stairsCell = BoardCellSnapshot(position: Position(x: 4, y: 0), tile: TileFactory.tile(for: ">"), occupant: .none, feature: .none)
+    let shrineCell = BoardCellSnapshot(position: Position(x: 5, y: 0), tile: TileFactory.tile(for: "*"), occupant: .none, feature: .none)
+    let beaconCell = BoardCellSnapshot(position: Position(x: 6, y: 0), tile: TileFactory.tile(for: "B"), occupant: .none, feature: .none)
+    let openDoorCell = BoardCellSnapshot(position: Position(x: 7, y: 0), tile: TileFactory.tile(for: "/"), occupant: .none, feature: .none)
+
+    #expect(GraphicsSceneSnapshotBuilder.makeBillboard(for: floorCell, distance: 1.0, angleOffset: 0.0, maxDistance: 18.0, lightLevel: 1.0) == nil)
+    #expect(GraphicsSceneSnapshotBuilder.makeBillboard(for: wallCell, distance: 1.0, angleOffset: 0.0, maxDistance: 18.0, lightLevel: 1.0) == nil)
+    #expect(GraphicsSceneSnapshotBuilder.makeBillboard(for: waterCell, distance: 1.0, angleOffset: 0.0, maxDistance: 18.0, lightLevel: 1.0) == nil)
+    #expect(isTileBillboard(GraphicsSceneSnapshotBuilder.makeBillboard(for: brushCell, distance: 1.0, angleOffset: 0.0, maxDistance: 18.0, lightLevel: 1.0), type: .brush))
+    #expect(isTileBillboard(GraphicsSceneSnapshotBuilder.makeBillboard(for: stairsCell, distance: 1.0, angleOffset: 0.0, maxDistance: 18.0, lightLevel: 1.0), type: .stairs))
+    #expect(isTileBillboard(GraphicsSceneSnapshotBuilder.makeBillboard(for: shrineCell, distance: 1.0, angleOffset: 0.0, maxDistance: 18.0, lightLevel: 1.0), type: .shrine))
+    #expect(isTileBillboard(GraphicsSceneSnapshotBuilder.makeBillboard(for: beaconCell, distance: 1.0, angleOffset: 0.0, maxDistance: 18.0, lightLevel: 1.0), type: .beacon))
+    #expect(isTileBillboard(GraphicsSceneSnapshotBuilder.makeBillboard(for: openDoorCell, distance: 1.0, angleOffset: 0.0, maxDistance: 18.0, lightLevel: 1.0), type: .doorOpen))
+}
+
+private func isTileBillboard(_ billboard: DepthBillboardSnapshot?, type: TileType) -> Bool {
+    guard let billboard else {
+        return false
+    }
+    guard case .tile(let billboardType) = billboard.kind else {
+        return false
+    }
+    return billboardType.rawValue == type.rawValue
 }
 
 @Test func movementUpdatesPlayerFacing() async throws {
