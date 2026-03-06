@@ -219,6 +219,7 @@ final class KeyCaptureView: NSView {
         case 124: return .move(.right)
         case 125: return .move(.down)
         case 126: return .move(.up)
+        case 36, 76: return .confirm
         default: break
         }
 

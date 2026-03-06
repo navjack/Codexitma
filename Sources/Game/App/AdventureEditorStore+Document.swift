@@ -80,6 +80,7 @@ extension AdventureEditorStore {
         let newMap = EditableMap(
             id: "new_map_\(nextIndex)",
             name: "New Map \(nextIndex)",
+            depthBackdrop: .sky,
             lines: Self.makeStarterMapLines(),
             spawn: Position(x: 2, y: 2),
             portals: [],
@@ -92,13 +93,15 @@ extension AdventureEditorStore {
 
     func duplicateSelectedMap() {
         guard let map = currentMap else { return }
+        let duplicateID = nextIdentifier(prefix: "\(map.id)_copy", existing: document.maps.map(\.id))
         let duplicate = EditableMap(
-            id: "\(map.id)_copy",
+            id: duplicateID,
             name: "\(map.name) Copy",
+            depthBackdrop: map.depthBackdrop,
             lines: map.lines,
             spawn: map.spawn,
             portals: map.portals,
-            interactables: map.interactables
+            interactables: duplicatedInteractables(from: map.interactables, mapID: duplicateID)
         )
         let insertIndex = min(document.selectedMapIndex + 1, document.maps.count)
         document.maps.insert(duplicate, at: insertIndex)
@@ -158,5 +161,33 @@ extension AdventureEditorStore {
     func updateCurrentMapName(_ value: String) {
         guard !document.maps.isEmpty else { return }
         document.maps[document.selectedMapIndex].name = value
+    }
+
+    func updateCurrentMapDepthBackdrop(_ value: DepthBackdropStyle?) {
+        guard !document.maps.isEmpty else { return }
+        document.maps[document.selectedMapIndex].depthBackdrop = value
+    }
+
+    private func duplicatedInteractables(from interactables: [InteractableDefinition], mapID: String) -> [InteractableDefinition] {
+        var seenIDs = Set(document.maps.flatMap { $0.interactables.map(\.id) })
+        return interactables.map { interactable in
+            var candidate = "\(mapID)_\(interactable.id)_copy"
+            var suffix = 2
+            while !seenIDs.insert(candidate).inserted {
+                candidate = "\(mapID)_\(interactable.id)_copy_\(suffix)"
+                suffix += 1
+            }
+            return InteractableDefinition(
+                id: candidate,
+                kind: interactable.kind,
+                position: interactable.position,
+                title: interactable.title,
+                lines: interactable.lines,
+                rewardItem: interactable.rewardItem,
+                rewardMarks: interactable.rewardMarks,
+                requiredFlag: interactable.requiredFlag,
+                grantsFlag: interactable.grantsFlag
+            )
+        }
     }
 }

@@ -73,6 +73,112 @@ import Testing
     }
 }
 
+@Test func editorStoreDuplicateMapKeepsBackdropAndRegeneratesIdentifiers() async throws {
+    let library = try ContentLoader().load()
+    let store = await MainActor.run {
+        let store = AdventureEditorStore(library: library)
+        store.createBlankAdventure()
+        return store
+    }
+
+    await MainActor.run {
+        let originalMap = store.document.maps[0]
+        let originalInteractableIDs = Set(originalMap.interactables.map(\.id))
+
+        store.updateCurrentMapDepthBackdrop(.ceiling)
+        store.duplicateSelectedMap()
+
+        #expect(store.document.maps.count == 2)
+
+        let duplicatedMap = store.document.maps[1]
+        #expect(duplicatedMap.id == "merrow_village_copy")
+        #expect(duplicatedMap.depthBackdrop == .ceiling)
+        #expect(Set(duplicatedMap.interactables.map(\.id)).intersection(originalInteractableIDs).isEmpty)
+
+        store.duplicateSelectedMap()
+
+        let thirdMap = store.document.maps[2]
+        let allMapIDs = store.document.maps.map(\.id)
+        let allInteractableIDs = store.document.maps.flatMap { $0.interactables.map(\.id) }
+        #expect(Set(allMapIDs).count == allMapIDs.count)
+        #expect(Set(allInteractableIDs).count == allInteractableIDs.count)
+        #expect(thirdMap.id.hasPrefix("merrow_village_copy"))
+        #expect(thirdMap.depthBackdrop == .ceiling)
+    }
+}
+
+@Test func editorStoreAddMapDefaultsToSkyBackdrop() async throws {
+    let library = try ContentLoader().load()
+    let store = await MainActor.run {
+        let store = AdventureEditorStore(library: library)
+        store.createBlankAdventure()
+        return store
+    }
+
+    await MainActor.run {
+        store.addMap()
+        #expect(store.document.maps.last?.depthBackdrop == .sky)
+    }
+}
+
+@Test func editorValidationRejectsGlobalDuplicateInteractableIdentifiers() async throws {
+    let library = try ContentLoader().load()
+    let store = await MainActor.run {
+        let store = AdventureEditorStore(library: library)
+        store.createBlankAdventure()
+        return store
+    }
+
+    await MainActor.run {
+        let sharedInteractable = store.document.maps[0].interactables[0]
+        store.addMap()
+        store.document.maps[1].interactables.append(
+            InteractableDefinition(
+                id: sharedInteractable.id,
+                kind: .chest,
+                position: Position(x: 4, y: 4),
+                title: "Duplicate Cache",
+                lines: ["A copied identifier should fail validation."],
+                rewardItem: .healingTonic,
+                rewardMarks: nil,
+                requiredFlag: nil,
+                grantsFlag: nil
+            )
+        )
+
+        #expect(store.validateCurrentPack() == false)
+        #expect(store.validationMessages.contains { $0.contains("Duplicate interactable id") })
+    }
+}
+
+@Test func editorStoreTreatsWindowsPackPathsAsExternal() async throws {
+    let library = try ContentLoader().load()
+    let originalEntry = try #require(library.catalog.first)
+    let windowsEntry = AdventureCatalogEntry(
+        id: originalEntry.id,
+        folder: #"C:\Users\jack\AppData\Roaming\Codexitma\Adventures\custom_pack"#,
+        packFile: originalEntry.packFile,
+        title: originalEntry.title,
+        summary: originalEntry.summary,
+        introLine: originalEntry.introLine
+    )
+    let overriddenCatalog = [windowsEntry] + library.catalog.dropFirst()
+    let overriddenLibrary = GameContentLibrary(
+        catalog: Array(overriddenCatalog),
+        adventures: library.adventures,
+        loadWarnings: library.loadWarnings
+    )
+
+    let store = await MainActor.run {
+        AdventureEditorStore(library: overriddenLibrary)
+    }
+
+    await MainActor.run {
+        #expect(AdventureEditorStore.sourceFolderName(for: windowsEntry) == "custom_pack")
+        #expect(store.savePolicyLines.first == "SOURCE: USER PACK OR OVERRIDE")
+    }
+}
+
 @Test func editorStoreInspectorMutatesSelectedObjects() async throws {
     let library = try ContentLoader().load()
     let store = await MainActor.run {

@@ -15,17 +15,17 @@ jobs:
 
     steps:
       - name: Check Out Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Install Swift
-        uses: compnerd/gha-setup-swift@main
+        uses: compnerd/gha-setup-swift@c8363f1001fbb4b12d127c432f9eaadec5f56e8c
         with:
           swift-version: swift-6.3-branch
           swift-build: 6.3-DEVELOPMENT-SNAPSHOT-2026-02-27-a
           update-sdk-modules: true
 
       - name: Set Up Visual Studio Build Environment
-        uses: compnerd/gha-setup-vsdevenv@main
+        uses: compnerd/gha-setup-vsdevenv@5eb3eae1490d4f7875d574c4973539f69109700d
         with:
           arch: amd64
 
@@ -39,8 +39,13 @@ jobs:
           $archivePath = Join-Path $env:RUNNER_TEMP $archiveName
           $extractRoot = Join-Path $env:RUNNER_TEMP "sdl3-sdk"
           $downloadUrl = "https://github.com/libsdl-org/SDL/releases/download/release-$sdlVersion/$archiveName"
+          $expectedSha256 = "fd4c60400634df13a86b69432b22b32f23bccd6a2f4c6a34b42b471c65eb4fd2"
 
           Invoke-WebRequest -Uri $downloadUrl -OutFile $archivePath
+          $actualSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $archivePath).Hash.ToLowerInvariant()
+          if ($actualSha256 -ne $expectedSha256) {
+            throw "SDL3 SDK hash mismatch. Expected $expectedSha256 but found $actualSha256."
+          }
           Expand-Archive -LiteralPath $archivePath -DestinationPath $extractRoot -Force
 
           $sdlRoot = Join-Path $extractRoot "SDL3-$sdlVersion"
@@ -120,7 +125,7 @@ jobs:
           }
 
       - name: Upload Windows Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: Codexitma-win64
           path: ${{ runner.temp }}/Codexitma-win64

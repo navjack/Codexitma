@@ -119,8 +119,14 @@ extension GameEngine {
         switch command {
         case .interact, .confirm, .cancel:
             state.currentDialogue = nil
-            state.mode = .exploration
-            state.log("The silence settles back in.")
+            if let pendingShopID = state.pendingShopID,
+               let shop = content.shops[pendingShopID] {
+                state.pendingShopID = nil
+                open(shop: shop)
+            } else {
+                state.mode = .exploration
+                state.log("The silence settles back in.")
+            }
         default:
             break
         }
@@ -140,6 +146,10 @@ extension GameEngine {
             dropSelectedInventoryItem()
         case .help:
             describeSelectedItem()
+        case .save:
+            saveAtRestPoint()
+        case .load:
+            loadSavedAdventure()
         case .interact, .confirm:
             useSelectedInventoryItem()
             state.mode = .exploration
@@ -162,6 +172,10 @@ extension GameEngine {
             moveShopSelection(.up)
         case .help:
             describeSelectedShopOffer()
+        case .save:
+            saveAtRestPoint()
+        case .load:
+            loadSavedAdventure()
         case .interact, .confirm:
             purchaseSelectedShopOffer()
         case .cancel, .openInventory:
@@ -207,22 +221,85 @@ extension GameEngine {
                 return
             }
             content = library.content(for: save.adventureID)
-            state.player = save.player
-            state.world = save.world
-            state.quests = save.quests
-            state.playTimeSeconds = save.playTimeSeconds
-            state.currentAdventureID = save.adventureID
-            state.availableAdventures = library.catalog
-            state.questFlow = content.questFlow
-            state.selectedAdventureIndex = library.catalog.firstIndex { $0.id == save.adventureID } ?? 0
-            state.titleSelectionIndex = TitleMenuOption.allCases.firstIndex(of: .startNewGame) ?? 0
-            state.clearShopPanel()
-            state.mode = .exploration
-            state.log("You return to the last warm light.")
+            guard let validationError = validate(save: save, against: content) else {
+                state.player = save.player
+                var restoredWorld = save.world
+                restoredWorld.maps = content.maps
+                state.world = restoredWorld
+                state.quests = save.quests
+                state.playTimeSeconds = save.playTimeSeconds
+                state.currentAdventureID = save.adventureID
+                state.availableAdventures = library.catalog
+                state.questFlow = content.questFlow
+                state.selectedAdventureIndex = library.catalog.firstIndex { $0.id == save.adventureID } ?? 0
+                state.titleSelectionIndex = TitleMenuOption.allCases.firstIndex(of: .startNewGame) ?? 0
+                state.clearShopPanel()
+                state.currentDialogue = nil
+                state.mode = .exploration
+                state.log("You return to the last warm light.")
+                return
+            }
+            state.log(validationError)
         } catch SaveError.notFound {
             state.log("No save waits in the ash.")
         } catch {
             state.log("The save file is broken.")
         }
+    }
+
+    private func validate(save: SaveGame, against content: GameContent) -> String? {
+        let mapIDs = Set(content.maps.keys)
+        guard mapIDs.contains(save.player.currentMapID),
+              mapIDs.contains(save.player.lastSaveMapID) else {
+            return "The save points to a map that no longer exists."
+        }
+
+        guard isPositionValid(save.player.position, in: content.maps[save.player.currentMapID]),
+              isPositionValid(save.player.lastSavePosition, in: content.maps[save.player.lastSaveMapID]) else {
+            return "The save contains an invalid player position."
+        }
+
+        guard Set(save.world.maps.keys) == mapIDs else {
+            return "The save was made against a different map layout."
+        }
+
+        for npc in save.world.npcs {
+            guard mapIDs.contains(npc.mapID),
+                  isPositionValid(npc.position, in: content.maps[npc.mapID]) else {
+                return "The save contains an invalid NPC placement."
+            }
+        }
+
+        for enemy in save.world.enemies {
+            guard mapIDs.contains(enemy.mapID),
+                  isPositionValid(enemy.position, in: content.maps[enemy.mapID]) else {
+                return "The save contains an invalid enemy placement."
+            }
+        }
+
+        let interactableIDs = Set(content.maps.values.flatMap { $0.interactables.map(\.id) })
+        let syntheticInteractableIDs: Set<String> = ["fen_causeway_raised", "spire_mirrors_aligned"]
+        guard save.world.openedInteractables.isSubset(of: interactableIDs.union(syntheticInteractableIDs)) else {
+            return "The save references unknown interactables."
+        }
+
+        let encounterIDs = Set(content.encounters.keys)
+        guard save.world.triggeredEncounters.isSubset(of: encounterIDs) else {
+            return "The save references unknown encounters."
+        }
+
+        let shopOfferIDs = Set(content.shops.values.flatMap { $0.offers.map(\.id) })
+        guard save.world.purchasedShopOffers.isSubset(of: shopOfferIDs) else {
+            return "The save references unknown shop purchases."
+        }
+
+        return nil
+    }
+
+    private func isPositionValid(_ position: Position, in map: MapDefinition?) -> Bool {
+        guard let map else { return false }
+        guard position.y >= 0, position.y < map.lines.count else { return false }
+        let row = Array(map.lines[position.y])
+        return position.x >= 0 && position.x < row.count
     }
 }

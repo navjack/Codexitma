@@ -116,6 +116,29 @@ extension AdventureEditorRootView {
                         ))
                     }
 
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("DEPTH BACKDROP")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .foregroundStyle(palette.label)
+
+                        Picker(
+                            "Depth Backdrop",
+                            selection: Binding<DepthBackdropStyle?>(
+                                get: { store.currentMap?.depthBackdrop },
+                                set: { store.updateCurrentMapDepthBackdrop($0) }
+                            )
+                        ) {
+                            Text("AUTO").tag(DepthBackdropStyle?.none)
+                            Text("SKY").tag(DepthBackdropStyle?.some(.sky))
+                            Text("CEILING").tag(DepthBackdropStyle?.some(.ceiling))
+                        }
+                        .pickerStyle(.segmented)
+
+                        Text("AUTO FALLS BACK TO THE ENGINE HEURISTIC.")
+                            .font(.system(size: 9, weight: .regular, design: .monospaced))
+                            .foregroundStyle(palette.text.opacity(0.72))
+                    }
+
                     toolPalette
 
                     if store.selectedTool == .terrain {

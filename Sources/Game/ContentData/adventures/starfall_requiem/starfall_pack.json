@@ -1,4 +1,5 @@
 {
+  "startMapID": "merrow_village",
   "objectivesFile": "starfall_objectives.json",
   "worldFile": "world_starfall.json",
   "dialoguesFile": "starfall_dialogues.json",

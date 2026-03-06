@@ -66,6 +66,7 @@ struct GameContent: @unchecked Sendable {
     let title: String
     let summary: String
     let introLine: String
+    let startMapID: String
     let questFlow: QuestFlowDefinition
     let maps: [String: MapDefinition]
     let dialogues: [String: DialogueNode]
@@ -74,11 +75,19 @@ struct GameContent: @unchecked Sendable {
     let shops: [NPCID: ShopDefinition]
     let initialNPCs: [NPCState]
     let initialEnemies: [EnemyState]
+
+    func resolvedStartMap() -> MapDefinition? {
+        if let map = maps[startMapID] {
+            return map
+        }
+        return maps.values.sorted { $0.id < $1.id }.first
+    }
 }
 
 struct GameContentLibrary: @unchecked Sendable {
     let catalog: [AdventureCatalogEntry]
     let adventures: [AdventureID: GameContent]
+    let loadWarnings: [String]
 
     func content(for adventureID: AdventureID) -> GameContent {
         if let content = adventures[adventureID] {
@@ -87,7 +96,13 @@ struct GameContentLibrary: @unchecked Sendable {
         if let first = catalog.first, let content = adventures[first.id] {
             return content
         }
-        return adventures[.ashesOfMerrow]!
+        if let content = adventures[.ashesOfMerrow] {
+            return content
+        }
+        if let content = adventures.values.first {
+            return content
+        }
+        preconditionFailure("GameContentLibrary contains no adventures.")
     }
 
     func entry(for adventureID: AdventureID) -> AdventureCatalogEntry? {
@@ -118,6 +133,7 @@ struct GameState {
     var shopLines: [String] = []
     var shopOffers: [ShopOffer] = []
     var shopDetail: String?
+    var pendingShopID: NPCID?
     var selectedHeroIndex = 0
     var selectedAdventureIndex = 0
     var titleSelectionIndex = 0
@@ -153,6 +169,7 @@ struct GameState {
         shopLines = []
         shopOffers = []
         shopDetail = nil
+        pendingShopID = nil
     }
 
     mutating func clampPauseSelection() {

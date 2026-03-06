@@ -54,17 +54,22 @@ extension GameEngine {
     }
 
     func interact() {
-        if let shop = shopNearPlayer() {
-            open(shop: shop)
-            return
-        }
-
         if let dialogue = npcDialogueNearPlayer() {
+            if let shop = shopNearPlayer() {
+                state.pendingShopID = shop.merchantID
+            } else {
+                state.pendingShopID = nil
+            }
             state.currentDialogue = dialogue
             state.mode = .dialogue
             if dialogue.id == "elder_intro" {
                 state.quests.set(.metElder)
             }
+            return
+        }
+
+        if let shop = shopNearPlayer() {
+            open(shop: shop)
             return
         }
 
@@ -121,6 +126,7 @@ extension GameEngine {
 
     func resolveCombat(with enemyIndex: Int) {
         state.mode = .combat
+        triggerEncounterIfNeeded(for: state.world.enemies[enemyIndex].id)
         turnCounter += 1
         let playerDamage = CombatSystem.damage(
             attackerAttack: state.player.effectiveAttack(),
@@ -142,8 +148,11 @@ extension GameEngine {
             }
             state.mode = .exploration
             if state.world.enemies[enemyIndex].id == "sentinel_1" {
-                grantItem(.lensCore, message: "The Lens Core hums in your palm.")
-                state.quests.set(.obtainedLensCore)
+                if grantItem(.lensCore, message: "The Lens Core hums in your palm.") {
+                    state.quests.set(.obtainedLensCore)
+                } else {
+                    state.log("The Lens Core slips from your grasp. Make room and search the chamber.")
+                }
             }
             return
         }
@@ -161,6 +170,20 @@ extension GameEngine {
         } else {
             state.mode = .exploration
         }
+    }
+
+    func triggerEncounterIfNeeded(for enemyID: EnemyID) {
+        guard let encounter = encounterDefinition(for: enemyID) else {
+            return
+        }
+        guard state.world.triggeredEncounters.insert(encounter.id).inserted else {
+            return
+        }
+        state.log(encounter.introLine)
+    }
+
+    func encounterDefinition(for enemyID: EnemyID) -> EncounterDefinition? {
+        content.encounters.values.first { $0.enemyID == enemyID }
     }
 
     func recoverFromDefeat() {
@@ -244,9 +267,14 @@ extension GameEngine {
                 state.log("Only splinters remain.")
                 return
             }
+            if let reward = interactable.rewardItem,
+               !canGrantItem(reward) {
+                state.log("Your satchel is too full.")
+                return
+            }
             state.world.openedInteractables.insert(interactable.id)
             if let reward = interactable.rewardItem {
-                grantItem(reward, message: interactable.lines.first ?? "You find something useful.")
+                _ = grantItem(reward, message: interactable.lines.first ?? "You find something useful.")
             }
             if let reward = interactable.rewardMarks, reward > 0 {
                 let message = interactable.rewardItem == nil
@@ -337,10 +365,31 @@ extension GameEngine {
         state.log(interactable.lines.first ?? "A distant mirror answers the rune.")
     }
 
-    func grantItem(_ id: ItemID, message: String) {
+    func canGrantItem(_ id: ItemID) -> Bool {
+        guard let item = content.items[id] else {
+            return false
+        }
+        if item.kind == .key || item.kind == .quest {
+            return true
+        }
+        if item.isEquippable,
+           let slot = item.slot,
+           state.player.equipment.itemID(for: slot) == nil {
+            return true
+        }
+        return state.player.inventory.count < state.player.inventoryCapacity()
+    }
+
+    @discardableResult
+    func grantItem(_ id: ItemID, message: String) -> Bool {
         guard let item = content.items[id] else {
             state.log("The relic dissolves before you can claim it.")
-            return
+            return false
+        }
+        if item.kind == .key || item.kind == .quest {
+            state.player.inventory.append(item)
+            state.log(message)
+            return true
         }
         if item.isEquippable,
            let slot = item.slot,
@@ -348,14 +397,15 @@ extension GameEngine {
             state.player.equipment.set(item.id, for: slot)
             state.log(message)
             state.log("\(item.name) is fitted to your \(slot.rawValue).")
-            return
+            return true
         }
         guard state.player.inventory.count < state.player.inventoryCapacity() else {
             state.log("Your satchel is too full.")
-            return
+            return false
         }
         state.player.inventory.append(item)
         state.log(message)
+        return true
     }
 
     func grantMarks(_ amount: Int, message: String?) {

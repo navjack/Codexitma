@@ -18,19 +18,11 @@ trap cleanup EXIT
 echo "Building Codexitma..."
 swift build
 
-BUILD_BINARY=""
-for candidate in \
-    "$ROOT_DIR/.build/arm64-apple-macosx/debug/Game" \
-    "$ROOT_DIR/.build/debug/Game"
-do
-    if [[ -x "$candidate" ]]; then
-        BUILD_BINARY="$candidate"
-        break
-    fi
-done
+BIN_PATH=$(swift build --show-bin-path)
+BUILD_BINARY="$BIN_PATH/Game"
 
-if [[ -z "$BUILD_BINARY" ]]; then
-    echo "Could not find a built Game binary under .build/" >&2
+if [[ ! -x "$BUILD_BINARY" ]]; then
+    echo "Could not find a built Game binary at $BUILD_BINARY" >&2
     exit 1
 fi
 

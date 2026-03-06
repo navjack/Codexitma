@@ -22,6 +22,16 @@ struct AdventureCatalogEntry: Codable, Equatable {
     let title: String
     let summary: String
     let introLine: String
+
+    var isExternalPackPath: Bool {
+        if (folder as NSString).isAbsolutePath {
+            return true
+        }
+        if folder.hasPrefix("\\\\") {
+            return true
+        }
+        return folder.range(of: #"^[A-Za-z]:[\\/]"#, options: .regularExpression) != nil
+    }
 }
 
 struct QuestState: Codable {
@@ -494,6 +504,7 @@ struct WorldState: Codable {
     var npcs: [NPCState]
     var enemies: [EnemyState]
     var openedInteractables: Set<String>
+    var triggeredEncounters: Set<String>
     var activeSwitchSequence: [String]
     var purchasedShopOffers: Set<String>
 
@@ -502,6 +513,7 @@ struct WorldState: Codable {
         case npcs
         case enemies
         case openedInteractables
+        case triggeredEncounters
         case activeSwitchSequence
         case purchasedShopOffers
     }
@@ -511,6 +523,7 @@ struct WorldState: Codable {
         npcs: [NPCState],
         enemies: [EnemyState],
         openedInteractables: Set<String>,
+        triggeredEncounters: Set<String> = [],
         activeSwitchSequence: [String] = [],
         purchasedShopOffers: Set<String> = []
     ) {
@@ -518,6 +531,7 @@ struct WorldState: Codable {
         self.npcs = npcs
         self.enemies = enemies
         self.openedInteractables = openedInteractables
+        self.triggeredEncounters = triggeredEncounters
         self.activeSwitchSequence = activeSwitchSequence
         self.purchasedShopOffers = purchasedShopOffers
     }
@@ -528,6 +542,7 @@ struct WorldState: Codable {
         npcs = try container.decode([NPCState].self, forKey: .npcs)
         enemies = try container.decode([EnemyState].self, forKey: .enemies)
         openedInteractables = try container.decode(Set<String>.self, forKey: .openedInteractables)
+        triggeredEncounters = try container.decodeIfPresent(Set<String>.self, forKey: .triggeredEncounters) ?? []
         activeSwitchSequence = try container.decodeIfPresent([String].self, forKey: .activeSwitchSequence) ?? []
         purchasedShopOffers = try container.decodeIfPresent(Set<String>.self, forKey: .purchasedShopOffers) ?? []
     }
@@ -538,6 +553,7 @@ struct WorldState: Codable {
         try container.encode(npcs, forKey: .npcs)
         try container.encode(enemies, forKey: .enemies)
         try container.encode(openedInteractables, forKey: .openedInteractables)
+        try container.encode(triggeredEncounters, forKey: .triggeredEncounters)
         try container.encode(activeSwitchSequence, forKey: .activeSwitchSequence)
         try container.encode(purchasedShopOffers, forKey: .purchasedShopOffers)
     }

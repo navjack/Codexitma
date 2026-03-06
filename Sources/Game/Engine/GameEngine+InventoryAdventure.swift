@@ -71,7 +71,11 @@ extension GameEngine {
     func startNewAdventure(with heroClass: HeroClass) {
         let adventureID = state.selectedAdventureID()
         content = library.content(for: adventureID)
-        let startMap = content.maps["merrow_village"]!
+        guard let startMap = content.resolvedStartMap() else {
+            state.log("That adventure has no valid starting map.")
+            state.mode = .title
+            return
+        }
         let selectedIndex = library.catalog.firstIndex { $0.id == adventureID } ?? 0
         state = Self.makeInitialState(content: content, availableAdventures: library.catalog)
         state.player = Self.makePlayer(for: heroClass, at: startMap)

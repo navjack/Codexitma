@@ -41,8 +41,11 @@ final class SaveRepository: @unchecked Sendable {
         let data = try JSONEncoder().encode(save)
         let tempURL = directory.appendingPathComponent(UUID().uuidString + ".tmp")
         try data.write(to: tempURL, options: .atomic)
-        _ = try? FileManager.default.removeItem(at: fileURL)
-        try FileManager.default.moveItem(at: tempURL, to: fileURL)
+        if FileManager.default.fileExists(atPath: fileURL.path) {
+            _ = try FileManager.default.replaceItemAt(fileURL, withItemAt: tempURL)
+        } else {
+            try FileManager.default.moveItem(at: tempURL, to: fileURL)
+        }
     }
 
     func load() throws -> SaveGame {

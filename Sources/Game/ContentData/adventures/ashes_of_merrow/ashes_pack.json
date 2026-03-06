@@ -1,4 +1,5 @@
 {
+  "startMapID": "merrow_village",
   "objectivesFile": "ashes_objectives.json",
   "worldFile": "world.json",
   "dialoguesFile": "ashes_dialogues.json",

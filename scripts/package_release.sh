@@ -4,7 +4,31 @@ set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
 VERSION=${1:-dev}
-DIST_DIR="$ROOT_DIR/dist/$VERSION"
+SAFE_VERSION=$(printf "%s" "$VERSION" | tr -cd 'A-Za-z0-9._-')
+if [[ -z "$SAFE_VERSION" || "$SAFE_VERSION" != "$VERSION" ]]; then
+    echo "Version may contain only letters, digits, dot, underscore, and dash." >&2
+    exit 1
+fi
+DIST_ROOT="$ROOT_DIR/dist"
+DIST_DIR="$DIST_ROOT/$SAFE_VERSION"
+RESOLVED_DIST_ROOT=$(python3 - <<'PY' "$DIST_ROOT"
+import os, sys
+print(os.path.realpath(sys.argv[1]))
+PY
+)
+RESOLVED_DIST_DIR=$(python3 - <<'PY' "$DIST_DIR"
+import os, sys
+print(os.path.realpath(sys.argv[1]))
+PY
+)
+
+case "$RESOLVED_DIST_DIR" in
+    "$RESOLVED_DIST_ROOT"/*) ;;
+    *)
+        echo "Refusing to package outside $DIST_ROOT" >&2
+        exit 1
+        ;;
+esac
 
 cd "$ROOT_DIR"
 

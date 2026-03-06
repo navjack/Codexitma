@@ -14,16 +14,22 @@ final class GameEngine {
         self.content = library.content(for: initialAdventure)
         self.saveRepository = saveRepository
         self.state = GameEngine.makeInitialState(content: self.content, availableAdventures: library.catalog)
+        for warning in library.loadWarnings {
+            self.state.log(warning)
+        }
     }
 
     static func makeInitialState(content: GameContent, availableAdventures: [AdventureCatalogEntry]) -> GameState {
-        let startMap = content.maps["merrow_village"]!
+        guard let startMap = content.resolvedStartMap() else {
+            preconditionFailure("Adventure \(content.id.rawValue) is missing a valid start map.")
+        }
         let player = makePlayer(for: .wayfarer, at: startMap)
         let world = WorldState(
             maps: content.maps,
             npcs: content.initialNPCs,
             enemies: content.initialEnemies,
             openedInteractables: [],
+            triggeredEncounters: [],
             activeSwitchSequence: [],
             purchasedShopOffers: []
         )

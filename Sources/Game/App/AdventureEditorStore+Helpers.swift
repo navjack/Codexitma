@@ -524,13 +524,24 @@ extension AdventureEditorStore {
     }
 
     static func sourceFolderName(for entry: AdventureCatalogEntry) -> String {
-        let value = entry.folder
-        if value.contains("/") {
-            return URL(fileURLWithPath: value).lastPathComponent
+        let normalized = entry.folder.replacingOccurrences(of: "\\", with: "/")
+        if normalized.contains("/") {
+            return URL(fileURLWithPath: normalized).lastPathComponent
         }
-        return value
+        return normalized
             .split(separator: "/")
             .last
             .map(String.init) ?? entry.id.rawValue
+    }
+
+    static func isExternalPackFolder(_ folder: String) -> Bool {
+        let normalized = folder.replacingOccurrences(of: "\\", with: "/")
+        if normalized.hasPrefix("//") {
+            return true
+        }
+        if normalized.range(of: #"^[A-Za-z]:/"#, options: .regularExpression) != nil {
+            return true
+        }
+        return (normalized as NSString).isAbsolutePath
     }
 }

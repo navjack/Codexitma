@@ -197,7 +197,7 @@ final class AdventureEditorStore: EditorObservableObject {
             ]
         }
 
-        if entry.folder.contains("/") {
+        if Self.isExternalPackFolder(entry.folder) {
             return [
                 "SOURCE: USER PACK OR OVERRIDE",
                 "SAVE WRITES BACK INTO THE EXISTING EXTERNAL PACK FOLDER."

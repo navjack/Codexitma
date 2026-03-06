@@ -128,29 +128,11 @@ extension MapBoardView {
     }
 
     var facingUnitVector: (x: Double, y: Double) {
-        switch state.player.facing {
-        case .up:
-            return (0, -1)
-        case .down:
-            return (0, 1)
-        case .left:
-            return (-1, 0)
-        case .right:
-            return (1, 0)
-        }
+        DepthProjectionMath.facingUnitVector(for: state.player.facing)
     }
 
     var rightUnitVector: (x: Double, y: Double) {
-        switch state.player.facing {
-        case .up:
-            return (1, 0)
-        case .down:
-            return (-1, 0)
-        case .left:
-            return (0, -1)
-        case .right:
-            return (0, 1)
-        }
+        DepthProjectionMath.rightUnitVector(for: state.player.facing)
     }
 
     var usesSkyBackdrop: Bool {
@@ -389,29 +371,11 @@ extension MapBoardView {
     }
 
     func facingUnitVector(for direction: Direction) -> (x: Double, y: Double) {
-        switch direction {
-        case .up:
-            return (0, -1)
-        case .down:
-            return (0, 1)
-        case .left:
-            return (-1, 0)
-        case .right:
-            return (1, 0)
-        }
+        DepthProjectionMath.facingUnitVector(for: direction)
     }
 
     func rightUnitVector(for direction: Direction) -> (x: Double, y: Double) {
-        switch direction {
-        case .up:
-            return (1, 0)
-        case .down:
-            return (-1, 0)
-        case .left:
-            return (0, -1)
-        case .right:
-            return (0, 1)
-        }
+        DepthProjectionMath.rightUnitVector(for: direction)
     }
 
     func depthFloorProjection(
@@ -432,68 +396,14 @@ extension MapBoardView {
         if let cached = Self.depthFloorProjectionCache[key] {
             return cached
         }
-
-        let forward = facingUnitVector(for: facing)
-        let right = rightUnitVector(for: facing)
-        let planeScale = tan(fieldOfView * 0.5)
-        let leftRay = (
-            x: forward.x - (right.x * planeScale),
-            y: forward.y - (right.y * planeScale)
+        let projections = DepthProjectionMath.floorProjection(
+            width: max(1, Int(size.width.rounded())),
+            height: max(1, Int(size.height.rounded())),
+            horizonOffset: Int(horizon.rounded()),
+            floorBands: floorBands,
+            facing: facing,
+            fieldOfView: fieldOfView
         )
-        let rightRay = (
-            x: forward.x + (right.x * planeScale),
-            y: forward.y + (right.y * planeScale)
-        )
-        let posZ = Double(size.height) * 0.50
-        var projections: [DepthFloorBandProjection] = []
-        projections.reserveCapacity(max(1, floorBands))
-
-        for band in 0..<max(1, floorBands) {
-            let t0 = Double(band) / Double(max(1, floorBands))
-            let t1 = Double(band + 1) / Double(max(1, floorBands))
-            let y0 = horizon + (size.height - horizon) * pow(CGFloat(t0), 1.6)
-            let y1 = horizon + (size.height - horizon) * pow(CGFloat(t1), 1.6)
-            let rowScreenY = max(horizon + 1, (y0 + y1) * 0.5)
-            let rowDepth = max(1.0, Double(rowScreenY - horizon))
-            let normalizedScreenDepth = max(
-                0.0,
-                min(1.0, Double((rowScreenY - horizon) / max(1.0, size.height - horizon)))
-            )
-            let perspectiveWarp = 0.72 + (pow(1.0 - normalizedScreenDepth, 1.55) * 0.65)
-            let rowDistance = (posZ / rowDepth) * perspectiveWarp
-            let bandNorm = (Double(band) + 0.5) / Double(max(1, floorBands))
-            let stripScale = 0.78 + (pow(1.0 - bandNorm, 1.2) * 0.72)
-            let stripCount = min(256, max(72, Int((Double(size.width) * 0.40) * stripScale)))
-            var strips: [DepthFloorStripProjection] = []
-            strips.reserveCapacity(stripCount)
-
-            for strip in 0..<stripCount {
-                let xNorm = (Double(strip) + 0.5) / Double(stripCount)
-                let rayX = leftRay.x + ((rightRay.x - leftRay.x) * xNorm)
-                let rayY = leftRay.y + ((rightRay.y - leftRay.y) * xNorm)
-                let x0 = (CGFloat(strip) / CGFloat(stripCount)) * size.width
-                let x1 = (CGFloat(strip + 1) / CGFloat(stripCount)) * size.width
-                strips.append(
-                    DepthFloorStripProjection(
-                        x0: x0,
-                        x1: x1,
-                        xNormalized: xNorm,
-                        rayX: rayX,
-                        rayY: rayY
-                    )
-                )
-            }
-
-            projections.append(
-                DepthFloorBandProjection(
-                    y0: y0,
-                    y1: y1,
-                    rowDistance: rowDistance,
-                    bandNorm: bandNorm,
-                    strips: strips
-                )
-            )
-        }
 
         Self.depthFloorProjectionCache[key] = projections
         if Self.depthFloorProjectionCache.count > 24 {
@@ -504,16 +414,7 @@ extension MapBoardView {
     }
 
     func facingKey(for direction: Direction) -> Int {
-        switch direction {
-        case .up:
-            return 0
-        case .right:
-            return 1
-        case .down:
-            return 2
-        case .left:
-            return 3
-        }
+        DepthProjectionMath.facingKey(for: direction)
     }
 
     func lightValueString(_ value: Double) -> String {

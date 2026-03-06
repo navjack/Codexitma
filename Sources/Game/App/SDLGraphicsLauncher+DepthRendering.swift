@@ -1,33 +1,8 @@
 import CSDL3
 import Foundation
 
-private struct DepthFloorProjectionCacheKey: Hashable {
-    let width: Int
-    let height: Int
-    let horizonOffset: Int
-    let floorBands: Int
-    let facing: Int
-    let fieldOfViewMilli: Int
-}
-
-private struct DepthFloorStripProjection {
-    let x0: Int
-    let x1: Int
-    let xNormalized: Double
-    let rayX: Double
-    let rayY: Double
-}
-
-private struct DepthFloorBandProjection {
-    let y0: Int
-    let y1: Int
-    let rowDistance: Double
-    let bandNorm: Double
-    let strips: [DepthFloorStripProjection]
-}
-
 @MainActor
-private var cachedDepthFloorProjection: [DepthFloorProjectionCacheKey: [DepthFloorBandProjection]] = [:]
+private var cachedDepthFloorProjection: [DepthFloorProjectionKey: [DepthFloorBandProjection]] = [:]
 
 extension SDLGraphicsLauncher {
     static func renderDepth(
@@ -91,8 +66,8 @@ extension SDLGraphicsLauncher {
         }
 
         for (band, projection) in floorProjection.enumerated() {
-            let y0 = projection.y0
-            let y1 = projection.y1
+            let y0 = Int(projection.y0.rounded())
+            let y1 = Int(projection.y1.rounded())
             let t1 = Double(band + 1) / Double(max(1, floorBands))
             let ratio = pow(t1, 0.62)
             let base = blended(floorFar, toward: floorNear, amount: ratio)
@@ -114,7 +89,9 @@ extension SDLGraphicsLauncher {
                 let shaded = max(floorLighting.ambient * 0.10, stripLevels[index] - (shadow * 0.74))
                 let lift = max(0.0, shaded - floorLighting.ambient)
                 let dim = max(max(0.0, floorLighting.ambient - shaded), shadow * 0.40)
-                let width = max(1, strip.x1 - strip.x0)
+                let stripX0 = Int(strip.x0.rounded())
+                let stripX1 = Int(strip.x1.rounded())
+                let width = max(1, stripX1 - stripX0)
 
                 if sampledTile.type.usesDepthPoolSurface {
                     let stripeHeight = max(1, y1 - y0)
@@ -123,7 +100,7 @@ extension SDLGraphicsLauncher {
                     let waterHeight = max(1, stripeHeight - poolInset)
                     fill(
                         renderer,
-                        x: strip.x0,
+                        x: stripX0,
                         y: y0,
                         width: width,
                         height: stripeHeight,
@@ -131,7 +108,7 @@ extension SDLGraphicsLauncher {
                     )
                     fill(
                         renderer,
-                        x: strip.x0,
+                        x: stripX0,
                         y: waterY,
                         width: width,
                         height: waterHeight,
@@ -139,7 +116,7 @@ extension SDLGraphicsLauncher {
                     )
                     fill(
                         renderer,
-                        x: strip.x0,
+                        x: stripX0,
                         y: waterY,
                         width: width,
                         height: 1,
@@ -147,7 +124,7 @@ extension SDLGraphicsLauncher {
                     )
                     fill(
                         renderer,
-                        x: strip.x0 + max(0, width / 10),
+                        x: stripX0 + max(0, width / 10),
                         y: waterY + max(1, waterHeight / 4),
                         width: max(1, (width * 4) / 5),
                         height: 1,
@@ -162,15 +139,15 @@ extension SDLGraphicsLauncher {
                 if lift > 0.01 {
                     let alpha = UInt8(max(0, min(170, Int((0.05 + (lift * 0.58)) * 255.0))))
                     let glow = blended(depthTheme.innerBorder, toward: .bright, amount: 0.34)
-                    fill(renderer, x: strip.x0, y: y0, width: width, height: max(1, y1 - y0), color: glow.withAlpha(alpha))
+                    fill(renderer, x: stripX0, y: y0, width: width, height: max(1, y1 - y0), color: glow.withAlpha(alpha))
                 }
                 if dim > 0.01 {
                     let alpha = UInt8(max(0, min(110, Int((0.04 + (dim * 0.34)) * 255.0))))
-                    fill(renderer, x: strip.x0, y: y0, width: width, height: max(1, y1 - y0), color: .void.withAlpha(alpha))
+                    fill(renderer, x: stripX0, y: y0, width: width, height: max(1, y1 - y0), color: .void.withAlpha(alpha))
                 }
                 if shadow > 0.01 {
                     let alpha = UInt8(max(0, min(130, Int((shadow * 0.28) * 255.0))))
-                    fill(renderer, x: strip.x0, y: y0, width: width, height: max(1, y1 - y0), color: .void.withAlpha(alpha))
+                    fill(renderer, x: stripX0, y: y0, width: width, height: max(1, y1 - y0), color: .void.withAlpha(alpha))
                 }
             }
             if band.isMultiple(of: 2) {
@@ -249,15 +226,19 @@ extension SDLGraphicsLauncher {
         }
 
         for billboard in depth.billboards {
-            let screenCenter = Int((((billboard.angleOffset / depth.fieldOfView) + 0.5) * Double(frame.width))) + frame.x
-            let projectedHeight = min(
-                Double(frame.height) * 0.88,
-                (Double(frame.height) * billboard.scale) / max(0.16, billboard.distance)
+            let projection = DepthProjectionMath.billboardProjection(
+                screenWidth: Double(frame.width),
+                screenHeight: Double(frame.height),
+                horizon: Double(horizon - frame.y),
+                fieldOfView: depth.fieldOfView,
+                billboard: billboard,
+                aspectRatio: 0.52
             )
-            let projectedWidth = max(10.0, projectedHeight * 0.52 * billboard.widthScale)
-            let left = Int(Double(screenCenter) - (projectedWidth / 2.0))
+            let projectedHeight = projection.height
+            let projectedWidth = projection.width
+            let left = frame.x + Int(projection.left.rounded())
             let width = max(2, Int(projectedWidth))
-            let top = Int(Double(horizon) - (projectedHeight * 0.5))
+            let top = frame.y + Int(projection.top.rounded())
             let height = max(2, Int(projectedHeight))
             let startSample = max(0, (left - frame.x) / columnWidth)
             let endSample = min(depthSamples.count - 1, (left - frame.x + width - 1) / columnWidth)
@@ -334,10 +315,10 @@ extension SDLGraphicsLauncher {
         renderer: OpaquePointer
     ) {
         for band in projection {
-            let mirroredY0 = horizon - (band.y1 - horizon)
-            let mirroredY1 = horizon - (band.y0 - horizon)
-            let y0 = max(frame.y, mirroredY0)
-            let y1 = min(horizon, mirroredY1)
+            let mirroredY0 = Double(horizon) - (band.y1 - Double(horizon))
+            let mirroredY1 = Double(horizon) - (band.y0 - Double(horizon))
+            let y0 = max(frame.y, Int(mirroredY0.rounded()))
+            let y1 = min(horizon, Int(mirroredY1.rounded()))
             if y1 <= y0 {
                 continue
             }
@@ -349,7 +330,9 @@ extension SDLGraphicsLauncher {
             )
 
             for (index, strip) in band.strips.enumerated() {
-                let width = max(1, strip.x1 - strip.x0)
+                let stripX0 = Int(strip.x0.rounded())
+                let stripX1 = Int(strip.x1.rounded())
+                let width = max(1, stripX1 - stripX0)
                 let level = stripLevels[index]
                 let shadow = stripShadowLevels[index]
                 let dim = max(max(0.0, floorLighting.ambient - level), shadow * 0.46)
@@ -357,17 +340,17 @@ extension SDLGraphicsLauncher {
 
                 if dim > 0.01 {
                     let alpha = UInt8(max(0, min(170, Int((0.04 + (dim * 0.46)) * 255.0))))
-                    fill(renderer, x: strip.x0, y: y0, width: width, height: max(1, y1 - y0), color: .void.withAlpha(alpha))
+                    fill(renderer, x: stripX0, y: y0, width: width, height: max(1, y1 - y0), color: .void.withAlpha(alpha))
                 }
                 if shadow > 0.01 {
                     let alpha = UInt8(max(0, min(145, Int((shadow * 0.30) * 255.0))))
-                    fill(renderer, x: strip.x0, y: y0, width: width, height: max(1, y1 - y0), color: .void.withAlpha(alpha))
+                    fill(renderer, x: stripX0, y: y0, width: width, height: max(1, y1 - y0), color: .void.withAlpha(alpha))
                 }
                 if lift > 0.01 {
                     let alpha = UInt8(max(0, min(90, Int((0.02 + (lift * 0.22)) * 255.0))))
                     fill(
                         renderer,
-                        x: strip.x0,
+                        x: stripX0,
                         y: y0,
                         width: width,
                         height: max(1, y1 - y0),
@@ -411,23 +394,9 @@ extension SDLGraphicsLauncher {
             stripShadowLevels[index] = shadowLevel
         }
 
-        smoothStripLevels(&stripLevels)
-        smoothStripLevels(&stripShadowLevels)
+        DepthProjectionMath.smoothStripLevels(&stripLevels)
+        DepthProjectionMath.smoothStripLevels(&stripShadowLevels)
         return (stripLevels, stripShadowLevels)
-    }
-
-    private static func smoothStripLevels(_ values: inout [Double]) {
-        guard values.count >= 3 else {
-            return
-        }
-
-        let source = values
-        for index in source.indices {
-            let left = source[max(0, index - 1)]
-            let center = source[index]
-            let right = source[min(source.count - 1, index + 1)]
-            values[index] = (left * 0.24) + (center * 0.52) + (right * 0.24)
-        }
     }
 
     private static func fract(_ value: Double) -> Double {
@@ -549,126 +518,35 @@ extension SDLGraphicsLauncher {
         facing: Direction,
         fieldOfView: Double
     ) -> [DepthFloorBandProjection] {
-        let key = DepthFloorProjectionCacheKey(
+        let key = DepthFloorProjectionKey(
             width: frame.width,
             height: frame.height,
             horizonOffset: horizon - frame.y,
             floorBands: floorBands,
-            facing: facingKey(for: facing),
+            facing: DepthProjectionMath.facingKey(for: facing),
             fieldOfViewMilli: Int((fieldOfView * 1000.0).rounded())
         )
         if let cached = cachedDepthFloorProjection[key] {
             return cached
         }
-
-        let forward = facingUnitVector(for: facing)
-        let right = rightUnitVector(for: facing)
-        let planeScale = tan(fieldOfView * 0.5)
-        let leftRay = (
-            x: forward.x - (right.x * planeScale),
-            y: forward.y - (right.y * planeScale)
+        let projections = DepthProjectionMath.floorProjection(
+            width: frame.width,
+            height: frame.height,
+            horizonOffset: horizon - frame.y,
+            floorBands: floorBands,
+            facing: facing,
+            fieldOfView: fieldOfView,
+            stripDensity: 0.52,
+            minStrips: 64,
+            maxStrips: 256
         )
-        let rightRay = (
-            x: forward.x + (right.x * planeScale),
-            y: forward.y + (right.y * planeScale)
-        )
-        let posZ = Double(frame.height) * 0.50
-        let totalHeight = Double(frame.height - (horizon - frame.y))
-        var result: [DepthFloorBandProjection] = []
-        result.reserveCapacity(max(1, floorBands))
 
-        for band in 0..<max(1, floorBands) {
-            let t0 = Double(band) / Double(max(1, floorBands))
-            let t1 = Double(band + 1) / Double(max(1, floorBands))
-            let y0 = horizon + Int(totalHeight * pow(t0, 1.58))
-            let y1 = horizon + Int(totalHeight * pow(t1, 1.58))
-            let bandNorm = (Double(band) + 0.5) / Double(max(1, floorBands))
-            let rowScreenY = max(Double(horizon + 1), Double(y0 + y1) * 0.5)
-            let rowDepth = max(1.0, rowScreenY - Double(horizon))
-            let normalizedScreenDepth = max(
-                0.0,
-                min(1.0, (rowScreenY - Double(horizon)) / max(1.0, Double(frame.height - (horizon - frame.y))))
-            )
-            let perspectiveWarp = 0.72 + (pow(1.0 - normalizedScreenDepth, 1.55) * 0.65)
-            let rowDistance = (posZ / rowDepth) * perspectiveWarp
-            let stripScale = 0.78 + (pow(1.0 - bandNorm, 1.2) * 0.72)
-            let stripCount = max(64, Int((Double(frame.width) * 0.52) * stripScale))
-            var strips: [DepthFloorStripProjection] = []
-            strips.reserveCapacity(stripCount)
-
-            for strip in 0..<stripCount {
-                let xNormalized = (Double(strip) + 0.5) / Double(stripCount)
-                let rayX = leftRay.x + ((rightRay.x - leftRay.x) * xNormalized)
-                let rayY = leftRay.y + ((rightRay.y - leftRay.y) * xNormalized)
-                let x0 = frame.x + Int((Double(strip) / Double(stripCount)) * Double(frame.width))
-                let x1 = frame.x + Int((Double(strip + 1) / Double(stripCount)) * Double(frame.width))
-                strips.append(
-                    DepthFloorStripProjection(
-                        x0: x0,
-                        x1: x1,
-                        xNormalized: xNormalized,
-                        rayX: rayX,
-                        rayY: rayY
-                    )
-                )
-            }
-
-            result.append(
-                DepthFloorBandProjection(
-                    y0: y0,
-                    y1: y1,
-                    rowDistance: rowDistance,
-                    bandNorm: bandNorm,
-                    strips: strips
-                )
-            )
-        }
-
-        cachedDepthFloorProjection[key] = result
+        cachedDepthFloorProjection[key] = projections
         if cachedDepthFloorProjection.count > 24 {
             cachedDepthFloorProjection.removeAll(keepingCapacity: true)
-            cachedDepthFloorProjection[key] = result
+            cachedDepthFloorProjection[key] = projections
         }
-        return result
-    }
-
-    private static func facingUnitVector(for direction: Direction) -> (x: Double, y: Double) {
-        switch direction {
-        case .up:
-            return (0, -1)
-        case .down:
-            return (0, 1)
-        case .left:
-            return (-1, 0)
-        case .right:
-            return (1, 0)
-        }
-    }
-
-    private static func rightUnitVector(for direction: Direction) -> (x: Double, y: Double) {
-        switch direction {
-        case .up:
-            return (1, 0)
-        case .down:
-            return (-1, 0)
-        case .left:
-            return (0, -1)
-        case .right:
-            return (0, 1)
-        }
-    }
-
-    private static func facingKey(for direction: Direction) -> Int {
-        switch direction {
-        case .up:
-            return 0
-        case .right:
-            return 1
-        case .down:
-            return 2
-        case .left:
-            return 3
-        }
+        return projections
     }
 
     static func tileColor(for type: TileType, theme: SDLBoardTheme) -> SDLColor {

@@ -275,6 +275,92 @@ import Testing
     #expect(engine.state.player.position == startPosition)
 }
 
+@Test func invalidSaveIsRejectedBeforeEnteringExploration() async throws {
+    let library = try ContentLoader().load()
+    let saveURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString).appendingPathExtension("json")
+    let repo = SaveRepository(fileURL: saveURL)
+    let engine = GameEngine(library: library, saveRepository: repo)
+
+    let invalidSave = SaveGame(
+        player: PlayerState(
+            name: "Mira",
+            heroClass: .wayfarer,
+            traits: heroTemplate(for: .wayfarer).traits,
+            skills: heroTemplate(for: .wayfarer).skills,
+            health: 10,
+            maxHealth: 20,
+            stamina: 5,
+            maxStamina: 10,
+            attack: 4,
+            defense: 2,
+            lanternCharge: 3,
+            marks: 10,
+            inventory: [],
+            equipment: EquipmentLoadout(),
+            position: Position(x: 99, y: 99),
+            currentMapID: "merrow_village",
+            lastSavePosition: Position(x: 1, y: 1),
+            lastSaveMapID: "merrow_village"
+        ),
+        world: WorldState(maps: library.content(for: .ashesOfMerrow).maps, npcs: [], enemies: [], openedInteractables: [], activeSwitchSequence: []),
+        quests: QuestState(flags: []),
+        playTimeSeconds: 12,
+        adventureID: .ashesOfMerrow
+    )
+    try repo.save(invalidSave)
+
+    engine.handle(.load)
+
+    #expect(engine.state.mode == .title)
+    #expect(engine.state.messages.last == "The save contains an invalid player position.")
+}
+
+@Test func chestRewardDoesNotConsumeUniquePickupWhenInventoryIsFull() async throws {
+    let library = try ContentLoader().load()
+    let saveURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString).appendingPathExtension("json")
+    let engine = GameEngine(library: library, saveRepository: SaveRepository(fileURL: saveURL))
+
+    engine.handle(.newGame)
+    engine.handle(.confirm)
+    engine.state.world.npcs = []
+    engine.state.world.enemies = []
+    engine.state.player.inventory = Array(repeating: itemTable[.healingTonic]!, count: engine.state.player.inventoryCapacity())
+    var equipment = engine.state.player.equipment
+    equipment.set(.mirrorCharm, for: .charm)
+    engine.state.player.equipment = equipment
+
+    let mapID = engine.state.player.currentMapID
+    let map = try #require(engine.state.world.maps[mapID])
+    let interactable = InteractableDefinition(
+        id: "full_pack_chest",
+        kind: .chest,
+        position: engine.state.player.position,
+        title: "Full Pack Cache",
+        lines: ["A relic waits inside."],
+        rewardItem: .sunCharm,
+        rewardMarks: nil,
+        requiredFlag: nil,
+        grantsFlag: nil
+    )
+    let updatedMap = MapDefinition(
+        id: map.id,
+        name: map.name,
+        depthBackdrop: map.depthBackdrop,
+        layoutFile: map.layoutFile,
+        lines: map.lines,
+        spawn: map.spawn,
+        portals: map.portals,
+        interactables: map.interactables + [interactable]
+    )
+    engine.state.world.maps[mapID] = updatedMap
+
+    engine.handle(.interact)
+
+    #expect(engine.state.world.openedInteractables.contains("full_pack_chest") == false)
+    #expect(engine.state.player.inventory.contains(where: { $0.id == .sunCharm }) == false)
+    #expect(engine.state.messages.last == "Your satchel is too full.")
+}
+
 @Test func pauseMenuCanSaveAndReturnToTitle() async throws {
     let library = try ContentLoader().load()
     let saveURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString).appendingPathExtension("json")
@@ -414,6 +500,58 @@ import Testing
     #expect(isTileBillboard(GraphicsSceneSnapshotBuilder.makeBillboard(for: shrineCell, distance: 1.0, angleOffset: 0.0, maxDistance: 18.0, lightLevel: 1.0), type: .shrine))
     #expect(isTileBillboard(GraphicsSceneSnapshotBuilder.makeBillboard(for: beaconCell, distance: 1.0, angleOffset: 0.0, maxDistance: 18.0, lightLevel: 1.0), type: .beacon))
     #expect(isTileBillboard(GraphicsSceneSnapshotBuilder.makeBillboard(for: openDoorCell, distance: 1.0, angleOffset: 0.0, maxDistance: 18.0, lightLevel: 1.0), type: .doorOpen))
+}
+
+@Test func encounterIntroLineTriggersOnlyOncePerEncounter() async throws {
+    let library = try ContentLoader().load()
+    let saveURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString).appendingPathExtension("json")
+    let engine = GameEngine(library: library, saveRepository: SaveRepository(fileURL: saveURL))
+
+    engine.handle(.newGame)
+    engine.handle(.confirm)
+
+    let encounter = try #require(engine.content.encounters.values.first)
+    let enemy = EnemyState(
+        id: encounter.enemyID,
+        name: "Encounter Dummy",
+        position: engine.state.player.position + Direction.right.delta,
+        hp: 50,
+        maxHP: 50,
+        attack: 0,
+        defense: 0,
+        ai: .stalk,
+        glyph: "e",
+        color: .red,
+        mapID: engine.state.player.currentMapID,
+        active: true
+    )
+    engine.state.world.enemies = [enemy]
+
+    engine.resolveCombat(with: 0)
+    engine.resolveCombat(with: 0)
+
+    #expect(engine.state.world.triggeredEncounters.contains(encounter.id))
+    #expect(engine.state.messages.filter { $0 == encounter.introLine }.count == 1)
+}
+
+@Test func sharedDepthProjectionProducesMonotonicFloorBands() async throws {
+    let projections = DepthProjectionMath.floorProjection(
+        width: 584,
+        height: 356,
+        horizonOffset: 178,
+        floorBands: 18,
+        facing: .right,
+        fieldOfView: .pi / 3
+    )
+
+    #expect(projections.count == 18)
+    #expect(projections.allSatisfy { !$0.strips.isEmpty })
+    #expect(projections.first?.y0 == 178)
+    for index in 1..<projections.count {
+        #expect(projections[index].y0 >= projections[index - 1].y0)
+        #expect(projections[index].y1 >= projections[index].y0)
+        #expect(projections[index].rowDistance <= projections[index - 1].rowDistance)
+    }
 }
 
 private func isTileBillboard(_ billboard: DepthBillboardSnapshot?, type: TileType) -> Bool {

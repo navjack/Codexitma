@@ -95,6 +95,7 @@ After successful builds, a convenience copy of the latest working binary is also
 
 - Tile-based top-down exploration
 - Turn-based movement and combat
+- Authored one-shot encounter intros tied to enemy contacts
 - Dialogue and NPC interaction
 - Inventory, consumables, gear, and equippable slots
 - Shops and `marks` currency
@@ -116,6 +117,8 @@ After successful builds, a convenience copy of the latest working binary is also
   - authored map backdrops (`sky` vs `ceiling`) for outdoor/indoor depth scenes
   - shared world-space lighting/shadow field across floor, walls, and ceiling
   - sky backdrop contributes emissive ambient light; torches and features cast occlusion-aware shadows
+
+The overhead board views now also use the same authored lighting/shadow field by default, so torch and structure lighting is visible outside `Depth 3D` too.
 
 In graphics mode, press `T` to cycle styles.
 
@@ -210,6 +213,8 @@ Current editor capabilities:
 - validate content before export
 - export and immediately playtest the active pack
 
+The native macOS editor is the most complete authoring surface. The SDL path supports structured pack editing, but still trails the native editor for full free-text authoring polish.
+
 Bundled adventures are never edited in-place. Editing a bundled adventure writes an external override pack instead.
 
 See [EDITOR_ROADMAP.md](EDITOR_ROADMAP.md) for the editor-specific notes and remaining polish targets.
@@ -254,6 +259,8 @@ For map JSON, `depthBackdrop` controls depth-mode backdrop and ambient behavior:
 - `ceiling`: indoor backdrop with shaded ceiling projection
 
 If an external pack uses the same adventure `id` as a bundled adventure, it overrides the bundled one. That is the supported mod path for changing shipped adventures without touching the app bundle.
+
+Malformed external packs are quarantined and reported as load warnings instead of aborting the entire app at startup.
 
 Graphics tile/sprite palettes and map theme overrides can also be modded without recompiling Swift by creating:
 

@@ -77,6 +77,10 @@ struct AdventurePackExporter {
         issues.append(contentsOf: duplicateIDIssues(for: document.npcs.map(\.id), label: "npc"))
         issues.append(contentsOf: duplicateIDIssues(for: document.enemies.map(\.id), label: "enemy"))
         issues.append(contentsOf: duplicateIDIssues(for: document.shops.map(\.id), label: "shop"))
+        issues.append(contentsOf: duplicateIDIssues(
+            for: document.maps.flatMap { $0.interactables.map(\.id) },
+            label: "interactable"
+        ))
 
         var mapsByID: [String: EditableMap] = [:]
         for map in document.maps {
@@ -165,6 +169,7 @@ struct AdventurePackExporter {
                 issues.append("Encounter \(encounter.id) points to missing enemy \(encounter.enemyID).")
             }
         }
+        issues.append(contentsOf: duplicateIDIssues(for: document.encounters.map(\.enemyID), label: "encounter enemy"))
 
         let npcIDs = Set(document.npcs.map(\.id))
         var allOfferIDs: [String] = []
@@ -204,6 +209,7 @@ struct AdventurePackExporter {
             title: document.title,
             summary: document.summary,
             introLine: document.introLine,
+            startMapID: document.maps.first?.id,
             objectivesFile: "quest_flow.json",
             worldFile: "world.json",
             dialoguesFile: "dialogues.json",
@@ -301,6 +307,7 @@ private struct EditorAdventureManifest: Codable {
     let title: String
     let summary: String
     let introLine: String
+    let startMapID: String?
     let objectivesFile: String
     let worldFile: String
     let dialoguesFile: String

@@ -232,3 +232,8 @@
 - Extended graphics automation to accept `warp:<map>:<x>:<y>[:<facing>]` so the real native and SDL frontends can be positioned deterministically for renderer verification, not just gameplay key sequences.
 - Added broader regression coverage for depth semantics and billboard classification so pass-through scenery tiles (`brush`, `stairs`, `shrine`, `beacon`, `doorOpen`) stay billboarded while `floor`, `wall`, and `water` do not.
 - Smoke-tested the real renderers with scripted native + SDL warps to water, brush, shrine, beacon, stairs, and locked-door checkpoints; water now renders as a recessed pool and the pass-through scenery tiles still appear as billboards instead of wall hits.
+- Closed the last two audit items from `CODEBASE_AUDIT_REPORT.json`: encounters are now real runtime content instead of dead authored data, and the core floor/billboard projection math is shared between native and SDL in `DepthProjectionMath.swift`.
+- Added persistent `triggeredEncounters` world state plus save validation so encounter intro lines fire once per authored encounter and survive saves without replay spam.
+- Tightened encounter validation so a pack cannot bind multiple encounter definitions to the same enemy ID, which keeps the runtime lookup deterministic.
+- Moved SDL floor projection onto the same shared helpers already used by native Depth3D, and replaced the remaining native strip-smoothing copies with calls into the shared helper too.
+- Added regression tests covering one-shot encounter intros and the monotonic/shared floor-band projection output, then reran the full test suite successfully.

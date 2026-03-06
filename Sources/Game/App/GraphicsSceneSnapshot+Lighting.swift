@@ -618,28 +618,10 @@ extension GraphicsSceneSnapshotBuilder {
     }
 
     static func facingUnitVector(for direction: Direction) -> (x: Double, y: Double) {
-        switch direction {
-        case .up:
-            return (0, -1)
-        case .down:
-            return (0, 1)
-        case .left:
-            return (-1, 0)
-        case .right:
-            return (1, 0)
-        }
+        DepthProjectionMath.facingUnitVector(for: direction)
     }
 
     static func rightUnitVector(for direction: Direction) -> (x: Double, y: Double) {
-        switch direction {
-        case .up:
-            return (1, 0)
-        case .down:
-            return (-1, 0)
-        case .left:
-            return (0, -1)
-        case .right:
-            return (0, 1)
-        }
+        DepthProjectionMath.rightUnitVector(for: direction)
     }
 }

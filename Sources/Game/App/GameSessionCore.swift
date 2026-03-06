@@ -105,7 +105,7 @@ final class SharedGameSession {
 
     func editorConfirmationLines() -> [String] {
         let adventureID = editorTargetAdventureID()
-        let isExternal = library.entry(for: adventureID)?.folder.contains("/") == true
+        let isExternal = library.entry(for: adventureID).map { AdventureEditorStore.isExternalPackFolder($0.folder) } == true
         var lines: [String] = []
 
         if isExternal {

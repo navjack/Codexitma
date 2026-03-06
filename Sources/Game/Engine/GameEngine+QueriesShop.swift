@@ -94,6 +94,7 @@ extension GameEngine {
     }
 
     func open(shop: ShopDefinition) {
+        state.pendingShopID = nil
         state.activeShopID = shop.id
         state.shopTitle = "\(shop.merchantName)'s Goods"
         state.shopLines = [

@@ -4,31 +4,6 @@ import Foundation
 import SwiftUI
 
 struct MapBoardView: View {
-    struct DepthFloorProjectionKey: Hashable {
-        let width: Int
-        let height: Int
-        let horizonOffset: Int
-        let floorBands: Int
-        let facing: Int
-        let fieldOfViewMilli: Int
-    }
-
-    struct DepthFloorStripProjection {
-        let x0: CGFloat
-        let x1: CGFloat
-        let xNormalized: Double
-        let rayX: Double
-        let rayY: Double
-    }
-
-    struct DepthFloorBandProjection {
-        let y0: CGFloat
-        let y1: CGFloat
-        let rowDistance: Double
-        let bandNorm: Double
-        let strips: [DepthFloorStripProjection]
-    }
-
     let state: GameState
     let scene: GraphicsSceneSnapshot
     let palette: UltimaPalette

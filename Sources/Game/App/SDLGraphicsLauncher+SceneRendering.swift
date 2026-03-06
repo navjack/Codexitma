@@ -114,8 +114,8 @@ extension SDLGraphicsLauncher {
         stroke(renderer, frame: panelFrame, color: .editorAccent)
 
         renderEditorSidebar(editor, frame: panelFrame, with: renderer)
-        drawText("EDITOR MODE", x: viewport.headerFrame.x + 4, y: viewport.headerFrame.y, color: .editorAccent, renderer: renderer)
-        drawText("GAME VIEW PAUSED", x: viewport.headerFrame.x + 120, y: viewport.headerFrame.y, color: .bright, renderer: renderer)
+        drawText("SDL LIMITED EDITOR", x: viewport.headerFrame.x + 4, y: viewport.headerFrame.y, color: .editorAccent, renderer: renderer)
+        drawText("GAME VIEW PAUSED", x: viewport.headerFrame.x + 170, y: viewport.headerFrame.y, color: .bright, renderer: renderer)
         if let statusLine {
             drawText(String(statusLine.uppercased().prefix(50)), x: viewport.headerFrame.x + max(320, viewport.headerFrame.width / 2), y: viewport.headerFrame.y, color: .gold, renderer: renderer)
         }
@@ -426,7 +426,7 @@ extension SDLGraphicsLauncher {
         stroke(renderer, frame: panel, color: .gold)
 
         var y = panel.y + 20
-        drawText("OPEN EDITOR?", x: panel.x + 16, y: y, color: .gold, renderer: renderer)
+        drawText("OPEN LIMITED EDITOR?", x: panel.x + 16, y: y, color: .gold, renderer: renderer)
         y += 24
         for line in lines {
             y = drawWrappedText(
@@ -603,6 +603,10 @@ extension SDLGraphicsLauncher {
         drawText("STATUS", x: frame.x + 10, y: y, color: .editorAccent, renderer: renderer)
         y += lineHeight
         y = drawWrappedText(editor.statusLine.uppercased(), x: frame.x + 10, y: y, width: 30, color: .bright, renderer: renderer)
+        y += lineHeight
+        drawText("LIMITED MODE", x: frame.x + 10, y: y, color: .editorAccent, renderer: renderer)
+        y += lineHeight
+        y = drawWrappedText("MAP EDITING IS DIRECT. DOCUMENT TABS CYCLE TEMPLATES AND IDS.", x: frame.x + 10, y: y, width: 30, color: .dim, renderer: renderer)
 
         if editor.showsDocumentPanel {
             drawText("W/S FIELD  A/D ADJUST", x: frame.x + 10, y: frame.y + frame.height - 56, color: .bright, renderer: renderer)

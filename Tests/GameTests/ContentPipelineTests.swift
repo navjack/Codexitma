@@ -41,6 +41,9 @@ import Testing
     }
 
     engine.handle(.interact)
+    #expect(engine.state.mode == .dialogue)
+
+    engine.handle(.confirm)
     #expect(engine.state.mode == .shop)
     #expect(engine.state.shopOffers.count >= 3)
 
@@ -51,6 +54,157 @@ import Testing
     #expect(engine.state.player.marks == marksBefore - 2)
     #expect(engine.state.player.inventory.count == inventoryBefore + 1)
     #expect(engine.state.world.purchasedShopOffers.isEmpty)
+}
+
+@Test func contentLoaderQuarantinesBrokenExternalPackInsteadOfBrickingStartup() async throws {
+    let root = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString, isDirectory: true)
+    defer {
+        try? FileManager.default.removeItem(at: root)
+    }
+
+    let goodPack = root.appendingPathComponent("good_pack", isDirectory: true)
+    let badPack = root.appendingPathComponent("bad_pack", isDirectory: true)
+    try FileManager.default.createDirectory(at: goodPack, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: badPack, withIntermediateDirectories: true)
+
+    try """
+    {
+      "id": "goodPack",
+      "title": "Good Pack",
+      "summary": "Loads cleanly.",
+      "introLine": "A clean road opens.",
+      "worldFile": "world.json",
+      "dialoguesFile": "dialogues.json",
+      "objectivesFile": "quest_flow.json",
+      "encountersFile": "encounters.json",
+      "npcsFile": "npcs.json",
+      "enemiesFile": "enemies.json",
+      "shopsFile": "shops.json"
+    }
+    """.write(to: goodPack.appendingPathComponent("adventure.json"), atomically: true, encoding: .utf8)
+
+    try """
+    [
+      {
+        "id": "dock_start",
+        "name": "Dock Start",
+        "layoutFile": "dock_map.txt",
+        "lines": [],
+        "spawn": { "x": 1, "y": 1 },
+        "portals": [],
+        "interactables": []
+      }
+    ]
+    """.write(to: goodPack.appendingPathComponent("world.json"), atomically: true, encoding: .utf8)
+    try "###\n#.#\n###\n".write(to: goodPack.appendingPathComponent("dock_map.txt"), atomically: true, encoding: .utf8)
+    try "[]\n".write(to: goodPack.appendingPathComponent("dialogues.json"), atomically: true, encoding: .utf8)
+    try "[]\n".write(to: goodPack.appendingPathComponent("encounters.json"), atomically: true, encoding: .utf8)
+    try "[]\n".write(to: goodPack.appendingPathComponent("npcs.json"), atomically: true, encoding: .utf8)
+    try "[]\n".write(to: goodPack.appendingPathComponent("enemies.json"), atomically: true, encoding: .utf8)
+    try "[]\n".write(to: goodPack.appendingPathComponent("shops.json"), atomically: true, encoding: .utf8)
+    try """
+    {
+      "stages": [
+        { "objective": "Reach the dock.", "completeWhenFlag": "metElder" }
+      ],
+      "completionText": "Done."
+    }
+    """.write(to: goodPack.appendingPathComponent("quest_flow.json"), atomically: true, encoding: .utf8)
+
+    try """
+    {
+      "id": "badPack",
+      "title": "Bad Pack",
+      "summary": "Should be skipped.",
+      "introLine": "This should not load.",
+      "worldFile": "../outside/world.json",
+      "dialoguesFile": "dialogues.json",
+      "objectivesFile": "quest_flow.json",
+      "encountersFile": "encounters.json",
+      "npcsFile": "npcs.json",
+      "enemiesFile": "enemies.json",
+      "shopsFile": "shops.json"
+    }
+    """.write(to: badPack.appendingPathComponent("adventure.json"), atomically: true, encoding: .utf8)
+    try "[]\n".write(to: badPack.appendingPathComponent("dialogues.json"), atomically: true, encoding: .utf8)
+    try "[]\n".write(to: badPack.appendingPathComponent("encounters.json"), atomically: true, encoding: .utf8)
+    try "[]\n".write(to: badPack.appendingPathComponent("npcs.json"), atomically: true, encoding: .utf8)
+    try "[]\n".write(to: badPack.appendingPathComponent("enemies.json"), atomically: true, encoding: .utf8)
+    try "[]\n".write(to: badPack.appendingPathComponent("shops.json"), atomically: true, encoding: .utf8)
+    try """
+    {
+      "stages": [
+        { "objective": "Should never load.", "completeWhenFlag": "metElder" }
+      ],
+      "completionText": "Done."
+    }
+    """.write(to: badPack.appendingPathComponent("quest_flow.json"), atomically: true, encoding: .utf8)
+
+    let library = try ContentLoader(externalRootURL: root).load()
+    #expect(library.contains(AdventureID(rawValue: "goodPack")))
+    #expect(!library.contains(AdventureID(rawValue: "badPack")))
+    #expect(library.loadWarnings.isEmpty == false)
+}
+
+@Test func contentLoaderUsesFirstMapAsFallbackStartMapForCustomPack() async throws {
+    let root = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString, isDirectory: true)
+    let packFolder = root.appendingPathComponent("stormkeep_trial", isDirectory: true)
+    try FileManager.default.createDirectory(at: packFolder, withIntermediateDirectories: true)
+    defer {
+        try? FileManager.default.removeItem(at: root)
+    }
+
+    try """
+    {
+      "id": "stormkeepTrial",
+      "title": "Stormkeep Trial",
+      "summary": "A compact external pack for loader validation.",
+      "introLine": "A hidden tower hums beyond the surf.",
+      "objectivesFile": "quest_flow.json",
+      "worldFile": "world.json",
+      "dialoguesFile": "dialogues.json",
+      "encountersFile": "encounters.json",
+      "npcsFile": "npcs.json",
+      "enemiesFile": "enemies.json",
+      "shopsFile": "shops.json"
+    }
+    """.write(to: packFolder.appendingPathComponent("adventure.json"), atomically: true, encoding: .utf8)
+
+    try """
+    {
+      "stages": [
+        { "objective": "Reach the tower gate.", "completeWhenFlag": "metElder" }
+      ],
+      "completionText": "The trial is complete."
+    }
+    """.write(to: packFolder.appendingPathComponent("quest_flow.json"), atomically: true, encoding: .utf8)
+
+    try """
+    [
+      {
+        "id": "stormkeep_gate",
+        "name": "Stormkeep Gate",
+        "layoutFile": "stormkeep_map.txt",
+        "lines": [],
+        "spawn": { "x": 1, "y": 1 },
+        "portals": [],
+        "interactables": []
+      }
+    ]
+    """.write(to: packFolder.appendingPathComponent("world.json"), atomically: true, encoding: .utf8)
+
+    try "###\n#.#\n###\n".write(to: packFolder.appendingPathComponent("stormkeep_map.txt"), atomically: true, encoding: .utf8)
+    try "[]\n".write(to: packFolder.appendingPathComponent("dialogues.json"), atomically: true, encoding: .utf8)
+    try "[]\n".write(to: packFolder.appendingPathComponent("encounters.json"), atomically: true, encoding: .utf8)
+    try "[]\n".write(to: packFolder.appendingPathComponent("npcs.json"), atomically: true, encoding: .utf8)
+    try "[]\n".write(to: packFolder.appendingPathComponent("enemies.json"), atomically: true, encoding: .utf8)
+    try "[]\n".write(to: packFolder.appendingPathComponent("shops.json"), atomically: true, encoding: .utf8)
+
+    let library = try ContentLoader(externalRootURL: root).load()
+    let externalID = AdventureID(rawValue: "stormkeepTrial")
+    let content = library.content(for: externalID)
+
+    #expect(content.startMapID == "stormkeep_gate")
 }
 
 @Test func droppingInventoryItemsRemovesConsumablesAndProtectsQuestItems() async throws {

@@ -451,8 +451,8 @@ extension MapBoardView {
         context.fill(Path(floorRect), with: .color(theme.floor.opacity(0.18)))
 
         for (band, projection) in projections.enumerated() {
-            let y0 = projection.y0
-            let y1 = projection.y1
+            let y0 = CGFloat(projection.y0)
+            let y1 = CGFloat(projection.y1)
             let t1 = CGFloat(band + 1) / CGFloat(max(1, effectiveFloorBands))
             let rect = CGRect(x: 0, y: y0, width: size.width, height: max(1, y1 - y0))
             let shade = 0.10 + (Double(t1) * 0.22)
@@ -540,9 +540,9 @@ extension MapBoardView {
                 let v = fract(worldY)
 
                 let stripe = CGRect(
-                    x: strip.x0,
+                    x: CGFloat(strip.x0),
                     y: rect.minY,
-                    width: max(1, strip.x1 - strip.x0),
+                    width: max(1, CGFloat(strip.x1 - strip.x0)),
                     height: rect.height
                 )
                 if let color = atlas.floorColor(u: u, v: v) {
@@ -602,26 +602,8 @@ extension MapBoardView {
             context.fill(Path(shimmerBand), with: .color(theme.roomHighlight.opacity(shimmerOpacity)))
         }
 
-        if stripLightLevels.count >= 3 {
-            var smoothed = stripLightLevels
-            for index in stripLightLevels.indices {
-                let left = stripLightLevels[max(0, index - 1)]
-                let center = stripLightLevels[index]
-                let right = stripLightLevels[min(stripLightLevels.count - 1, index + 1)]
-                smoothed[index] = (left * 0.24) + (center * 0.52) + (right * 0.24)
-            }
-            stripLightLevels = smoothed
-        }
-        if stripShadowLevels.count >= 3 {
-            var smoothed = stripShadowLevels
-            for index in stripShadowLevels.indices {
-                let left = stripShadowLevels[max(0, index - 1)]
-                let center = stripShadowLevels[index]
-                let right = stripShadowLevels[min(stripShadowLevels.count - 1, index + 1)]
-                smoothed[index] = (left * 0.24) + (center * 0.52) + (right * 0.24)
-            }
-            stripShadowLevels = smoothed
-        }
+        DepthProjectionMath.smoothStripLevels(&stripLightLevels)
+        DepthProjectionMath.smoothStripLevels(&stripShadowLevels)
 
         let ambient = floorLighting?.ambient ?? worldLighting?.ambient
         if let ambient {
@@ -663,13 +645,14 @@ extension MapBoardView {
         theme: RegionTheme
     ) {
         for projection in projections {
-            let mirroredY0 = horizon - (projection.y1 - horizon)
-            let mirroredY1 = horizon - (projection.y0 - horizon)
+            let horizonValue = Double(horizon)
+            let mirroredY0 = horizonValue - (projection.y1 - horizonValue)
+            let mirroredY1 = horizonValue - (projection.y0 - horizonValue)
             let rect = CGRect(
                 x: 0,
-                y: max(0, mirroredY0),
-                width: projection.strips.last?.x1 ?? 0,
-                height: max(1, mirroredY1 - mirroredY0)
+                y: max(0, CGFloat(mirroredY0)),
+                width: CGFloat(projection.strips.last?.x1 ?? 0),
+                height: max(1, CGFloat(mirroredY1 - mirroredY0))
             )
             if rect.height <= 0 {
                 continue
@@ -700,32 +683,14 @@ extension MapBoardView {
                 stripShadowLevels[index] = shadow
             }
 
-            if stripLevels.count >= 3 {
-                var smoothed = stripLevels
-                for index in stripLevels.indices {
-                    let left = stripLevels[max(0, index - 1)]
-                    let center = stripLevels[index]
-                    let right = stripLevels[min(stripLevels.count - 1, index + 1)]
-                    smoothed[index] = (left * 0.24) + (center * 0.52) + (right * 0.24)
-                }
-                stripLevels = smoothed
-            }
-            if stripShadowLevels.count >= 3 {
-                var smoothed = stripShadowLevels
-                for index in stripShadowLevels.indices {
-                    let left = stripShadowLevels[max(0, index - 1)]
-                    let center = stripShadowLevels[index]
-                    let right = stripShadowLevels[min(stripShadowLevels.count - 1, index + 1)]
-                    smoothed[index] = (left * 0.24) + (center * 0.52) + (right * 0.24)
-                }
-                stripShadowLevels = smoothed
-            }
+            DepthProjectionMath.smoothStripLevels(&stripLevels)
+            DepthProjectionMath.smoothStripLevels(&stripShadowLevels)
 
             for (index, strip) in projection.strips.enumerated() {
                 let stripe = CGRect(
-                    x: strip.x0,
+                    x: CGFloat(strip.x0),
                     y: rect.minY,
-                    width: max(1, strip.x1 - strip.x0),
+                    width: max(1, CGFloat(strip.x1 - strip.x0)),
                     height: rect.height
                 )
                 let level = stripLevels[index]
@@ -847,16 +812,20 @@ extension MapBoardView {
         let sceneDepth = scene.depth
         let fieldOfView = sceneDepth?.fieldOfView ?? depthFieldOfView
         for billboard in billboards {
-            let screenCenter = ((billboard.angleOffset / fieldOfView) + 0.5) * size.width
-            let projectedHeight = min(
-                size.height * 0.88,
-                CGFloat((size.height * billboard.scale) / max(0.16, billboard.distance))
-            )
             let pattern = depthBillboardPattern(for: billboard.kind)
             let aspect = CGFloat(max(1, pattern.first?.count ?? 1)) / CGFloat(max(1, pattern.count))
-            let projectedWidth = max(10, projectedHeight * aspect * billboard.widthScale)
-            let left = screenCenter - (projectedWidth / 2)
-            let top = horizon - (projectedHeight * 0.5)
+            let projection = DepthProjectionMath.billboardProjection(
+                screenWidth: Double(size.width),
+                screenHeight: Double(size.height),
+                horizon: Double(horizon),
+                fieldOfView: fieldOfView,
+                billboard: billboard,
+                aspectRatio: Double(aspect)
+            )
+            let projectedHeight = CGFloat(projection.height)
+            let projectedWidth = CGFloat(projection.width)
+            let left = CGFloat(projection.left)
+            let top = CGFloat(projection.top)
             let cellWidth = projectedWidth / CGFloat(max(1, pattern.first?.count ?? 1))
             let cellHeight = projectedHeight / CGFloat(max(1, pattern.count))
             let lightShade = max(0.18, min(1.0, billboard.lightLevel))
