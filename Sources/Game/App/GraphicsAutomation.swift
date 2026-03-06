@@ -16,6 +16,7 @@ enum GraphicsAutomationDirective: Equatable {
     case warp(mapID: String?, position: Position, facing: Direction?)
     case cycleTheme
     case selectTheme(GraphicsVisualTheme)
+    case toggleDebugLighting
     case screenshot(String?)
 }
 
@@ -34,6 +35,8 @@ enum GraphicsAutomationCommandParser {
         switch trimmed.lowercased() {
         case "theme", "style", "t":
             return .cycleTheme
+        case "debug", "dbg", "f10":
+            return .toggleDebugLighting
         default:
             break
         }
@@ -115,6 +118,7 @@ final class GraphicsAutomationRunner {
         warpPlayer: (String?, Position, Direction?) throws -> Void,
         cycleTheme: () -> Void,
         selectTheme: (GraphicsVisualTheme) -> Void,
+        toggleDebugLighting: () -> Void,
         captureScreenshot: (String?) -> Void
     ) throws {
         guard !isFinished else {
@@ -133,6 +137,8 @@ final class GraphicsAutomationRunner {
             cycleTheme()
         case .selectTheme(let theme):
             selectTheme(theme)
+        case .toggleDebugLighting:
+            toggleDebugLighting()
         case .screenshot(let label):
             captureScreenshot(label)
         }

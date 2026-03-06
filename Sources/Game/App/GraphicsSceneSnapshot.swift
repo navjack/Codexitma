@@ -178,11 +178,11 @@ struct DepthWorldLightingSnapshot {
     let shadowValues: [[Double]]
 
     func level(atWorldX worldX: Double, y worldY: Double) -> Double {
-        sample(from: values, atWorldX: worldX, y: worldY)
+        sample(from: values, atWorldX: worldX, y: worldY, outsideValue: ambient)
     }
 
     func shadowLevel(atWorldX worldX: Double, y worldY: Double) -> Double {
-        sample(from: shadowValues, atWorldX: worldX, y: worldY)
+        sample(from: shadowValues, atWorldX: worldX, y: worldY, outsideValue: 0.0)
     }
 
     func effectiveLevel(
@@ -198,16 +198,21 @@ struct DepthWorldLightingSnapshot {
         return max(minimum, min(1.0, shaded))
     }
 
-    private func sample(from grid: [[Double]], atWorldX worldX: Double, y worldY: Double) -> Double {
+    private func sample(
+        from grid: [[Double]],
+        atWorldX worldX: Double,
+        y worldY: Double,
+        outsideValue: Double
+    ) -> Double {
         guard worldX >= 0.0,
               worldY >= 0.0,
               worldX < Double(width),
               worldY < Double(height) else {
-            return ambient
+            return outsideValue
         }
 
         guard sampleWidth > 0, sampleHeight > 0, !grid.isEmpty else {
-            return ambient
+            return outsideValue
         }
 
         let scaledX = (worldX * Double(subdivisions)) - 0.5
@@ -328,10 +333,30 @@ enum GraphicsSceneSnapshotBuilder {
 
     struct DepthLightSource {
         let position: Position
+        let worldX: Double
+        let worldY: Double
         let intensity: Double
         let radius: Double
         let blockedTransmission: Double
         let shadowStrength: Double
+
+        init(
+            position: Position,
+            worldX: Double? = nil,
+            worldY: Double? = nil,
+            intensity: Double,
+            radius: Double,
+            blockedTransmission: Double,
+            shadowStrength: Double
+        ) {
+            self.position = position
+            self.worldX = worldX ?? (Double(position.x) + 0.5)
+            self.worldY = worldY ?? (Double(position.y) + 0.5)
+            self.intensity = intensity
+            self.radius = radius
+            self.blockedTransmission = blockedTransmission
+            self.shadowStrength = shadowStrength
+        }
     }
 
     struct DepthLightField {
@@ -352,7 +377,7 @@ enum GraphicsSceneSnapshotBuilder {
         }
 
         func level(atWorldX worldX: Double, y worldY: Double) -> Double {
-            sample(from: values, atWorldX: worldX, y: worldY)
+            sample(from: values, atWorldX: worldX, y: worldY, outsideValue: ambient)
         }
 
         func shadowLevel(at position: Position) -> Double {
@@ -363,7 +388,7 @@ enum GraphicsSceneSnapshotBuilder {
         }
 
         func shadowLevel(atWorldX worldX: Double, y worldY: Double) -> Double {
-            sample(from: shadowValues, atWorldX: worldX, y: worldY)
+            sample(from: shadowValues, atWorldX: worldX, y: worldY, outsideValue: 0.0)
         }
 
         func effectiveLevel(
@@ -387,21 +412,27 @@ enum GraphicsSceneSnapshotBuilder {
         ) -> Double {
             let light = level(atWorldX: worldX, y: worldY)
             let shadow = shadowLevel(atWorldX: worldX, y: worldY)
-            let shaded = light - (shadow * shadowWeight)
+            let excess = max(0.0, light - ambient)
+            let shaded = ambient + max(0.0, excess - (shadow * shadowWeight))
             let minimum = max(0.01, ambient * minimumAmbientFactor)
             return max(minimum, min(1.0, shaded))
         }
 
-        private func sample(from grid: [[Double]], atWorldX worldX: Double, y worldY: Double) -> Double {
+        private func sample(
+            from grid: [[Double]],
+            atWorldX worldX: Double,
+            y worldY: Double,
+            outsideValue: Double
+        ) -> Double {
             guard worldX >= 0.0,
                   worldY >= 0.0,
                   worldX < Double(width),
                   worldY < Double(height) else {
-                return ambient
+                return outsideValue
             }
 
             guard sampleWidth > 0, sampleHeight > 0, !grid.isEmpty else {
-                return ambient
+                return outsideValue
             }
 
             let scaledX = (worldX * Double(subdivisions)) - 0.5

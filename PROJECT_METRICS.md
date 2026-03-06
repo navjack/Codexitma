@@ -13,7 +13,7 @@ It is meant to answer practical questions such as:
 ## Snapshot
 
 - Snapshot date: `March 6, 2026`
-- Base commit: `39a28fc`
+- Base commit: `e6285c9`
 - Measurement tools:
   - `cloc 2.08`
   - `git`
@@ -21,22 +21,22 @@ It is meant to answer practical questions such as:
 
 ## Headline Numbers
 
-- Git commits: `91`
-- Git-tracked files: `142`
-- `cloc`-counted files: `123`
-- Repository size on disk: `2.0G`
+- Git commits: `92`
+- Git-tracked files: `143`
+- `cloc`-counted files: `124`
+- Repository size on disk: `2.1G`
 
 ## Code Size
 
-- Total `cloc` code lines: `23,006`
-- Total `cloc` blank lines: `2,471`
+- Total `cloc` code lines: `23,304`
+- Total `cloc` blank lines: `2,494`
 - Total `cloc` comment lines: `101`
 
 ### By Language
 
-- Swift: `68` files, `18,715` code lines
+- Swift: `69` files, `19,005` code lines
 - JSON: `20` files, `2,246` lines
-- Markdown: `9` files, `1,436` lines
+- Markdown: `9` files, `1,444` lines
 - Shell: `3` files, `172` lines
 - YAML: `2` files, `142` lines
 
@@ -44,13 +44,13 @@ It is meant to answer practical questions such as:
 
 These are plain line counts rather than `cloc` code-line counts.
 
-- Total Swift raw lines: `20,604`
-- Production Swift under `Sources/`: `64` files, `18,964` lines
+- Total Swift raw lines: `20,917`
+- Production Swift under `Sources/`: `65` files, `19,277` lines
 - Test Swift under `Tests/`: `3` files, `1,596` lines
 
 ### Swift Breakdown By Area
 
-- App/frontend/editor layer: `48` files, `15,743` raw lines
+- App/frontend/editor layer: `49` files, `16,056` raw lines
 - Engine layer: `6` files, `1,205` raw lines
 - Model layer: `3` files, `1,286` raw lines
 - Content loader layer: `3` files, `584` raw lines
@@ -99,8 +99,8 @@ These are plain line counts rather than `cloc` code-line counts.
 
 ## Largest Swift Files
 
-1. [Sources/Game/App/SDLGraphicsLauncher+DepthRendering.swift](/Volumes/4terrybi/coding/Codexitma/Sources/Game/App/SDLGraphicsLauncher+DepthRendering.swift): `1015` lines
-2. [Sources/Game/App/MapBoardView+DepthRendering.swift](/Volumes/4terrybi/coding/Codexitma/Sources/Game/App/MapBoardView+DepthRendering.swift): `908` lines
+1. [Sources/Game/App/SDLGraphicsLauncher+DepthRendering.swift](/Volumes/4terrybi/coding/Codexitma/Sources/Game/App/SDLGraphicsLauncher+DepthRendering.swift): `1014` lines
+2. [Sources/Game/App/MapBoardView+DepthRendering.swift](/Volumes/4terrybi/coding/Codexitma/Sources/Game/App/MapBoardView+DepthRendering.swift): `869` lines
 3. [Sources/Game/App/SDLGraphicsLauncher+SceneRendering.swift](/Volumes/4terrybi/coding/Codexitma/Sources/Game/App/SDLGraphicsLauncher+SceneRendering.swift): `741` lines
 4. [Sources/Game/App/AdventureEditorSession.swift](/Volumes/4terrybi/coding/Codexitma/Sources/Game/App/AdventureEditorSession.swift): `693` lines
 5. [Sources/Game/App/MapBoardView+DepthSupport.swift](/Volumes/4terrybi/coding/Codexitma/Sources/Game/App/MapBoardView+DepthSupport.swift): `683` lines

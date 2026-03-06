@@ -44,6 +44,7 @@ extension SDLGraphicsLauncher {
         let floorFar = blended(depthTheme.floor, toward: .void, amount: 0.52)
         let floorBands = max(20, frame.height / 14)
         let floorLighting = depth.floorLighting
+        let worldLighting = depth.worldLighting
         let floorProjection = depthFloorProjection(
             frame: frame,
             horizon: horizon,
@@ -60,6 +61,8 @@ extension SDLGraphicsLauncher {
                 horizon: horizon,
                 projection: floorProjection,
                 floorLighting: floorLighting,
+                worldLighting: worldLighting,
+                playerPosition: scene.player.position,
                 theme: depthTheme,
                 renderer: renderer
             )
@@ -73,10 +76,12 @@ extension SDLGraphicsLauncher {
             let base = blended(floorFar, toward: floorNear, amount: ratio)
             fill(renderer, x: frame.x, y: y0, width: frame.width, height: max(1, y1 - y0), color: base)
 
-            let (stripLevels, stripShadowLevels) = sampledStripLighting(
+            let (stripLevels, _) = sampledStripLighting(
                 band: projection,
+                playerPosition: scene.player.position,
+                worldLighting: worldLighting,
                 floorLighting: floorLighting,
-                mode: .raw
+                mode: .effective
             )
 
             for (index, strip) in projection.strips.enumerated() {
@@ -85,10 +90,9 @@ extension SDLGraphicsLauncher {
                 let sampledTile = scene.board.cell(
                     at: Position(x: Int(floor(worldX)), y: Int(floor(worldY)))
                 )?.tile ?? TileFactory.tile(for: "#")
-                let shadow = stripShadowLevels[index]
-                let shaded = max(floorLighting.ambient * 0.10, stripLevels[index] - (shadow * 0.74))
+                let shaded = stripLevels[index]
                 let lift = max(0.0, shaded - floorLighting.ambient)
-                let dim = max(max(0.0, floorLighting.ambient - shaded), shadow * 0.40)
+                let dim = max(0.0, floorLighting.ambient - shaded)
                 let stripX0 = Int(strip.x0.rounded())
                 let stripX1 = Int(strip.x1.rounded())
                 let width = max(1, stripX1 - stripX0)
@@ -137,16 +141,18 @@ extension SDLGraphicsLauncher {
                 }
 
                 if lift > 0.01 {
-                    let alpha = UInt8(max(0, min(170, Int((0.05 + (lift * 0.58)) * 255.0))))
+                    let glowScale = depth.usesSkyBackdrop ? 0.20 : 0.58
+                    let glowBase = depth.usesSkyBackdrop ? 0.02 : 0.05
+                    let glowMax = depth.usesSkyBackdrop ? 96 : 170
+                    let alpha = UInt8(max(0, min(glowMax, Int((glowBase + (lift * glowScale)) * 255.0))))
                     let glow = blended(depthTheme.innerBorder, toward: .bright, amount: 0.34)
                     fill(renderer, x: stripX0, y: y0, width: width, height: max(1, y1 - y0), color: glow.withAlpha(alpha))
                 }
                 if dim > 0.01 {
-                    let alpha = UInt8(max(0, min(110, Int((0.04 + (dim * 0.34)) * 255.0))))
-                    fill(renderer, x: stripX0, y: y0, width: width, height: max(1, y1 - y0), color: .void.withAlpha(alpha))
-                }
-                if shadow > 0.01 {
-                    let alpha = UInt8(max(0, min(130, Int((shadow * 0.28) * 255.0))))
+                    let dimScale = depth.usesSkyBackdrop ? 0.16 : 0.34
+                    let dimBase = depth.usesSkyBackdrop ? 0.02 : 0.04
+                    let dimMax = depth.usesSkyBackdrop ? 72 : 110
+                    let alpha = UInt8(max(0, min(dimMax, Int((dimBase + (dim * dimScale)) * 255.0))))
                     fill(renderer, x: stripX0, y: y0, width: width, height: max(1, y1 - y0), color: .void.withAlpha(alpha))
                 }
             }
@@ -206,14 +212,6 @@ extension SDLGraphicsLauncher {
                     height: height,
                     color: .void.withAlpha(24)
                 )
-            }
-            if effectiveShade < 0.65 {
-                let darkness = UInt8(max(0, min(170, Int((0.65 - effectiveShade) * 255.0))))
-                fill(renderer, x: x, y: top, width: max(1, columnWidth + 1), height: height, color: .void.withAlpha(darkness))
-            }
-            if shadowShade > 0.01 {
-                let shadowAlpha = UInt8(max(0, min(130, Int((shadowShade * 0.26) * 255.0))))
-                fill(renderer, x: x, y: top, width: max(1, columnWidth + 1), height: height, color: .void.withAlpha(shadowAlpha))
             }
             fill(
                 renderer,
@@ -311,9 +309,13 @@ extension SDLGraphicsLauncher {
         horizon: Int,
         projection: [DepthFloorBandProjection],
         floorLighting: DepthFloorLightingSnapshot,
+        worldLighting: DepthWorldLightingSnapshot,
+        playerPosition: Position,
         theme: SDLBoardTheme,
         renderer: OpaquePointer
     ) {
+        let playerX = Double(playerPosition.x) + 0.5
+        let playerY = Double(playerPosition.y) + 0.5
         for band in projection {
             let mirroredY0 = Double(horizon) - (band.y1 - Double(horizon))
             let mirroredY1 = Double(horizon) - (band.y0 - Double(horizon))
@@ -323,8 +325,11 @@ extension SDLGraphicsLauncher {
                 continue
             }
 
-            let (stripLevels, stripShadowLevels) = sampledStripLighting(
+            let (stripLevels, _) = sampledStripLighting(
                 band: band,
+                playerX: playerX,
+                playerY: playerY,
+                worldLighting: worldLighting,
                 floorLighting: floorLighting,
                 mode: .effective
             )
@@ -334,16 +339,11 @@ extension SDLGraphicsLauncher {
                 let stripX1 = Int(strip.x1.rounded())
                 let width = max(1, stripX1 - stripX0)
                 let level = stripLevels[index]
-                let shadow = stripShadowLevels[index]
-                let dim = max(max(0.0, floorLighting.ambient - level), shadow * 0.46)
+                let dim = max(0.0, floorLighting.ambient - level)
                 let lift = max(0.0, level - floorLighting.ambient)
 
                 if dim > 0.01 {
                     let alpha = UInt8(max(0, min(170, Int((0.04 + (dim * 0.46)) * 255.0))))
-                    fill(renderer, x: stripX0, y: y0, width: width, height: max(1, y1 - y0), color: .void.withAlpha(alpha))
-                }
-                if shadow > 0.01 {
-                    let alpha = UInt8(max(0, min(145, Int((shadow * 0.30) * 255.0))))
                     fill(renderer, x: stripX0, y: y0, width: width, height: max(1, y1 - y0), color: .void.withAlpha(alpha))
                 }
                 if lift > 0.01 {
@@ -361,42 +361,41 @@ extension SDLGraphicsLauncher {
         }
     }
 
-    private enum DepthStripLightingMode {
-        case raw
-        case effective
+    private static func sampledStripLighting(
+        band: DepthFloorBandProjection,
+        playerPosition: Position,
+        worldLighting: DepthWorldLightingSnapshot,
+        floorLighting: DepthFloorLightingSnapshot,
+        mode: DepthStripLightingMode
+    ) -> ([Double], [Double]) {
+        sampledStripLighting(
+            band: band,
+            playerX: Double(playerPosition.x) + 0.5,
+            playerY: Double(playerPosition.y) + 0.5,
+            worldLighting: worldLighting,
+            floorLighting: floorLighting,
+            mode: mode
+        )
     }
 
     private static func sampledStripLighting(
         band: DepthFloorBandProjection,
+        playerX: Double,
+        playerY: Double,
+        worldLighting: DepthWorldLightingSnapshot,
         floorLighting: DepthFloorLightingSnapshot,
         mode: DepthStripLightingMode
     ) -> ([Double], [Double]) {
-        var stripLevels = Array(repeating: floorLighting.ambient, count: band.strips.count)
-        var stripShadowLevels = Array(repeating: 0.0, count: band.strips.count)
-
-        for (index, strip) in band.strips.enumerated() {
-            let rawLevel = floorLighting.interpolatedLevel(
-                xNormalized: strip.xNormalized,
-                yNormalized: band.bandNorm
-            )
-            let shadowLevel = floorLighting.interpolatedShadow(
-                xNormalized: strip.xNormalized,
-                yNormalized: band.bandNorm
-            )
-            switch mode {
-            case .raw:
-                stripLevels[index] = rawLevel
-            case .effective:
-                let shaded = rawLevel - (shadowLevel * 0.72)
-                let minimum = max(0.01, floorLighting.ambient * 0.14)
-                stripLevels[index] = max(minimum, min(1.0, shaded))
-            }
-            stripShadowLevels[index] = shadowLevel
-        }
-
-        DepthProjectionMath.smoothStripLevels(&stripLevels)
-        DepthProjectionMath.smoothStripLevels(&stripShadowLevels)
-        return (stripLevels, stripShadowLevels)
+        DepthProjectionMath.sampleStripLighting(
+            band: band,
+            playerX: playerX,
+            playerY: playerY,
+            worldLighting: worldLighting,
+            floorLighting: floorLighting,
+            mode: mode,
+            shadowWeight: 0.72,
+            minimumAmbientFactor: mode == .effective ? 0.14 : 0.10
+        )
     }
 
     private static func fract(_ value: Double) -> Double {

@@ -137,6 +137,9 @@ enum SDLGraphicsLauncher {
                         },
                         cycleTheme: { session.cycleVisualTheme() },
                         selectTheme: { session.selectVisualTheme($0) },
+                        toggleDebugLighting: {
+                            showDebugLightingOverlay.toggle()
+                        },
                         captureScreenshot: { label in
                             pendingScreenshotLabel = label ?? screenshotLabel(session: session, editorSession: nil)
                         }

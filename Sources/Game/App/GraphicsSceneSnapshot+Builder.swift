@@ -587,8 +587,8 @@ extension GraphicsSceneSnapshotBuilder {
                 columns: 96,
                 ambientLight: 0.11,
                 skyEmissive: 0.0,
-                lightSubdivisions: 12,
-                floorLightBands: 20
+                lightSubdivisions: 16,
+                floorLightBands: 24
             )
         }
         if backdrop == .sky {
@@ -596,10 +596,10 @@ extension GraphicsSceneSnapshotBuilder {
                 fieldOfView: .pi / 2.95,
                 maxDistance: sharedDepthRenderDistance,
                 columns: 128,
-                ambientLight: 0.18,
-                skyEmissive: 0.12,
-                lightSubdivisions: 12,
-                floorLightBands: 22
+                ambientLight: 0.20,
+                skyEmissive: 0.16,
+                lightSubdivisions: 16,
+                floorLightBands: 28
             )
         }
         return DepthRenderProfile(
@@ -608,8 +608,8 @@ extension GraphicsSceneSnapshotBuilder {
             columns: 112,
             ambientLight: 0.15,
             skyEmissive: 0.0,
-            lightSubdivisions: 12,
-            floorLightBands: 20
+            lightSubdivisions: 16,
+            floorLightBands: 26
         )
     }
 }

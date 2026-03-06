@@ -467,7 +467,8 @@ extension MapBoardView {
                     floorLighting: floorLighting,
                     worldLighting: worldLighting,
                     projection: projection,
-                    theme: theme
+                    theme: theme,
+                    isSkyBackdrop: hasSkyBackdrop
                 )
                 context.fill(Path(rect), with: .color(Color.black.opacity(0.06 + (Double(t1) * 0.10))))
                 context.fill(Path(rect.insetBy(dx: 0, dy: 0)), with: .color(stripe.opacity(0.16)))
@@ -516,7 +517,8 @@ extension MapBoardView {
         floorLighting: DepthFloorLightingSnapshot?,
         worldLighting: DepthWorldLightingSnapshot?,
         projection: DepthFloorBandProjection,
-        theme: RegionTheme
+        theme: RegionTheme,
+        isSkyBackdrop: Bool
     ) {
         let playerX = Double(scene.player.position.x) + 0.5
         let playerY = Double(scene.player.position.y) + 0.5
@@ -524,14 +526,11 @@ extension MapBoardView {
         let bandNorm = projection.bandNorm
         let stripCount = projection.strips.count
         guard stripCount > 0 else { return }
-        var stripLightLevels = Array(repeating: floorLighting?.ambient ?? worldLighting?.ambient ?? 0.20, count: stripCount)
-        var stripShadowLevels = Array(repeating: 0.0, count: stripCount)
         var waterSurfaces: [(pit: CGRect, surface: CGRect, shimmer: Double)] = []
 
         context.withCGContext { cgContext in
             cgContext.interpolationQuality = .none
-            for (index, strip) in projection.strips.enumerated() {
-                let xNorm = strip.xNormalized
+            for strip in projection.strips {
                 let rayX = strip.rayX
                 let rayY = strip.rayY
                 let worldX = playerX + (rowDistance * rayX)
@@ -562,20 +561,6 @@ extension MapBoardView {
                     let shimmer = Double((u * 0.55) + (v * 0.45))
                     waterSurfaces.append((pit: stripe, surface: waterRect, shimmer: shimmer))
                 }
-
-                let light = floorLighting?.interpolatedLevel(
-                        xNormalized: xNorm,
-                        yNormalized: bandNorm
-                    )
-                    ?? worldLighting?.level(atWorldX: worldX, y: worldY)
-                    ?? (floorLighting?.ambient ?? worldLighting?.ambient ?? 0.20)
-                stripLightLevels[index] = light
-                stripShadowLevels[index] = floorLighting?.interpolatedShadow(
-                    xNormalized: xNorm,
-                    yNormalized: bandNorm
-                )
-                ?? worldLighting?.shadowLevel(atWorldX: worldX, y: worldY)
-                ?? 0.0
             }
         }
 
@@ -602,8 +587,14 @@ extension MapBoardView {
             context.fill(Path(shimmerBand), with: .color(theme.roomHighlight.opacity(shimmerOpacity)))
         }
 
-        DepthProjectionMath.smoothStripLevels(&stripLightLevels)
-        DepthProjectionMath.smoothStripLevels(&stripShadowLevels)
+        let (stripLightLevels, _) = DepthProjectionMath.sampleStripLighting(
+            band: projection,
+            playerX: playerX,
+            playerY: playerY,
+            worldLighting: worldLighting,
+            floorLighting: floorLighting,
+            mode: .effective
+        )
 
         let ambient = floorLighting?.ambient ?? worldLighting?.ambient
         if let ambient {
@@ -614,21 +605,22 @@ extension MapBoardView {
                     width: max(1, strip.x1 - strip.x0),
                     height: rect.height
                 )
-                let shadow = stripShadowLevels[index]
-                let shaded = max(ambient * 0.10, stripLightLevels[index] - (shadow * 0.74))
+                let shaded = stripLightLevels[index]
                 let lift = max(0.0, shaded - ambient)
-                let dim = max(max(0.0, ambient - shaded), shadow * 0.40)
+                let dim = max(0.0, ambient - shaded)
                 if lift > 0.01 {
-                    let glow = theme.roomHighlight.opacity(min(0.44, 0.05 + (lift * 0.60)))
+                    let glowCap = isSkyBackdrop ? 0.24 : 0.44
+                    let glowBase = isSkyBackdrop ? 0.02 : 0.05
+                    let glowScale = isSkyBackdrop ? 0.22 : 0.60
+                    let glow = theme.roomHighlight.opacity(min(glowCap, glowBase + (lift * glowScale)))
                     context.fill(Path(stripe), with: .color(glow))
                 }
                 if dim > 0.01 {
-                    let shadow = Color.black.opacity(min(0.24, 0.04 + (dim * 0.38)))
+                    let shadowCap = isSkyBackdrop ? 0.14 : 0.24
+                    let shadowBase = isSkyBackdrop ? 0.02 : 0.04
+                    let shadowScale = isSkyBackdrop ? 0.18 : 0.38
+                    let shadow = Color.black.opacity(min(shadowCap, shadowBase + (dim * shadowScale)))
                     context.fill(Path(stripe), with: .color(shadow))
-                }
-                if shadow > 0.01 {
-                    let occlusion = Color.black.opacity(min(0.24, shadow * 0.28))
-                    context.fill(Path(stripe), with: .color(occlusion))
                 }
             }
         }
@@ -658,33 +650,16 @@ extension MapBoardView {
                 continue
             }
 
-            var stripLevels = Array(repeating: worldLighting.ambient, count: projection.strips.count)
-            var stripShadowLevels = Array(repeating: 0.0, count: projection.strips.count)
-            for (index, strip) in projection.strips.enumerated() {
-                let light = floorLighting?.interpolatedLevel(
-                    xNormalized: strip.xNormalized,
-                    yNormalized: projection.bandNorm
-                ) ?? {
-                    let worldX = playerX + (projection.rowDistance * strip.rayX)
-                    let worldY = playerY + (projection.rowDistance * strip.rayY)
-                    return worldLighting.level(atWorldX: worldX, y: worldY)
-                }()
-                let shadow = floorLighting?.interpolatedShadow(
-                    xNormalized: strip.xNormalized,
-                    yNormalized: projection.bandNorm
-                ) ?? {
-                    let worldX = playerX + (projection.rowDistance * strip.rayX)
-                    let worldY = playerY + (projection.rowDistance * strip.rayY)
-                    return worldLighting.shadowLevel(atWorldX: worldX, y: worldY)
-                }()
-                let shaded = light - (shadow * 0.72)
-                let minimum = max(0.01, worldLighting.ambient * 0.14)
-                stripLevels[index] = max(minimum, min(1.0, shaded))
-                stripShadowLevels[index] = shadow
-            }
-
-            DepthProjectionMath.smoothStripLevels(&stripLevels)
-            DepthProjectionMath.smoothStripLevels(&stripShadowLevels)
+            let (stripLevels, _) = DepthProjectionMath.sampleStripLighting(
+                band: projection,
+                playerX: playerX,
+                playerY: playerY,
+                worldLighting: worldLighting,
+                floorLighting: floorLighting,
+                mode: .effective,
+                shadowWeight: 0.72,
+                minimumAmbientFactor: 0.14
+            )
 
             for (index, strip) in projection.strips.enumerated() {
                 let stripe = CGRect(
@@ -694,17 +669,12 @@ extension MapBoardView {
                     height: rect.height
                 )
                 let level = stripLevels[index]
-                let shadow = stripShadowLevels[index]
-                let dim = max(max(0.0, worldLighting.ambient - level), shadow * 0.46)
+                let dim = max(0.0, worldLighting.ambient - level)
                 let lift = max(0.0, level - worldLighting.ambient)
 
                 if dim > 0.01 {
                     let darkness = Color.black.opacity(min(0.38, 0.04 + (dim * 0.46)))
                     context.fill(Path(stripe), with: .color(darkness))
-                }
-                if shadow > 0.01 {
-                    let occlusion = Color.black.opacity(min(0.30, shadow * 0.30))
-                    context.fill(Path(stripe), with: .color(occlusion))
                 }
                 if lift > 0.01 {
                     let highlight = theme.roomHighlight.opacity(min(0.18, 0.02 + (lift * 0.22)))
@@ -762,15 +732,6 @@ extension MapBoardView {
                     Path(rect),
                     with: .color(Color.black.opacity(min(0.82, max(0.0, darkPass * 0.88))))
                 )
-            }
-
-            if effectiveShade < 0.65 {
-                let darkness = (0.65 - effectiveShade) * 0.55
-                context.fill(Path(rect), with: .color(Color.black.opacity(darkness)))
-            }
-            if shadowShade > 0.01 {
-                let shadow = Color.black.opacity(min(0.30, shadowShade * 0.26))
-                context.fill(Path(rect), with: .color(shadow))
             }
 
             if depthTextureAtlas == nil, sample.column.isMultiple(of: 3) {

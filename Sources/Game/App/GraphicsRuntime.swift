@@ -118,6 +118,7 @@ final class GraphicsAppDelegate: NSObject, NSApplicationDelegate {
     private let automationRunner: GraphicsAutomationRunner?
     private var window: NSWindow?
     private var automationTimer: Timer?
+    private var showDebugLightingOverlay = false
 
     init(session: GameSessionController, automationRunner: GraphicsAutomationRunner? = nil) {
         self.session = session
@@ -184,6 +185,10 @@ final class GraphicsAppDelegate: NSObject, NSApplicationDelegate {
                 },
                 cycleTheme: { [session] in session.cycleVisualTheme() },
                 selectTheme: { [session] in session.selectVisualTheme($0) },
+                toggleDebugLighting: { [weak self] in
+                    self?.showDebugLightingOverlay.toggle()
+                    self?.refreshRootView()
+                },
                 captureScreenshot: { [weak self] label in
                     self?.captureAutomationScreenshot(label: label)
                 }
@@ -201,6 +206,16 @@ final class GraphicsAppDelegate: NSObject, NSApplicationDelegate {
     private func captureAutomationScreenshot(label: String?) {
         let resolvedLabel = label ?? ScreenshotSupport.defaultGameLabel(for: session.state)
         _ = try? NativeScreenshotCapture.captureKeyWindow(label: resolvedLabel)
+    }
+
+    private func refreshRootView() {
+        guard let contentView = window?.contentView as? NSHostingView<GameRootView> else {
+            return
+        }
+        contentView.rootView = GameRootView(
+            session: session,
+            showDebugLightingOverlay: showDebugLightingOverlay
+        )
     }
 
     private func finishAutomation() {

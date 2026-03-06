@@ -214,8 +214,8 @@ extension GraphicsSceneSnapshotBuilder {
             return
         }
 
-        let sourceWorldX = Double(source.position.x) + 0.5
-        let sourceWorldY = Double(source.position.y) + 0.5
+        let sourceWorldX = source.worldX
+        let sourceWorldY = source.worldY
         let sampleScale = Double(field.subdivisions)
 
         let minSampleX = max(0, Int(floor((sourceWorldX - source.radius) * sampleScale)))
@@ -245,7 +245,8 @@ extension GraphicsSceneSnapshotBuilder {
                 }
 
                 let attenuation = pow(max(0.0, 1.0 - (distance / source.radius)), 1.25)
-                var contribution = source.intensity * attenuation
+                let unblockedContribution = source.intensity * attenuation
+                var contribution = unblockedContribution
                 let blocked = !hasLightLineOfSight(
                     fromWorldX: sourceWorldX,
                     y: sourceWorldY,
@@ -263,7 +264,9 @@ extension GraphicsSceneSnapshotBuilder {
 
                 if blocked {
                     let occlusion = max(0.0, 1.0 - source.blockedTransmission)
-                    let shadowContribution = source.shadowStrength * attenuation * occlusion
+                    let lostLight = unblockedContribution * occlusion
+                    let ambientOcclusionScale = max(0.18, 1.0 - (field.ambient * 2.4))
+                    let shadowContribution = lostLight * source.shadowStrength * ambientOcclusionScale
                     let shadowNext = shadowValues[sampleY][sampleX] + shadowContribution
                     shadowValues[sampleY][sampleX] = max(0.0, min(1.0, shadowNext))
                 }
@@ -282,22 +285,12 @@ extension GraphicsSceneSnapshotBuilder {
 
         for y in 0..<height {
             for x in 0..<width {
-                var weightedSum = 0.0
-                var totalWeight = 0.0
-
-                for dy in -1...1 {
-                    for dx in -1...1 {
-                        let sampleX = min(max(0, x + dx), width - 1)
-                        let sampleY = min(max(0, y + dy), height - 1)
-                        let weightX = dx == 0 ? 2.0 : 1.0
-                        let weightY = dy == 0 ? 2.0 : 1.0
-                        let weight = weightX * weightY
-                        weightedSum += values[sampleY][sampleX] * weight
-                        totalWeight += weight
-                    }
-                }
-
-                output[y][x] = max(0.0, min(1.0, weightedSum / max(1.0, totalWeight)))
+                let center = values[y][x] * 0.72
+                let north = values[max(0, y - 1)][x] * 0.07
+                let south = values[min(height - 1, y + 1)][x] * 0.07
+                let west = values[y][max(0, x - 1)] * 0.07
+                let east = values[y][min(width - 1, x + 1)] * 0.07
+                output[y][x] = max(0.0, min(1.0, center + north + south + west + east))
             }
         }
 
@@ -306,10 +299,11 @@ extension GraphicsSceneSnapshotBuilder {
 
     static func collectDepthLightSources(from state: GameState, board: MapBoardSnapshot) -> [DepthLightSource] {
         var sources: [DepthLightSource] = []
+        let isSkyMap = depthBackdropStyle(for: state, mapID: state.player.currentMapID) == .sky
 
         for row in board.rows {
             for cell in row {
-                if let source = depthLightSource(for: cell) {
+                if let source = depthLightSource(for: cell, board: board, isSkyMap: isSkyMap) {
                     sources.append(source)
                 }
             }
@@ -333,7 +327,11 @@ extension GraphicsSceneSnapshotBuilder {
         return sources
     }
 
-    static func depthLightSource(for cell: BoardCellSnapshot) -> DepthLightSource? {
+    static func depthLightSource(
+        for cell: BoardCellSnapshot,
+        board: MapBoardSnapshot,
+        isSkyMap: Bool
+    ) -> DepthLightSource? {
         switch cell.feature {
         case .beacon:
             return DepthLightSource(
@@ -362,18 +360,21 @@ extension GraphicsSceneSnapshotBuilder {
         case .torchFloor:
             return DepthLightSource(
                 position: cell.position,
-                intensity: 0.72,
-                radius: 5.2,
+                intensity: isSkyMap ? 0.42 : 0.72,
+                radius: isSkyMap ? 3.4 : 5.2,
                 blockedTransmission: 0.0,
-                shadowStrength: 0.52
+                shadowStrength: isSkyMap ? 0.10 : 0.52
             )
         case .torchWall:
+            let origin = anchoredWallLightOrigin(for: cell.position, board: board)
             return DepthLightSource(
                 position: cell.position,
-                intensity: 0.64,
-                radius: 4.7,
+                worldX: origin.x,
+                worldY: origin.y,
+                intensity: isSkyMap ? 0.46 : 0.64,
+                radius: isSkyMap ? 3.6 : 4.7,
                 blockedTransmission: 0.0,
-                shadowStrength: 0.58
+                shadowStrength: isSkyMap ? 0.08 : 0.58
             )
         case .gate:
             return DepthLightSource(
@@ -568,10 +569,64 @@ extension GraphicsSceneSnapshotBuilder {
     }
 
     fileprivate static func makeLightBlockingGrid(board: MapBoardSnapshot) -> DepthLightBlockingGrid {
-        let values = board.rows.flatMap { row in
-            row.map { $0.tile.type.blocksDepthLighting }
+        let values = board.rows.enumerated().flatMap { y, row in
+            row.enumerated().map { x, cell in
+                guard cell.tile.type.blocksDepthLighting else {
+                    return false
+                }
+                return !isBoundaryOccluder(x: x, y: y, board: board)
+            }
         }
         return DepthLightBlockingGrid(width: board.width, height: board.height, values: values)
+    }
+
+    fileprivate static func isBoundaryOccluder(x: Int, y: Int, board: MapBoardSnapshot) -> Bool {
+        x == 0 || y == 0 || x == max(0, board.width - 1) || y == max(0, board.height - 1)
+    }
+
+    fileprivate static func anchoredWallLightOrigin(
+        for position: Position,
+        board: MapBoardSnapshot
+    ) -> (x: Double, y: Double) {
+        let centerX = Double(position.x) + 0.5
+        let centerY = Double(position.y) + 0.5
+        let neighbors = [
+            (dx: 0, dy: -1),
+            (dx: 1, dy: 0),
+            (dx: 0, dy: 1),
+            (dx: -1, dy: 0)
+        ]
+
+        var anchorX = 0.0
+        var anchorY = 0.0
+        for neighbor in neighbors {
+            let sample = Position(x: position.x + neighbor.dx, y: position.y + neighbor.dy)
+            if tileBlocksDepthLighting(at: sample, board: board) {
+                anchorX += Double(neighbor.dx)
+                anchorY += Double(neighbor.dy)
+            }
+        }
+
+        let magnitude = hypot(anchorX, anchorY)
+        guard magnitude > 0.01 else {
+            return (centerX, centerY)
+        }
+
+        let offset = 0.28
+        return (
+            x: centerX - ((anchorX / magnitude) * offset),
+            y: centerY - ((anchorY / magnitude) * offset)
+        )
+    }
+
+    fileprivate static func tileBlocksDepthLighting(at position: Position, board: MapBoardSnapshot) -> Bool {
+        guard position.y >= 0,
+              position.y < board.rows.count,
+              position.x >= 0,
+              position.x < board.rows[position.y].count else {
+            return true
+        }
+        return board.rows[position.y][position.x].tile.type.blocksDepthLighting
     }
 
     static func resolved(_ raw: Character, state: GameState) -> Character {

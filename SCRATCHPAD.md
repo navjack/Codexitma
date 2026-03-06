@@ -237,3 +237,11 @@
 - Tightened encounter validation so a pack cannot bind multiple encounter definitions to the same enemy ID, which keeps the runtime lookup deterministic.
 - Moved SDL floor projection onto the same shared helpers already used by native Depth3D, and replaced the remaining native strip-smoothing copies with calls into the shared helper too.
 - Added regression tests covering one-shot encounter intros and the monotonic/shared floor-band projection output, then reran the full test suite successfully.
+- Fixed a real shared-lighting bug where out-of-bounds shadow sampling returned ambient instead of zero, which could inject phantom darkness when projected floor rays drifted outside the authored light field.
+- Added scripted `debug` / `f10` support to graphics automation so native and SDL lighting repros can capture the live debug-light overlay at exact warp coordinates after each rebuild.
+- Corrected wall-torch origin anchoring to push the light origin out into the room instead of into the blocking wall, which removes one obvious source of backward shadow geometry.
+- Removed redundant wall darkening passes in both native and SDL Depth3D so wall shading now comes from one path instead of stacking an extra black wash and another explicit shadow overlay on top of `effectiveShade`.
+- Reworked blocked-light shadow accumulation to scale from actual lost light energy instead of an independent black-mask term, then damped that effect harder on sky maps where ambient sky fill should dominate.
+- Retuned outdoor torch parameters separately from indoor torches: sky maps now use smaller radii, lower intensities, and much softer shadow strength so dock/field maps stop reading like sealed indoor chambers.
+- Softened sky-map floor lighting overlays in both frontends so outdoor light pools read as gentle illumination rather than hard-edged shadow wedges, while ceiling maps keep the stronger indoor contrast.
+- Increased shared Depth3D floor/light sampling density and per-map light-field subdivisions/bands to reduce strip aliasing and make floor light boundaries less faceted during first-person rendering.

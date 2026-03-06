@@ -117,6 +117,7 @@ After successful builds, a convenience copy of the latest working binary is also
   - authored map backdrops (`sky` vs `ceiling`) for outdoor/indoor depth scenes
   - shared world-space lighting/shadow field across floor, walls, and ceiling
   - sky backdrop contributes emissive ambient light; torches and features cast occlusion-aware shadows
+  - outdoor (`sky`) and indoor (`ceiling`) maps now use distinct torch shadow tuning to keep open-air scenes from reading like indoor chambers
 
 The overhead board views now also use the same authored lighting/shadow field by default, so torch and structure lighting is visible outside `Depth 3D` too.
 
@@ -286,7 +287,14 @@ swift run Game --script "right,new,e,state"
 swift run Game --script "new,e,warp:merrow_village:10:5:w,state"
 swift run Game --script-file path/to/commands.txt --step-json
 swift run Game --bridge
+swift run Game --sdl --graphics-script "d,new,e,theme:depth3d,debug,warp:merrow_village:5:4:e,shot:lighting-check"
 ```
+
+Graphics automation supports:
+
+- `theme:<gemstone|ultima|depth3d>` to set visual mode directly
+- `debug` / `f10` to toggle the lighting debug overlay
+- `shot[:label]` to capture deterministic framebuffer screenshots
 
 The bridge is the preferred automation surface. If an MCP server is added later, it should wrap this interface instead of duplicating game logic.
 

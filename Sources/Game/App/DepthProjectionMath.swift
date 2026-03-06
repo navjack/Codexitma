@@ -33,7 +33,15 @@ struct DepthBillboardProjection {
     let height: Double
 }
 
+enum DepthStripLightingMode {
+    case raw
+    case effective
+}
+
 enum DepthProjectionMath {
+    private static let wallProjectionScale = 0.82
+    private static let cameraHeight = 0.5
+
     static func facingUnitVector(for direction: Direction) -> (x: Double, y: Double) {
         switch direction {
         case .up:
@@ -80,9 +88,9 @@ enum DepthProjectionMath {
         floorBands: Int,
         facing: Direction,
         fieldOfView: Double,
-        stripDensity: Double = 0.46,
-        minStrips: Int = 72,
-        maxStrips: Int = 256,
+        stripDensity: Double = 0.60,
+        minStrips: Int = 96,
+        maxStrips: Int = 384,
         bandExponent: Double = 1.58
     ) -> [DepthFloorBandProjection] {
         let safeWidth = max(1, width)
@@ -101,7 +109,7 @@ enum DepthProjectionMath {
             x: forward.x + (right.x * planeScale),
             y: forward.y + (right.y * planeScale)
         )
-        let posZ = Double(safeHeight) * 0.50
+        let posZ = Double(safeHeight) * wallProjectionScale * cameraHeight
         var result: [DepthFloorBandProjection] = []
         result.reserveCapacity(safeBands)
 
@@ -112,12 +120,7 @@ enum DepthProjectionMath {
             let y1 = horizon + (totalFloorHeight * pow(t1, bandExponent))
             let rowScreenY = max(horizon + 1.0, (y0 + y1) * 0.5)
             let rowDepth = max(1.0, rowScreenY - horizon)
-            let normalizedScreenDepth = max(
-                0.0,
-                min(1.0, (rowScreenY - horizon) / totalFloorHeight)
-            )
-            let perspectiveWarp = 0.72 + (pow(1.0 - normalizedScreenDepth, 1.55) * 0.65)
-            let rowDistance = (posZ / rowDepth) * perspectiveWarp
+            let rowDistance = posZ / rowDepth
             let bandNorm = (Double(band) + 0.5) / Double(safeBands)
             let stripScale = 0.78 + (pow(1.0 - bandNorm, 1.2) * 0.72)
             let requestedStrips = Int((Double(safeWidth) * stripDensity) * stripScale)
@@ -191,5 +194,45 @@ enum DepthProjectionMath {
             let right = source[min(source.count - 1, index + 1)]
             values[index] = (left * 0.24) + (center * 0.52) + (right * 0.24)
         }
+    }
+
+    static func sampleStripLighting(
+        band: DepthFloorBandProjection,
+        playerX: Double,
+        playerY: Double,
+        worldLighting: DepthWorldLightingSnapshot?,
+        floorLighting: DepthFloorLightingSnapshot?,
+        mode: DepthStripLightingMode,
+        shadowWeight: Double = 0.72,
+        minimumAmbientFactor: Double = 0.10
+    ) -> ([Double], [Double]) {
+        let ambient = worldLighting?.ambient ?? floorLighting?.ambient ?? 0.20
+        var stripLevels = Array(repeating: ambient, count: band.strips.count)
+        var stripShadowLevels = Array(repeating: 0.0, count: band.strips.count)
+
+        for (index, strip) in band.strips.enumerated() {
+            let worldX = playerX + (band.rowDistance * strip.rayX)
+            let worldY = playerY + (band.rowDistance * strip.rayY)
+            let rawLevel = worldLighting?.level(atWorldX: worldX, y: worldY)
+                ?? floorLighting?.interpolatedLevel(xNormalized: strip.xNormalized, yNormalized: band.bandNorm)
+                ?? ambient
+            let shadowLevel = worldLighting?.shadowLevel(atWorldX: worldX, y: worldY)
+                ?? floorLighting?.interpolatedShadow(xNormalized: strip.xNormalized, yNormalized: band.bandNorm)
+                ?? 0.0
+
+            switch mode {
+            case .raw:
+                stripLevels[index] = rawLevel
+            case .effective:
+                let excess = max(0.0, rawLevel - ambient)
+                let shaded = ambient + max(0.0, excess - (shadowLevel * shadowWeight))
+                let minimum = max(0.01, ambient * minimumAmbientFactor)
+                stripLevels[index] = max(minimum, min(1.0, shaded))
+            }
+            stripShadowLevels[index] = shadowLevel
+        }
+
+        smoothStripLevels(&stripLevels)
+        return (stripLevels, stripShadowLevels)
     }
 }

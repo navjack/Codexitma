@@ -81,6 +81,11 @@ struct GameRootView: View {
 
     let palette = UltimaPalette()
 
+    init(session: GameSessionController, showDebugLightingOverlay: Bool = false) {
+        self._session = ObservedObject(wrappedValue: session)
+        self._showDebugLightingOverlay = State(initialValue: showDebugLightingOverlay)
+    }
+
     var body: some View {
         ZStack {
             palette.background.ignoresSafeArea()
